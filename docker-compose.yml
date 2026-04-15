@@ -1,0 +1,20 @@
+services:
+  telegram-star:
+    build: .
+    container_name: telegram-star
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - telegram-star-data:/app/data
+    environment:
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - PORT=3000
+      - HOST=0.0.0.0
+      - DB_PATH=/app/data/telegram-star.db
+      - SESSION_PATH=/app/data/session.txt
+      - CORS_ORIGIN=*
+
+volumes:
+  telegram-star-data:

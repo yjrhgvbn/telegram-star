@@ -1,0 +1,17 @@
+{
+  "name": "telegram-star",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"pnpm run dev:server\" \"pnpm run dev:web\"",
+    "dev:server": "pnpm --filter @telegram-star/server dev",
+    "dev:web": "pnpm --filter @telegram-star/web dev",
+    "build": "pnpm --filter @telegram-star/web build && pnpm --filter @telegram-star/server build",
+    "start": "pnpm --filter @telegram-star/server start",
+    "db:generate": "pnpm --filter @telegram-star/server db:generate",
+    "db:migrate": "pnpm --filter @telegram-star/server db:migrate"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

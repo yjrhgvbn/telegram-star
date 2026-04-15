@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/api/client.ts","./src/components/filterpanel.tsx","./src/components/messagecard.tsx","./src/components/messagelist.tsx","./src/components/telegramlogin.tsx","./src/hooks/usefilters.ts","./src/hooks/usemessages.ts","./src/types/index.ts"],"version":"5.9.3"}
