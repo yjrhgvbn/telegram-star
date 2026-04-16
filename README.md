@@ -18,7 +18,7 @@ Telegram 消息追踪工具 - 监控群组/频道消息，关键词过滤，已�
 | 前端 | React + Vite + TypeScript |
 | 后端 | Fastify + TypeScript |
 | Telegram | GramJS (MTProto) |
-| ORM | Drizzle ORM |
+| ORM | Prisma ORM v7 |
 | 数据库 | SQLite |
 | 部署 | Docker |
 
@@ -44,7 +44,8 @@ cp .env.example .env
 # 3. 安装依赖
 pnpm install
 
-# 4. 启动开发服务
+# 4. 同步数据库结构并启动开发服务
+pnpm db:deploy
 pnpm dev
 ```
 
@@ -80,7 +81,7 @@ telegram-star/
 ├── packages/
 │   ├── server/          # Fastify 后端
 │   │   └── src/
-│   │       ├── db/      # Drizzle ORM + SQLite
+│   │       ├── db/      # Prisma runtime + SQLite
 │   │       ├── routes/  # API 路由
 │   │       └── services/ # Telegram 服务
 │   └── web/             # React + Vite 前端
@@ -96,3 +97,15 @@ telegram-star/
 ## License
 
 MIT
+
+## Prisma v7 更新说明
+
+- 运行时查询已从 Drizzle 切换为 Prisma Client + libSQL adapter，继续使用同一个 SQLite 数据文件。
+- 后续修改数据结构时，开发环境使用 `pnpm db:migrate -- --name <migration-name>` 生成 migration；部署环境统一执行 `pnpm db:deploy`。
+
+## 文档导航
+
+- 开发文档: [docs/user-development.md](docs/user-development.md)
+- 部署文档: [docs/user-deployment.md](docs/user-deployment.md)
+- Agent 全局约束: [CLAUDE.md](CLAUDE.md)
+- Agent Server 约束: [packages/server/CLAUDE.md](packages/server/CLAUDE.md)

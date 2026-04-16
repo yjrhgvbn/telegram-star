@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
-import { messages, filters } from "../db/schema.js";
-import { eq, desc, and, like, sql, count } from "drizzle-orm";
+import type { Prisma } from "../generated/prisma/client.js";
 
 export async function messageRoutes(app: FastifyInstance): Promise<void> {
   // Get messages with pagination and filtering
@@ -18,49 +17,56 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
     const limit = parseInt(request.query.limit || "20");
     const offset = (page - 1) * limit;
 
-    const conditions = [];
+    const where: Prisma.MessageWhereInput = {};
 
     // Filter by read status
     if (request.query.isRead !== undefined && request.query.isRead !== "") {
-      conditions.push(eq(messages.isRead, request.query.isRead === "true"));
+      where.isRead = request.query.isRead === "true";
     }
 
     // Filter by filter ID
     if (request.query.filterId) {
-      conditions.push(eq(messages.matchedFilterId, parseInt(request.query.filterId)));
+      where.matchedFilterId = parseInt(request.query.filterId, 10);
     }
 
     // Search in content
     if (request.query.search) {
-      conditions.push(like(messages.content, `%${request.query.search}%`));
+      where.content = { contains: request.query.search };
     }
 
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
-
     const [data, totalResult] = await Promise.all([
-      db
-        .select({
-          message: messages,
-          filterName: filters.name,
-        })
-        .from(messages)
-        .leftJoin(filters, eq(messages.matchedFilterId, filters.id))
-        .where(where)
-        .orderBy(desc(messages.createdAt))
-        .limit(limit)
-        .offset(offset),
-      db
-        .select({ count: count() })
-        .from(messages)
-        .where(where),
+      db.message.findMany({
+        where,
+        include: {
+          matchedFilter: {
+            select: { name: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+      db.message.count({ where }),
     ]);
 
-    const total = totalResult[0]?.count || 0;
+    const total = totalResult;
 
     return {
       data: data.map((row) => ({
-        ...row.message,
-        filterName: row.filterName,
+        id: row.id,
+        telegramMessageId: row.telegramMessageId,
+        chatId: row.chatId,
+        chatTitle: row.chatTitle,
+        senderName: row.senderName,
+        senderId: row.senderId,
+        content: row.content,
+        messageDate: row.messageDate,
+        telegramLink: row.telegramLink,
+        isRead: row.isRead,
+        matchedFilterId: row.matchedFilterId,
+        matchedKeyword: row.matchedKeyword,
+        createdAt: row.createdAt,
+        filterName: row.matchedFilter?.name ?? null,
       })),
       pagination: {
         page,
@@ -75,23 +81,15 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
   app.patch<{ Params: { id: string } }>("/api/messages/:id/read", async (request, reply) => {
     const id = parseInt(request.params.id);
 
-    const existing = await db
-      .select()
-      .from(messages)
-      .where(eq(messages.id, id))
-      .limit(1);
-
-    if (existing.length === 0) {
+    const existing = await db.message.findUnique({ where: { id } });
+    if (!existing) {
       return reply.status(404).send({ error: "Message not found" });
     }
 
-    const result = await db
-      .update(messages)
-      .set({ isRead: !existing[0].isRead })
-      .where(eq(messages.id, id))
-      .returning();
-
-    return result[0];
+    return db.message.update({
+      where: { id },
+      data: { isRead: !existing.isRead },
+    });
   });
 
   // Batch mark as read
@@ -101,12 +99,10 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: "ids array is required" });
     }
 
-    for (const id of ids) {
-      await db
-        .update(messages)
-        .set({ isRead: true })
-        .where(eq(messages.id, id));
-    }
+    await db.message.updateMany({
+      where: { id: { in: ids } },
+      data: { isRead: true },
+    });
 
     return { success: true, count: ids.length };
   });
@@ -118,21 +114,19 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
     const todayStr = today.toISOString();
 
     const [totalResult, unreadResult, todayResult] = await Promise.all([
-      db.select({ count: count() }).from(messages),
-      db
-        .select({ count: count() })
-        .from(messages)
-        .where(eq(messages.isRead, false)),
-      db
-        .select({ count: count() })
-        .from(messages)
-        .where(sql`${messages.createdAt} >= ${todayStr}`),
+      db.message.count(),
+      db.message.count({ where: { isRead: false } }),
+      db.$queryRaw<Array<{ count: number }>>`
+        SELECT COUNT(*) AS count
+        FROM messages
+        WHERE datetime(created_at) >= datetime(${todayStr})
+      `,
     ]);
 
     return {
-      total: totalResult[0]?.count || 0,
-      unread: unreadResult[0]?.count || 0,
-      today: todayResult[0]?.count || 0,
+      total: totalResult,
+      unread: unreadResult,
+      today: Number(todayResult[0]?.count || 0),
     };
   });
 }

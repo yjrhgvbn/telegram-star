@@ -8,46 +8,10 @@ import { authRoutes } from "./routes/auth.js";
 import { filterRoutes } from "./routes/filters.js";
 import { messageRoutes } from "./routes/messages.js";
 import { initClient } from "./services/telegram.js";
-import { client } from "./db/index.js";
-
-// Auto-create tables if DB is fresh
-async function initDatabase() {
-  await client.executeMultiple(`
-    CREATE TABLE IF NOT EXISTS filters (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('keyword', 'group', 'channel')),
-      value TEXT NOT NULL,
-      enabled INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      telegram_message_id INTEGER NOT NULL,
-      chat_id TEXT NOT NULL,
-      chat_title TEXT NOT NULL DEFAULT '',
-      sender_name TEXT NOT NULL DEFAULT '',
-      sender_id TEXT NOT NULL DEFAULT '',
-      content TEXT NOT NULL DEFAULT '',
-      message_date TEXT NOT NULL,
-      telegram_link TEXT NOT NULL DEFAULT '',
-      is_read INTEGER NOT NULL DEFAULT 0,
-      matched_filter_id INTEGER REFERENCES filters(id) ON DELETE SET NULL,
-      matched_keyword TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-  `);
-  console.log("[DB] Tables initialized");
-}
 
 const app = Fastify({ logger: true });
 
 async function start() {
-  // Initialize database
-  await initDatabase();
-
   // Register CORS
   await app.register(cors, {
     origin: appConfig.cors.origin === "*" ? true : appConfig.cors.origin,

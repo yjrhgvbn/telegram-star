@@ -5,8 +5,6 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import { appConfig } from "../config.js";
 import { db } from "../db/index.js";
-import { filters, messages } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
 
 let client: TelegramClient | null = null;
 let isConnected = false;
@@ -169,10 +167,9 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
   if (!message || !message.text) return;
 
   // Get active filters
-  const activeFilters = await db
-    .select()
-    .from(filters)
-    .where(eq(filters.enabled, true));
+  const activeFilters = await db.filter.findMany({
+    where: { enabled: true },
+  });
 
   if (activeFilters.length === 0) return;
 
@@ -209,18 +206,14 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
 
     if (matched) {
       // Check for duplicate
-      const existing = await db
-        .select()
-        .from(messages)
-        .where(
-          and(
-            eq(messages.telegramMessageId, message.id),
-            eq(messages.chatId, chatId)
-          )
-        )
-        .limit(1);
+      const existing = await db.message.findFirst({
+        where: {
+          telegramMessageId: message.id,
+          chatId,
+        },
+      });
 
-      if (existing.length > 0) continue;
+      if (existing) continue;
 
       // Build telegram link
       let telegramLink = "";
@@ -243,18 +236,21 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
           : (sender as any)?.title || "Unknown";
       const senderId = sender ? sender.id.toString() : "";
 
-      await db.insert(messages).values({
-        telegramMessageId: message.id,
-        chatId,
-        chatTitle,
-        senderName,
-        senderId,
-        content: message.text || "",
-        messageDate: new Date((message.date || 0) * 1000).toISOString(),
-        telegramLink,
-        isRead: false,
-        matchedFilterId: filter.id,
-        matchedKeyword: matchedKeyword || null,
+      await db.message.create({
+        data: {
+          telegramMessageId: message.id,
+          chatId,
+          chatTitle,
+          senderName,
+          senderId,
+          content: message.text || "",
+          messageDate: new Date((message.date || 0) * 1000).toISOString(),
+          telegramLink,
+          isRead: false,
+          matchedFilterId: filter.id,
+          matchedKeyword: matchedKeyword || null,
+          createdAt: new Date().toISOString(),
+        },
       });
 
       console.log(

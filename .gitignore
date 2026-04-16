@@ -7,3 +7,6 @@ data
 .env
 session.txt
 .DS_Store
+.agents
+skills-lock.json
+packages/server/src/generated

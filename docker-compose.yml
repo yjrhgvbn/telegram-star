@@ -12,6 +12,7 @@ services:
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
       - PORT=3000
       - HOST=0.0.0.0
+      - DATABASE_URL=file:/app/data/telegram-star.db
       - DB_PATH=/app/data/telegram-star.db
       - SESSION_PATH=/app/data/session.txt
       - CORS_ORIGIN=*

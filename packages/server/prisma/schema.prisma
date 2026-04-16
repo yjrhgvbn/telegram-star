@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum FilterType {
+  keyword
+  group
+  channel
+}
+
+model Filter {
+  id        Int         @id @default(autoincrement())
+  name      String
+  type      FilterType
+  value     String
+  enabled   Boolean     @default(true)
+  createdAt String      @map("created_at")
+  updatedAt String      @map("updated_at")
+  messages  Message[]
+
+  @@map("filters")
+}
+
+model Message {
+  id                Int      @id @default(autoincrement())
+  telegramMessageId Int      @map("telegram_message_id")
+  chatId            String   @map("chat_id")
+  chatTitle         String   @default("") @map("chat_title")
+  senderName        String   @default("") @map("sender_name")
+  senderId          String   @default("") @map("sender_id")
+  content           String   @default("")
+  messageDate       String   @map("message_date")
+  telegramLink      String   @default("") @map("telegram_link")
+  isRead            Boolean  @default(false) @map("is_read")
+  matchedFilterId   Int?     @map("matched_filter_id")
+  matchedKeyword    String?  @map("matched_keyword")
+  createdAt         String   @map("created_at")
+  matchedFilter     Filter?  @relation(fields: [matchedFilterId], references: [id], onDelete: SetNull)
+
+  @@map("messages")
+}

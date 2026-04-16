@@ -1,16 +1,13 @@
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
+import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { mkdirSync } from "fs";
 import { dirname } from "path";
 import { appConfig } from "../config.js";
-import * as schema from "./schema.js";
+import { PrismaClient } from "../generated/prisma/client.js";
 
-// Ensure the data directory exists
 mkdirSync(dirname(appConfig.dbPath), { recursive: true });
 
-const client = createClient({
-  url: `file:${appConfig.dbPath}`,
+const adapter = new PrismaLibSql({
+  url: appConfig.databaseUrl,
 });
 
-export const db = drizzle(client, { schema });
-export { client };
+export const db = new PrismaClient({ adapter });
