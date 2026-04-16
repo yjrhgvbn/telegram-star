@@ -102,7 +102,8 @@ function App() {
       {sidebarOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-20 bg-black/40 backdrop-blur-[1px] md:hidden"
+          className="fixed inset-y-0 right-0 z-20 bg-black/40 backdrop-blur-[1px] md:hidden"
+          style={{ left: "min(320px, 100vw)" }}
           onClick={() => setSidebarOpen(false)}
           aria-label="关闭侧栏"
         />

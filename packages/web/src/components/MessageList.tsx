@@ -15,14 +15,7 @@ interface Props {
   searchQuery?: string;
 }
 
-export function MessageList({
-  messages,
-  pagination,
-  loading,
-  onToggleRead,
-  onPageChange,
-  searchQuery,
-}: Props) {
+export function MessageList({ messages, pagination, loading, onToggleRead, onPageChange, searchQuery }: Props) {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -44,9 +37,7 @@ export function MessageList({
             <Inbox className="size-5 text-muted-foreground" />
           </div>
           <CardTitle>暂无消息</CardTitle>
-          <CardDescription>
-            添加过滤器来开始追踪 Telegram 消息，匹配的消息会出现在这里。
-          </CardDescription>
+          <CardDescription>添加过滤器来开始追踪 Telegram 消息，匹配的消息会出现在这里。</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -55,13 +46,10 @@ export function MessageList({
   return (
     <div className="space-y-4">
       <div className="space-y-3">
-        {messages.map((msg, index) => (
-          <div key={msg.id} className="animate-in fade-in-0 slide-in-from-bottom-1" style={{ animationDelay: `${index * 20}ms` }}>
-            <MessageCard
-              message={msg}
-              onToggleRead={onToggleRead}
-              searchQuery={searchQuery}
-            />
+        {messages.map((msg) => (
+          // <div key={msg.id} className="animate-in fade-in-0 slide-in-from-bottom-1" style={{ animationDelay: `${index * 20}ms` }}>
+          <div key={msg.id}>
+            <MessageCard message={msg} onToggleRead={onToggleRead} searchQuery={searchQuery} />
           </div>
         ))}
       </div>
@@ -69,22 +57,14 @@ export function MessageList({
       {pagination.totalPages > 1 && (
         <Card className="bg-card/70">
           <CardContent className="flex items-center justify-center gap-3 py-3">
-            <Button
-              variant="ghost"
-              size="sm"
-            disabled={pagination.page <= 1}
-            onClick={() => onPageChange(pagination.page - 1)}
-          >
-            ← 上一页
+            <Button variant="ghost" size="sm" disabled={pagination.page <= 1} onClick={() => onPageChange(pagination.page - 1)}>
+              ← 上一页
             </Button>
-            <Badge variant="secondary" className="rounded-full px-3">{pagination.page} / {pagination.totalPages}</Badge>
-            <Button
-              variant="ghost"
-              size="sm"
-            disabled={pagination.page >= pagination.totalPages}
-            onClick={() => onPageChange(pagination.page + 1)}
-          >
-            下一页 →
+            <Badge variant="secondary" className="rounded-full px-3">
+              {pagination.page} / {pagination.totalPages}
+            </Badge>
+            <Button variant="ghost" size="sm" disabled={pagination.page >= pagination.totalPages} onClick={() => onPageChange(pagination.page + 1)}>
+              下一页 →
             </Button>
           </CardContent>
         </Card>

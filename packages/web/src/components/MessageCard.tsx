@@ -88,7 +88,12 @@ export function MessageCard({ message, onToggleRead, searchQuery }: Props) {
           </Button>
 
           {message.telegramLink && (
-            <Button variant="ghost" size="sm" render={<a href={message.telegramLink} target="_blank" rel="noopener noreferrer" />}>
+            <Button
+              variant="ghost"
+              size="sm"
+              nativeButton={false}
+              render={<a href={message.telegramLink} target="_blank" rel="noopener noreferrer" />}
+            >
               查看原文
               <ExternalLink data-icon="inline-end" />
             </Button>
