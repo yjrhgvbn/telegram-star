@@ -1,6 +1,20 @@
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import type { Filter } from "../types";
-import "./FilterPanel.css";
 
 interface Props {
   filters: Filter[];
@@ -60,57 +74,57 @@ export function FilterPanel({
 
   const getTypeBadge = (t: string) => {
     switch (t) {
-      case "keyword": return "badge-keyword";
-      case "group": return "badge-group";
-      case "channel": return "badge-channel";
+      case "keyword": return "bg-amber-500/15 text-amber-700";
+      case "group": return "bg-sky-500/15 text-sky-700";
+      case "channel": return "bg-indigo-500/15 text-indigo-700";
       default: return "";
     }
   };
 
   return (
-    <div className="filter-panel">
-      <div className="filter-panel-header">
-        <h2 className="filter-panel-title">
-          <span>🎯</span> 过滤器
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center justify-between px-4 py-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <span>🎯</span>
+          <span>过滤器</span>
         </h2>
-        <button
-          className="btn btn-sm btn-primary"
-          onClick={() => setShowForm(!showForm)}
-        >
-          {showForm ? "✕" : "+ 新建"}
-        </button>
+        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+          {showForm ? "收起" : "新建"}
+        </Button>
       </div>
+      <Separator />
 
       {showForm && (
-        <form className="filter-form animate-fade-in" onSubmit={handleSubmit}>
-          {error && <div className="filter-form-error">{error}</div>}
-          <div className="form-group">
-            <label className="form-label">名称</label>
-            <input
-              className="input"
+        <form className="animate-in fade-in zoom-in-95 space-y-3 border-b border-border/70 bg-background/60 px-4 py-4" onSubmit={handleSubmit}>
+          {error && <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>}
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">名称</label>
+            <Input
               placeholder="例如：BTC 讨论"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
-          <div className="form-group">
-            <label className="form-label">类型</label>
-            <select
-              className="input select"
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-            >
-              <option value="keyword">🔑 关键词</option>
-              <option value="group">👥 群组</option>
-              <option value="channel">📢 频道</option>
-            </select>
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">类型</label>
+            <Select value={type} onValueChange={(nextValue) => setType(nextValue ?? "keyword")}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="请选择过滤器类型" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="keyword">🔑 关键词</SelectItem>
+                  <SelectItem value="group">👥 群组</SelectItem>
+                  <SelectItem value="channel">📢 频道</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
-          <div className="form-group">
-            <label className="form-label">
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">
               {type === "keyword" ? "关键词" : type === "group" ? "群组名称/ID" : "频道名称/ID"}
             </label>
-            <input
-              className="input"
+            <Input
               placeholder={
                 type === "keyword" ? "例如：bitcoin" :
                 type === "group" ? "群组名或 Chat ID" :
@@ -120,68 +134,86 @@ export function FilterPanel({
               onChange={(e) => setValue(e.target.value)}
             />
           </div>
-          <button type="submit" className="btn btn-primary btn-full" disabled={creating}>
-            {creating ? <span className="spinner" /> : "创建过滤器"}
-          </button>
+          <Button type="submit" className="w-full" disabled={creating}>
+            {creating ? "创建中..." : "创建过滤器"}
+          </Button>
         </form>
       )}
 
-      <div className="filter-list">
+      <ScrollArea className="min-h-0 flex-1 px-2 py-2">
+        <div className="space-y-1.5">
         {/* "All" option */}
-        <button
-          className={`filter-item ${selectedFilterId === "" ? "active" : ""}`}
-          onClick={() => onSelectFilter("")}
-        >
-          <div className="filter-item-info">
-            <span className="filter-icon">📋</span>
-            <span className="filter-name">全部消息</span>
-          </div>
-        </button>
-
-        {loading ? (
-          <div className="filter-loading">
-            <span className="spinner" />
-          </div>
-        ) : filters.length === 0 ? (
-          <div className="filter-empty">
-            <p>暂无过滤器</p>
-            <p>点击上方按钮创建</p>
-          </div>
-        ) : (
-          filters.map((filter) => (
-            <div key={filter.id} className={`filter-item ${selectedFilterId === String(filter.id) ? "active" : ""} ${!filter.enabled ? "disabled" : ""}`}>
-              <button
-                className="filter-item-info"
-                onClick={() => onSelectFilter(String(filter.id))}
-              >
-                <span className="filter-icon">{getTypeIcon(filter.type)}</span>
-                <div className="filter-details">
-                  <span className="filter-name">{filter.name}</span>
-                  <span className={`badge ${getTypeBadge(filter.type)}`}>
-                    {filter.value}
-                  </span>
-                </div>
-              </button>
-              <div className="filter-item-actions">
-                <button
-                  className={`btn btn-icon btn-sm btn-ghost toggle-btn ${filter.enabled ? "on" : ""}`}
-                  onClick={() => onToggleFilter(filter.id)}
-                  title={filter.enabled ? "禁用" : "启用"}
-                >
-                  {filter.enabled ? "🟢" : "⚪"}
-                </button>
-                <button
-                  className="btn btn-icon btn-sm btn-ghost delete-btn"
-                  onClick={() => onDeleteFilter(filter.id)}
-                  title="删除"
-                >
-                  🗑️
-                </button>
-              </div>
+          <button
+            className={cn(
+              "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition",
+              selectedFilterId === "" ? "border-primary/30 bg-primary/10" : "border-transparent hover:bg-accent"
+            )}
+            onClick={() => onSelectFilter("")}
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span>📋</span>
+              <span className="truncate text-sm font-medium">全部消息</span>
             </div>
-          ))
-        )}
-      </div>
+          </button>
+
+          {loading ? (
+            <div className="space-y-2 px-1 py-3">
+              <Skeleton className="h-14 rounded-lg" />
+              <Skeleton className="h-14 rounded-lg" />
+              <Skeleton className="h-14 rounded-lg" />
+            </div>
+          ) : filters.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border bg-background/60 px-3 py-8 text-center text-sm text-muted-foreground">
+              <p>暂无过滤器</p>
+              <p className="mt-1 text-xs">点击上方按钮创建</p>
+            </div>
+          ) : (
+            filters.map((filter) => (
+              <div
+                key={filter.id}
+                className={cn(
+                  "group flex items-center gap-2 rounded-lg border px-2 py-2 transition",
+                  selectedFilterId === String(filter.id) ? "border-primary/30 bg-primary/10" : "border-transparent hover:bg-accent",
+                  !filter.enabled && "opacity-55"
+                )}
+              >
+                <button
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  onClick={() => onSelectFilter(String(filter.id))}
+                >
+                  <span>{getTypeIcon(filter.type)}</span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{filter.name}</p>
+                    <Badge variant="outline" className={cn("mt-1 max-w-full truncate", getTypeBadge(filter.type))}>
+                      {filter.value}
+                    </Badge>
+                  </div>
+                </button>
+
+                <div className="flex items-center gap-1 opacity-60 transition group-hover:opacity-100">
+                  <Button
+                    variant={filter.enabled ? "secondary" : "ghost"}
+                    size="icon-sm"
+                    onClick={() => onToggleFilter(filter.id)}
+                    title={filter.enabled ? "禁用" : "启用"}
+                  >
+                    {filter.enabled ? "🟢" : "⚪"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => onDeleteFilter(filter.id)}
+                    title="删除"
+                    className="hover:text-destructive"
+                  >
+                    🗑️
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 }

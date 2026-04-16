@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { api } from "../api/client";
 import type { AuthStatus } from "../types";
-import "./TelegramLogin.css";
 
 interface Props {
   authStatus: AuthStatus;
@@ -74,96 +77,84 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
   if (authStatus.authorized) return null;
 
   return (
-    <div className="login-overlay">
-      <div className="login-card animate-fade-in">
-        <div className="login-header">
-          <div className="login-logo">⭐</div>
-          <h1 className="login-title">Telegram Star</h1>
-          <p className="login-subtitle">连接你的 Telegram 账号开始追踪消息</p>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 backdrop-blur-md">
+      <Card className="w-full max-w-md animate-in fade-in-0 zoom-in-95 border-border/70 bg-card/95 shadow-xl">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-2 flex size-14 items-center justify-center rounded-2xl bg-primary/15 text-3xl">⭐</div>
+          <CardTitle className="text-xl">Telegram Star</CardTitle>
+          <CardDescription>连接你的 Telegram 账号开始追踪消息</CardDescription>
+        </CardHeader>
 
-        {error && <div className="login-error">{error}</div>}
+        <CardContent className="space-y-4">
+          {error && <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
 
-        {step === "phone" && (
-          <form onSubmit={handleSendCode} className="login-form">
-            <div className="form-group">
-              <label className="form-label">手机号码</label>
-              <input
-                type="tel"
-                className="input"
-                placeholder="+86 13800138000"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                autoFocus
-              />
-              <span className="form-hint">请输入完整的国际格式手机号</span>
-            </div>
-            <button type="submit" className="btn btn-telegram btn-full" disabled={loading}>
-              {loading ? <span className="spinner" /> : "发送验证码"}
-            </button>
-          </form>
-        )}
+          {step === "phone" && (
+            <form onSubmit={handleSendCode} className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-sm text-muted-foreground">手机号码</label>
+                <Input
+                  type="tel"
+                  placeholder="+86 13800138000"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground">请输入完整的国际格式手机号</p>
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "发送中..." : "发送验证码"}
+              </Button>
+            </form>
+          )}
 
-        {step === "code" && (
-          <form onSubmit={handleLogin} className="login-form">
-            <div className="form-group">
-              <label className="form-label">验证码</label>
-              <input
-                type="text"
-                className="input"
-                placeholder="12345"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                autoFocus
-              />
-              <span className="form-hint">请输入你在 Telegram 收到的验证码</span>
-            </div>
-            <button type="submit" className="btn btn-telegram btn-full" disabled={loading}>
-              {loading ? <span className="spinner" /> : "登录"}
-            </button>
-            <button type="button" className="btn btn-ghost btn-full" onClick={() => setStep("phone")}>
-              返回
-            </button>
-          </form>
-        )}
+          {step === "code" && (
+            <form onSubmit={handleLogin} className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-sm text-muted-foreground">验证码</label>
+                <Input
+                  type="text"
+                  placeholder="12345"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground">请输入你在 Telegram 收到的验证码</p>
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "登录中..." : "登录"}
+              </Button>
+              <Button type="button" variant="ghost" className="w-full" onClick={() => setStep("phone")}>
+                返回修改手机号
+              </Button>
+            </form>
+          )}
 
-        {step === "password" && (
-          <form onSubmit={handlePasswordSubmit} className="login-form">
-            <div className="form-group">
-              <label className="form-label">两步验证密码</label>
-              <input
-                type="password"
-                className="input"
-                placeholder="请输入你的两步验证密码"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoFocus
-              />
-              <span className="form-hint">你的账号已开启两步验证</span>
-            </div>
-            <button type="submit" className="btn btn-telegram btn-full" disabled={loading}>
-              {loading ? <span className="spinner" /> : "确认"}
-            </button>
-          </form>
-        )}
+          {step === "password" && (
+            <form onSubmit={handlePasswordSubmit} className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-sm text-muted-foreground">两步验证密码</label>
+                <Input
+                  type="password"
+                  placeholder="请输入你的两步验证密码"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground">你的账号已开启两步验证</p>
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "验证中..." : "确认"}
+              </Button>
+            </form>
+          )}
 
-        <div className="login-steps">
-          <div className={`login-step ${step === "phone" ? "active" : "done"}`}>
-            <span className="step-dot" />
-            <span className="step-label">手机号</span>
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <Badge variant={step === "phone" ? "default" : "secondary"} className="rounded-full px-2.5">手机号</Badge>
+            <Badge variant={step === "code" ? "default" : "secondary"} className="rounded-full px-2.5">验证码</Badge>
+            <Badge variant={step === "password" ? "default" : "secondary"} className="rounded-full px-2.5">2FA</Badge>
           </div>
-          <div className="step-line" />
-          <div className={`login-step ${step === "code" ? "active" : step === "password" ? "done" : ""}`}>
-            <span className="step-dot" />
-            <span className="step-label">验证码</span>
-          </div>
-          <div className="step-line" />
-          <div className={`login-step ${step === "password" ? "active" : ""}`}>
-            <span className="step-dot" />
-            <span className="step-label">2FA</span>
-          </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
