@@ -6,6 +6,19 @@ import { dirname } from "path";
 import { appConfig } from "../config.js";
 import { db } from "../db/index.js";
 
+type FilterConditionType = "keyword" | "group" | "channel";
+
+interface FilterCondition {
+  type: FilterConditionType;
+  values: string[];
+}
+
+export interface JoinedChat {
+  id: string;
+  title: string;
+  type: "group" | "channel";
+}
+
 let client: TelegramClient | null = null;
 let isConnected = false;
 let phoneCodeResolver: ((code: string) => void) | null = null;
@@ -31,6 +44,66 @@ function saveSession(session: string): void {
 
 export function getClient(): TelegramClient | null {
   return client;
+}
+
+function parseConditions(raw: string): FilterCondition[] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((item) => item && typeof item === "object")
+      .map((item) => ({
+        type: item.type,
+        values: Array.isArray(item.values)
+          ? item.values.filter((v: unknown) => typeof v === "string").map((v: string) => v.trim()).filter(Boolean)
+          : [],
+      }))
+      .filter((item): item is FilterCondition =>
+        (item.type === "keyword" || item.type === "group" || item.type === "channel") && item.values.length > 0
+      );
+  } catch {
+    return [];
+  }
+}
+
+function getEntityType(entity: any): "group" | "channel" | "other" {
+  if (!entity) return "other";
+
+  if (entity.className === "Channel") {
+    return entity.broadcast ? "channel" : "group";
+  }
+
+  if (entity.className === "Chat") {
+    return "group";
+  }
+
+  return "other";
+}
+
+export async function listJoinedChats(): Promise<JoinedChat[]> {
+  if (!client || !isConnected) {
+    throw new Error("Telegram client is not connected");
+  }
+
+  const dialogs = await client.getDialogs({ limit: 300 });
+  const seen = new Set<string>();
+  const chats: JoinedChat[] = [];
+
+  for (const dialog of dialogs) {
+    const entity = (dialog as any).entity;
+    const entityType = getEntityType(entity);
+    if (entityType === "other") continue;
+
+    const id = entity?.id?.toString?.() || "";
+    if (!id || seen.has(id)) continue;
+
+    const title = entity?.title || entity?.username || id;
+    seen.add(id);
+    chats.push({ id, title, type: entityType });
+  }
+
+  return chats.sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
 }
 
 export function getConnectionStatus(): {
@@ -179,29 +252,45 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
 
   const chatId = chat.id.toString();
   const chatTitle = (chat as any).title || (chat as any).firstName || chatId;
+  const chatType = getEntityType(chat as any);
 
   // Check each filter
   for (const filter of activeFilters) {
-    let matched = false;
+    const conditions = parseConditions(filter.conditions);
+    if (conditions.length === 0) {
+      continue;
+    }
+
+    let matched = true;
     let matchedKeyword = "";
 
-    switch (filter.type) {
-      case "keyword":
-        if (message.text.toLowerCase().includes(filter.value.toLowerCase())) {
-          matched = true;
-          matchedKeyword = filter.value;
+    for (const condition of conditions) {
+      let conditionMatched = false;
+
+      if (condition.type === "keyword") {
+        for (const keyword of condition.values) {
+          if (message.text.toLowerCase().includes(keyword.toLowerCase())) {
+            conditionMatched = true;
+            if (!matchedKeyword) {
+              matchedKeyword = keyword;
+            }
+            break;
+          }
         }
-        break;
-      case "group":
-      case "channel":
-        // Match by chat ID or chat title
-        if (
-          chatId === filter.value ||
-          chatTitle.toLowerCase().includes(filter.value.toLowerCase())
-        ) {
-          matched = true;
+      } else if (condition.type === "group") {
+        if (chatType === "group") {
+          conditionMatched = condition.values.includes(chatId);
         }
+      } else if (condition.type === "channel") {
+        if (chatType === "channel") {
+          conditionMatched = condition.values.includes(chatId);
+        }
+      }
+
+      if (!conditionMatched) {
+        matched = false;
         break;
+      }
     }
 
     if (matched) {

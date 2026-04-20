@@ -1,8 +1,7 @@
 CREATE TABLE "filters" (
   "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
   "name" TEXT NOT NULL,
-  "type" TEXT NOT NULL,
-  "value" TEXT NOT NULL,
+  "conditions" TEXT NOT NULL,
   "enabled" BOOLEAN NOT NULL DEFAULT true,
   "created_at" TEXT NOT NULL,
   "updated_at" TEXT NOT NULL

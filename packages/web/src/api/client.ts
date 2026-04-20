@@ -1,4 +1,4 @@
-import type { Filter, MessageResponse, Stats, AuthStatus } from "../types";
+import type { Filter, FilterCondition, JoinedChat, MessageResponse, Stats, AuthStatus } from "../types";
 
 const BASE = "/api";
 
@@ -40,12 +40,12 @@ export const api = {
 
   filters: {
     list: () => request<Filter[]>("/filters"),
-    create: (data: { name: string; type: string; value: string }) =>
+    create: (data: { name: string; conditions: FilterCondition[] }) =>
       request<Filter>("/filters", {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    update: (id: number, data: Partial<Filter>) =>
+    update: (id: number, data: { name?: string; conditions?: FilterCondition[] }) =>
       request<Filter>(`/filters/${id}`, {
         method: "PUT",
         body: JSON.stringify(data),
@@ -54,6 +54,10 @@ export const api = {
       request<{ success: boolean }>(`/filters/${id}`, { method: "DELETE" }),
     toggle: (id: number) =>
       request<Filter>(`/filters/${id}/toggle`, { method: "PATCH" }),
+  },
+
+  chats: {
+    list: () => request<JoinedChat[]>("/chats"),
   },
 
   messages: {

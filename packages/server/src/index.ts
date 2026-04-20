@@ -5,6 +5,7 @@ import { existsSync } from "fs";
 import { resolve } from "path";
 import { appConfig } from "./config.js";
 import { authRoutes } from "./routes/auth.js";
+import { chatRoutes } from "./routes/chats.js";
 import { filterRoutes } from "./routes/filters.js";
 import { messageRoutes } from "./routes/messages.js";
 import { initClient } from "./services/telegram.js";
@@ -20,6 +21,7 @@ async function start() {
 
   // Register API routes
   await app.register(authRoutes);
+  await app.register(chatRoutes);
   await app.register(filterRoutes);
   await app.register(messageRoutes);
 

@@ -1,11 +1,23 @@
+export type FilterConditionType = "keyword" | "group" | "channel";
+
+export interface FilterCondition {
+  type: FilterConditionType;
+  values: string[];
+}
+
 export interface Filter {
   id: number;
   name: string;
-  type: "keyword" | "group" | "channel";
-  value: string;
+  conditions: FilterCondition[];
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface JoinedChat {
+  id: string;
+  title: string;
+  type: "group" | "channel";
 }
 
 export interface Message {

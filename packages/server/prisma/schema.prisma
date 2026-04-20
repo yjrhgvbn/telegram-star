@@ -7,17 +7,10 @@ datasource db {
   provider = "sqlite"
 }
 
-enum FilterType {
-  keyword
-  group
-  channel
-}
-
 model Filter {
   id        Int         @id @default(autoincrement())
   name      String
-  type      FilterType
-  value     String
+  conditions String
   enabled   Boolean     @default(true)
   createdAt String      @map("created_at")
   updatedAt String      @map("updated_at")

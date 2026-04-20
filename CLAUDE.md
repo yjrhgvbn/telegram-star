@@ -67,3 +67,7 @@ pnpm start
 - web 规则：就近遵循 [packages/web/CLAUDE.md](packages/web/CLAUDE.md)
 
 当目录级规则冲突时：子目录规则优先。
+
+## 7. 测试规则
+- 后端服务端口默认 3000，前端默认 5173。
+- 如果已经有服务运行，直接访问，不要启动新的服务实例。
