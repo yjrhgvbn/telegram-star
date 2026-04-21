@@ -58,6 +58,12 @@ export const api = {
 
   chats: {
     list: () => request<JoinedChat[]>("/chats"),
+    messagesByChat: (params: { chatId: string; limit?: number }) => {
+      const searchParams = new URLSearchParams();
+      searchParams.set("chatId", params.chatId);
+      if (params.limit) searchParams.set("limit", params.limit.toString());
+      return request<{ chatId: string; messages: import("../types").LiveChatMessage[] }>(`/chats/messages?${searchParams.toString()}`);
+    },
   },
 
   messages: {

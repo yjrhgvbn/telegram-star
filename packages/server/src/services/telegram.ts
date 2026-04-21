@@ -19,6 +19,19 @@ export interface JoinedChat {
   type: "group" | "channel";
 }
 
+export interface LiveChatMessage {
+  id: number;
+  chatId: string;
+  chatTitle: string;
+  chatType: "group" | "channel";
+  senderName: string;
+  senderId: string;
+  content: string;
+  messageDate: string;
+  telegramLink: string;
+  inDatabase: boolean;
+}
+
 let client: TelegramClient | null = null;
 let isConnected = false;
 let phoneCodeResolver: ((code: string) => void) | null = null;
@@ -104,6 +117,90 @@ export async function listJoinedChats(): Promise<JoinedChat[]> {
   }
 
   return chats.sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
+}
+
+export async function listSingleChatMessages(options: {
+  chatId: string;
+  messageLimit?: number;
+  chatSearchLimit?: number;
+}): Promise<LiveChatMessage[]> {
+  if (!client || !isConnected) {
+    throw new Error("Telegram client is not connected");
+  }
+
+  const targetChatId = options.chatId.trim();
+  if (!targetChatId) {
+    throw new Error("chatId is required");
+  }
+
+  const messageLimit = Math.max(1, Math.min(options.messageLimit ?? 100, 500));
+  const chatSearchLimit = Math.max(1, Math.min(options.chatSearchLimit ?? 500, 1000));
+  const dialogs = await client.getDialogs({ limit: chatSearchLimit });
+
+  const targetDialog = dialogs.find((dialog: any) => {
+    const id = dialog?.entity?.id?.toString?.() || "";
+    return id === targetChatId;
+  });
+
+  if (!targetDialog) {
+    throw new Error("Chat not found or no access");
+  }
+
+  const entity = (targetDialog as any).entity;
+  const entityType = getEntityType(entity);
+  if (entityType === "other") {
+    throw new Error("Unsupported chat type");
+  }
+
+  const chatId = entity?.id?.toString?.() || targetChatId;
+  const chatTitle = entity?.title || entity?.username || chatId;
+  const history = await client.getMessages(entity, { limit: messageLimit });
+
+  const textMessages = history.filter((item: any) => {
+    const content = typeof item?.message === "string" ? item.message.trim() : "";
+    return content.length > 0;
+  });
+
+  const dbRows = await db.message.findMany({
+    where: {
+      chatId,
+      telegramMessageId: { in: textMessages.map((item: any) => item.id) },
+    },
+    select: {
+      telegramMessageId: true,
+    },
+  });
+
+  const storedMessageIdSet = new Set<number>(dbRows.map((row) => row.telegramMessageId));
+
+  return textMessages.map((item: any) => {
+    const sender = (item as any).sender;
+    const senderName = sender?.firstName
+      ? `${sender.firstName}${sender.lastName ? ` ${sender.lastName}` : ""}`
+      : sender?.title || sender?.username || "Unknown";
+    const senderId = sender?.id?.toString?.() || "";
+
+    let telegramLink = "";
+    if (entity?.username) {
+      telegramLink = `https://t.me/${entity.username}/${item.id}`;
+    } else {
+      const linkChatId = chatId.startsWith("-100") ? chatId.slice(4) : chatId.replace("-", "");
+      telegramLink = `https://t.me/c/${linkChatId}/${item.id}`;
+    }
+
+    return {
+      id: item.id,
+      chatId,
+      chatTitle,
+      chatType: entityType,
+      senderName,
+      senderId,
+      content: item.message,
+      messageDate: new Date((item.date || 0) * 1000).toISOString(),
+      telegramLink,
+      inDatabase: storedMessageIdSet.has(item.id),
+    };
+  });
 }
 
 export function getConnectionStatus(): {

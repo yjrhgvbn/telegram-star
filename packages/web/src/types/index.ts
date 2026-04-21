@@ -37,6 +37,19 @@ export interface Message {
   createdAt: string;
 }
 
+export interface LiveChatMessage {
+  id: number;
+  chatId: string;
+  chatTitle: string;
+  chatType: "group" | "channel";
+  senderName: string;
+  senderId: string;
+  content: string;
+  messageDate: string;
+  telegramLink: string;
+  inDatabase: boolean;
+}
+
 export interface MessagePagination {
   page: number;
   limit: number;
