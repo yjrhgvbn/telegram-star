@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
+import useSWR from "swr";
 import { api } from "../api/client";
-import type { Message, MessagePagination, Stats } from "../types";
+import type { MessagePagination, Stats } from "../types";
 
 interface UseMessagesOptions {
   page?: number;
@@ -11,72 +12,77 @@ interface UseMessagesOptions {
 }
 
 export function useMessages(options: UseMessagesOptions = {}) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [pagination, setPagination] = useState<MessagePagination>({
-    page: 1,
-    limit: 20,
+  const fallbackPagination: MessagePagination = {
+    page: options.page ?? 1,
+    limit: options.limit ?? 20,
     total: 0,
     totalPages: 0,
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  };
 
-  const fetchMessages = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await api.messages.list(options);
-      setMessages(res.data);
-      setPagination(res.pagination);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+  const swrKey = [
+    "messages",
+    options.page ?? 1,
+    options.limit ?? 20,
+    options.isRead ?? "",
+    options.filterId ?? "",
+    options.search ?? "",
+  ] as const;
+
+  const { data, error, isLoading, mutate } = useSWR(
+    swrKey,
+    () => api.messages.list(options),
+    {
+      keepPreviousData: true,
+      refreshInterval: 10000,
     }
-  }, [options.page, options.limit, options.isRead, options.filterId, options.search]);
-
-  useEffect(() => {
-    fetchMessages();
-  }, [fetchMessages]);
+  );
 
   const toggleRead = useCallback(async (id: number) => {
-    try {
-      const updated = await api.messages.toggleRead(id);
-      setMessages((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, isRead: updated.isRead } : m))
-      );
-    } catch (err: any) {
-      setError(err.message);
-    }
-  }, []);
+    const updated = await api.messages.toggleRead(id);
+
+    await mutate(
+      (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          data: current.data.map((message) =>
+            message.id === id ? { ...message, isRead: updated.isRead } : message
+          ),
+        };
+      },
+      { revalidate: false }
+    );
+  }, [mutate]);
 
   const refresh = useCallback(() => {
-    fetchMessages();
-  }, [fetchMessages]);
+    void mutate();
+  }, [mutate]);
 
-  return { messages, pagination, loading, error, toggleRead, refresh };
+  return {
+    messages: data?.data ?? [],
+    pagination: data?.pagination ?? fallbackPagination,
+    loading: isLoading,
+    error: error instanceof Error ? error.message : null,
+    toggleRead,
+    refresh,
+  };
 }
 
 export function useStats() {
-  const [stats, setStats] = useState<Stats>({ total: 0, unread: 0, today: 0 });
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading, mutate } = useSWR<Stats>("message-stats", api.messages.stats, {
+    refreshInterval: 15000,
+  });
 
-  const fetchStats = useCallback(async () => {
-    try {
-      const data = await api.messages.stats();
-      setStats(data);
-    } catch {
-      // Silently ignore stats errors
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const refresh = useCallback(() => {
+    void mutate();
+  }, [mutate]);
 
-  useEffect(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, 15000);
-    return () => clearInterval(interval);
-  }, [fetchStats]);
-
-  return { stats, loading, refresh: fetchStats };
+  return {
+    stats: data ?? { total: 0, unread: 0, today: 0 },
+    loading: isLoading,
+    refresh,
+  };
 }
