@@ -2,6 +2,75 @@
 
 本文档面向部署与运维，提供 Docker 部署、升级与回滚建议。
 
+## 0. GitHub Actions 自动部署（推荐）
+
+仓库已提供工作流：[.github/workflows/deploy.yml](.github/workflows/deploy.yml)。
+
+触发方式：
+
+- push 到 `main`
+- 在 GitHub Actions 页面手动执行 `workflow_dispatch`
+
+### 0.1 服务器准备
+
+在服务器上准备代码目录（示例路径 `/opt/telegram-star`）：
+
+```bash
+mkdir -p /opt/telegram-star
+cd /opt/telegram-star
+git clone <your-repo-url> .
+cp .env.example .env
+# 编辑 .env，填写 TELEGRAM_API_ID / TELEGRAM_API_HASH 等变量
+```
+
+确保服务器已安装：
+
+- Docker
+- Docker Compose（`docker compose` 子命令可用）
+
+### 0.2 GitHub Secrets 配置
+
+在仓库 `Settings -> Secrets and variables -> Actions` 中添加：
+
+- `SSH_HOST`：服务器 IP 或域名
+- `SSH_PORT`：SSH 端口（通常 `22`）
+- `SSH_USER`：SSH 用户
+- `SSH_PRIVATE_KEY`：用于登录服务器的私钥内容
+- `DEPLOY_PATH`：服务器上的项目目录（如 `/opt/telegram-star`）
+
+说明：
+
+- 建议为部署单独创建 SSH 密钥对
+- 将公钥写入服务器目标用户的 `~/.ssh/authorized_keys`
+- 私钥完整内容（含 `BEGIN/END`）放入 `SSH_PRIVATE_KEY`
+
+### 0.3 工作流执行内容
+
+工作流在服务器执行：
+
+```bash
+cd "$DEPLOY_PATH"
+git fetch --all --prune
+git checkout main
+git pull --ff-only origin main
+docker compose up -d --build
+docker compose ps
+```
+
+这会自动完成：
+
+- 拉取最新代码
+- 重建并重启容器
+- 容器启动时自动执行 Prisma `db:deploy`
+
+### 0.4 首次验证
+
+首次配置完成后，建议手动触发一次 Actions 并检查：
+
+- Actions 日志是否成功
+- 服务器上 `docker compose ps` 状态是否正常
+- 页面是否可访问（默认 `http://<server-ip>:3000`）
+
 ## 1. 部署方式
 
 推荐使用 Docker Compose。
