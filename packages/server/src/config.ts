@@ -18,4 +18,7 @@ export const appConfig = {
   cors: {
     origin: process.env.CORS_ORIGIN || "http://localhost:5173",
   },
+  notifications: {
+    settingsPath: "./data/notification-settings.json",
+  },
 };

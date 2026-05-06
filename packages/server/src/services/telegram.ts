@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import { appConfig } from "../config.js";
 import { db } from "../db/index.js";
+import { forwardMatchedMessage } from "./notifier.js";
 
 type FilterConditionType = "keyword" | "group" | "channel";
 
@@ -437,6 +438,16 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
           matchedKeyword: matchedKeyword || null,
           createdAt: new Date().toISOString(),
         },
+      });
+
+      await forwardMatchedMessage({
+        filterName: filter.name,
+        matchedKeyword: matchedKeyword || null,
+        chatTitle,
+        senderName,
+        content: message.text || "",
+        messageDate: new Date((message.date || 0) * 1000).toISOString(),
+        telegramLink,
       });
 
       console.log(

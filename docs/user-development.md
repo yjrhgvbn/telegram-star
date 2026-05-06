@@ -27,6 +27,8 @@ cp .env.example .env
 - `DB_PATH=./data/telegram-star.db`
 - `SESSION_PATH=./data/session.txt`
 
+通知转发配置通过 Web UI 的「通知设置」页面管理，默认保存到 `./data/notification-settings.json`。
+
 ## 3. 启动本地开发
 
 ```bash

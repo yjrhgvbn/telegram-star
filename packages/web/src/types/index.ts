@@ -74,3 +74,10 @@ export interface AuthStatus {
   waitingForCode: boolean;
   waitingForPassword: boolean;
 }
+
+export type NotificationSource = "feishu";
+
+export interface NotificationSettings {
+  sources: NotificationSource[];
+  feishuWebhookUrl: string;
+}

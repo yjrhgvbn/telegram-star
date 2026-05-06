@@ -1,6 +1,7 @@
  import { Navigate, Route, Routes } from "react-router-dom";
  import { GroupsPage } from "./pages/GroupsPage";
  import { MessagesPage } from "./pages/MessagesPage";
+ import { NotificationsPage } from "./pages/NotificationsPage";
  import { NotFoundPage } from "./pages/NotFoundPage";
  
  function App() {
@@ -9,6 +10,7 @@
        <Route path="/" element={<Navigate to="/messages" replace />} />
        <Route path="/messages" element={<MessagesPage />} />
        <Route path="/groups" element={<GroupsPage />} />
+       <Route path="/notifications" element={<NotificationsPage />} />
        <Route path="*" element={<NotFoundPage />} />
      </Routes>
    );

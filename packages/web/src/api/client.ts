@@ -1,4 +1,13 @@
-import type { Filter, FilterCondition, JoinedChat, MessageResponse, Stats, AuthStatus } from "../types";
+import type {
+  Filter,
+  FilterCondition,
+  JoinedChat,
+  MessageResponse,
+  Stats,
+  AuthStatus,
+  NotificationSettings,
+  NotificationSource,
+} from "../types";
 
 const BASE = "/api";
 
@@ -93,5 +102,17 @@ export const api = {
         body: JSON.stringify({ ids }),
       }),
     stats: () => request<Stats>("/messages/stats"),
+  },
+
+  notifications: {
+    getSettings: () => request<NotificationSettings>("/notifications/settings"),
+    updateSettings: (data: {
+      sources?: NotificationSource[];
+      feishuWebhookUrl?: string;
+    }) =>
+      request<NotificationSettings>("/notifications/settings", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
   },
 };
