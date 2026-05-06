@@ -7,7 +7,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
 # Copy workspace config
-COPY package.json pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/server/package.json ./packages/server/
 COPY packages/server/prisma.config.ts ./packages/server/
 COPY packages/server/tsconfig.json ./packages/server/
@@ -34,7 +34,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
 # Copy workspace config
-COPY package.json pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/server/package.json ./packages/server/
 COPY packages/server/prisma.config.ts ./packages/server/
 COPY packages/server/tsconfig.json ./packages/server/
