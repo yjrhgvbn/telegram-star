@@ -7,6 +7,9 @@ import type {
   AuthStatus,
   NotificationSettings,
   NotificationSource,
+  FilterPreviewResponse,
+  FilterBackfillResponse,
+  FilterHistoryScope,
 } from "../types";
 
 const BASE = "/api";
@@ -59,10 +62,20 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(data),
       }),
+    preview: (data: { conditions: FilterCondition[] } & FilterHistoryScope) =>
+      request<FilterPreviewResponse>("/filters/preview", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     delete: (id: number) =>
       request<{ success: boolean }>(`/filters/${id}`, { method: "DELETE" }),
     toggle: (id: number) =>
       request<Filter>(`/filters/${id}/toggle`, { method: "PATCH" }),
+    backfill: (id: number, data?: FilterHistoryScope) =>
+      request<FilterBackfillResponse>(`/filters/${id}/backfill`, {
+        method: "POST",
+        body: JSON.stringify(data ?? {}),
+      }),
   },
 
   chats: {

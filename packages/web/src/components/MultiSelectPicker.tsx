@@ -91,6 +91,7 @@ export function MultiSelectPicker({
 }: MultiSelectPickerProps) {
   const [searchInput, setSearchInput] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0 });
 
   const filteredItems = items.filter((item) => {
@@ -130,7 +131,15 @@ export function MultiSelectPicker({
     if (!open) return;
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        triggerRef.current?.contains(target) ||
+        popoverRef.current?.contains(target)
+      ) {
+        return;
+      }
+
+      if (open) {
         handleOpenChange(false);
       }
     };
@@ -146,7 +155,7 @@ export function MultiSelectPicker({
         type="button"
         className={cn(
           "flex w-full items-center justify-between rounded-lg border border-border/70 px-3 py-2 text-left text-xs transition",
-          open ? "bg-accent/50" : "hover:bg-accent/40"
+          open ? "bg-accent/50" : "hover:bg-accent/40",
         )}
         onClick={() => handleOpenChange(!open)}
       >
@@ -159,11 +168,12 @@ export function MultiSelectPicker({
 
       {open && (
         <div
+          ref={popoverRef}
           className={cn(
             "fixed z-50 rounded-lg border border-border/70 bg-background/95 backdrop-blur-sm shadow-lg ring-1 ring-foreground/10",
             popoverHeight,
             popoverWidth,
-            "overflow-hidden flex flex-col"
+            "overflow-hidden flex flex-col",
           )}
           style={{
             top: `${popoverPos.top}px`,
@@ -171,13 +181,7 @@ export function MultiSelectPicker({
           }}
         >
           <div className="border-b border-border/40 p-2">
-            <Input
-              placeholder={searchPlaceholder}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              autoFocus
-              className="h-8"
-            />
+            <Input placeholder={searchPlaceholder} value={searchInput} onChange={(e) => setSearchInput(e.target.value)} autoFocus className="h-8" />
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-1 p-2">
@@ -194,18 +198,20 @@ export function MultiSelectPicker({
                     type="button"
                     className={cn(
                       "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs transition",
-                      isSelected ? "bg-primary/15 text-primary" : "hover:bg-accent/60"
+                      isSelected ? "bg-primary/15 text-primary" : "hover:bg-accent/60",
                     )}
-                    onClick={() => handleToggleItem(item.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      handleToggleItem(item.id);
+                    }}
                   >
                     {renderItem ? (
                       renderItem(item, isSelected)
                     ) : (
                       <>
                         <span className="truncate">{item.title}</span>
-                        <span className="text-[11px] text-muted-foreground ml-2 flex-shrink-0">
-                          {isSelected ? "✓" : ""}
-                        </span>
+                        <span className="text-[11px] text-muted-foreground ml-2 flex-shrink-0">{isSelected ? "✓" : ""}</span>
                       </>
                     )}
                   </button>

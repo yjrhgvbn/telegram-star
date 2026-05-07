@@ -6,13 +6,12 @@ import { dirname } from "path";
 import { appConfig } from "../config.js";
 import { db } from "../db/index.js";
 import { forwardMatchedMessage } from "./notifier.js";
-
-type FilterConditionType = "keyword" | "group" | "channel";
-
-interface FilterCondition {
-  type: FilterConditionType;
-  values: string[];
-}
+import {
+  hasConflictingChatConditions,
+  matchFilterConditions,
+  parseConditions,
+  type FilterCondition,
+} from "./filter-matching.js";
 
 export interface JoinedChat {
   id: string;
@@ -33,11 +32,23 @@ export interface LiveChatMessage {
   inDatabase: boolean;
 }
 
+export interface HistoricalFilterPreviewMessage extends LiveChatMessage {
+  matchedKeyword: string | null;
+}
+
 let client: TelegramClient | null = null;
 let isConnected = false;
 let phoneCodeResolver: ((code: string) => void) | null = null;
 let passwordResolver: ((password: string) => void) | null = null;
 let phoneNumber: string = "";
+
+function getClientConfig() {
+  return {
+    connectionRetries: 5,
+    requestTimeout: 30000,
+    autoReconnect: true,
+  };
+}
 
 function loadSession(): string {
   try {
@@ -60,27 +71,6 @@ export function getClient(): TelegramClient | null {
   return client;
 }
 
-function parseConditions(raw: string): FilterCondition[] {
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter((item) => item && typeof item === "object")
-      .map((item) => ({
-        type: item.type,
-        values: Array.isArray(item.values)
-          ? item.values.filter((v: unknown) => typeof v === "string").map((v: string) => v.trim()).filter(Boolean)
-          : [],
-      }))
-      .filter((item): item is FilterCondition =>
-        (item.type === "keyword" || item.type === "group" || item.type === "channel") && item.values.length > 0
-      );
-  } catch {
-    return [];
-  }
-}
-
 function getEntityType(entity: any): "group" | "channel" | "other" {
   if (!entity) return "other";
 
@@ -93,6 +83,291 @@ function getEntityType(entity: any): "group" | "channel" | "other" {
   }
 
   return "other";
+}
+
+function buildTelegramLink(chatId: string, chat: any, messageId: number): string {
+  if (chat?.username) {
+    return `https://t.me/${chat.username}/${messageId}`;
+  }
+
+  const linkChatId = chatId.startsWith("-100") ? chatId.slice(4) : chatId.replace("-", "");
+  return `https://t.me/c/${linkChatId}/${messageId}`;
+}
+
+function getSenderSummary(sender: any): { senderName: string; senderId: string } {
+  const senderName = sender?.firstName
+    ? `${sender.firstName}${sender.lastName ? ` ${sender.lastName}` : ""}`
+    : sender?.title || sender?.username || "Unknown";
+  const senderId = sender?.id?.toString?.() || "";
+  return { senderName, senderId };
+}
+
+function getScopedChatIds(conditions: FilterCondition[]) {
+  const groupCondition = conditions.find((condition) => condition.type === "group");
+  const channelCondition = conditions.find((condition) => condition.type === "channel");
+
+  return {
+    groupIds: new Set(groupCondition?.values ?? []),
+    channelIds: new Set(channelCondition?.values ?? []),
+  };
+}
+
+function shouldInspectChat(
+  chatId: string,
+  chatType: "group" | "channel",
+  scopedChatIds: ReturnType<typeof getScopedChatIds>,
+): boolean {
+  if (chatType === "group" && scopedChatIds.groupIds.size > 0) {
+    return scopedChatIds.groupIds.has(chatId);
+  }
+
+  if (chatType === "channel" && scopedChatIds.channelIds.size > 0) {
+    return scopedChatIds.channelIds.has(chatId);
+  }
+
+  if (chatType === "group" && scopedChatIds.channelIds.size > 0 && scopedChatIds.groupIds.size === 0) {
+    return false;
+  }
+
+  if (chatType === "channel" && scopedChatIds.groupIds.size > 0 && scopedChatIds.channelIds.size === 0) {
+    return false;
+  }
+
+  return true;
+}
+
+function getMessageTimestampMs(message: any): number {
+  // GramJS 在不同调用链里可能返回 Unix 秒、Date 或可解析字符串，这里统一转成毫秒时间戳。
+  if (typeof message?.date === "number") {
+    return message.date * 1000;
+  }
+
+  if (message?.date instanceof Date) {
+    return message.date.getTime();
+  }
+
+  const parsed = Date.parse(String(message?.date ?? ""));
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+async function loadSegmentedHistory(options: {
+  entity: any;
+  scanLimit: number;
+  batchSize?: number;
+  sinceMs?: number;
+}): Promise<any[]> {
+  if (!client) {
+    return [];
+  }
+
+  const batchSize = Math.max(20, Math.min(options.batchSize ?? 100, 200));
+  const messages: any[] = [];
+  let scanned = 0;
+  let offsetId = 0;
+  let guard = 0;
+
+  // 通过 offsetId 按批次向更早的历史翻页，直到达到扫描上限或越过时间窗口下界。
+  while (scanned < options.scanLimit && guard < 100) {
+    guard += 1;
+    const take = Math.min(batchSize, options.scanLimit - scanned);
+    const history = await client.getMessages(options.entity, {
+      limit: take,
+      offsetId,
+    });
+
+    if (!history || history.length === 0) {
+      break;
+    }
+
+    messages.push(...history);
+    scanned += history.length;
+
+    const oldest = history[history.length - 1];
+    const oldestId = Number(oldest?.id || 0);
+    const oldestTs = getMessageTimestampMs(oldest);
+
+    // 没有继续翻页的锚点时停止，避免重复拉同一批消息。
+    if (!oldestId || oldestId === offsetId) {
+      break;
+    }
+
+    offsetId = oldestId;
+
+    if (options.sinceMs !== undefined && oldestTs > 0 && oldestTs < options.sinceMs) {
+      // 已翻到窗口下界之前，可停止继续向更早翻页。
+      break;
+    }
+  }
+
+  return messages;
+}
+
+export async function previewHistoricalFilterMessages(options: {
+  conditions: FilterCondition[];
+  perChatLimit?: number;
+  totalLimit?: number;
+  chatIds?: string[];
+  since?: string;
+  until?: string;
+}): Promise<{ messages: HistoricalFilterPreviewMessage[]; scannedChats: number }> {
+  if (!client || !isConnected) {
+    throw new Error("Telegram client is not connected");
+  }
+
+  if (hasConflictingChatConditions(options.conditions)) {
+    return { messages: [], scannedChats: 0 };
+  }
+
+  // perChatLimit 现在表示“每个会话最多向历史扫描多少条”，而不是只取最近一页。
+  const perChatLimit = Math.max(1, Math.min(options.perChatLimit ?? 200, 5000));
+  const totalLimit = Math.max(1, Math.min(options.totalLimit ?? 50, 200));
+  const dialogs = await client.getDialogs({ limit: 300 });
+  const scopedChatIds = getScopedChatIds(options.conditions);
+  const selectedChatIdSet = new Set((options.chatIds ?? []).map((chatId) => chatId.trim()).filter(Boolean));
+  const sinceMs = options.since ? Date.parse(options.since) : NaN;
+  const untilMs = options.until ? Date.parse(options.until) : NaN;
+  const hasSince = !Number.isNaN(sinceMs);
+  const hasUntil = !Number.isNaN(untilMs);
+  const previews: HistoricalFilterPreviewMessage[] = [];
+  let scannedChats = 0;
+
+  for (const dialog of dialogs) {
+    const entity = (dialog as any).entity;
+    const chatType = getEntityType(entity);
+    if (chatType === "other") {
+      continue;
+    }
+
+    const chatId = entity?.id?.toString?.() || "";
+    if (!chatId || !shouldInspectChat(chatId, chatType, scopedChatIds)) {
+      continue;
+    }
+    if (selectedChatIdSet.size > 0 && !selectedChatIdSet.has(chatId)) {
+      continue;
+    }
+
+    scannedChats += 1;
+    // 先把时间窗口附近可能命中的历史分段拉出来，再在本地做文本与时间条件过滤。
+    const history = await loadSegmentedHistory({
+      entity,
+      scanLimit: perChatLimit,
+      batchSize: 100,
+      sinceMs: hasSince ? sinceMs : undefined,
+    });
+    const textMessages = history.filter((item: any) => typeof item?.message === "string" && item.message.trim().length > 0);
+    const ids = textMessages.map((item: any) => item.id);
+    const existingRows = ids.length
+      ? await db.message.findMany({
+          where: {
+            chatId,
+            telegramMessageId: { in: ids },
+          },
+          select: { telegramMessageId: true },
+        })
+      : [];
+    const existingIdSet = new Set(existingRows.map((row) => row.telegramMessageId));
+
+    for (const item of textMessages) {
+      const messageTs = getMessageTimestampMs(item);
+      const messageDate = new Date(messageTs).toISOString();
+      const messageMs = Date.parse(messageDate);
+      // 这里再次做窗口裁剪，是为了兼容最后一批翻页可能同时包含窗口内外消息。
+      if (hasSince && messageMs < sinceMs) {
+        continue;
+      }
+      if (hasUntil && messageMs > untilMs) {
+        continue;
+      }
+
+      const match = matchFilterConditions(
+        {
+          chatId,
+          chatType,
+          content: item.message,
+        },
+        options.conditions,
+      );
+
+      if (!match.matched) {
+        continue;
+      }
+
+      const sender = (item as any).sender;
+      const { senderName, senderId } = getSenderSummary(sender);
+      previews.push({
+        id: item.id,
+        chatId,
+        chatTitle: entity?.title || entity?.username || chatId,
+        chatType,
+        senderName,
+        senderId,
+        content: item.message,
+        messageDate,
+        telegramLink: buildTelegramLink(chatId, entity, item.id),
+        inDatabase: existingIdSet.has(item.id),
+        matchedKeyword: match.matchedKeyword,
+      });
+
+      if (previews.length >= totalLimit) {
+        return { messages: previews, scannedChats };
+      }
+    }
+  }
+
+  return { messages: previews, scannedChats };
+}
+
+export async function backfillFilterHistory(options: {
+  filterId: number;
+  conditions: FilterCondition[];
+  perChatLimit?: number;
+  chatIds?: string[];
+  since?: string;
+  until?: string;
+}): Promise<{ scannedChats: number; matchedCount: number; savedCount: number; skippedExistingCount: number }> {
+  const preview = await previewHistoricalFilterMessages({
+    conditions: options.conditions,
+    perChatLimit: options.perChatLimit,
+    totalLimit: 200,
+    chatIds: options.chatIds,
+    since: options.since,
+    until: options.until,
+  });
+
+  let savedCount = 0;
+  let skippedExistingCount = 0;
+
+  for (const message of preview.messages) {
+    if (message.inDatabase) {
+      skippedExistingCount += 1;
+      continue;
+    }
+
+    await db.message.create({
+      data: {
+        telegramMessageId: message.id,
+        chatId: message.chatId,
+        chatTitle: message.chatTitle,
+        senderName: message.senderName,
+        senderId: message.senderId,
+        content: message.content,
+        messageDate: message.messageDate,
+        telegramLink: message.telegramLink,
+        isRead: false,
+        matchedFilterId: options.filterId,
+        matchedKeyword: message.matchedKeyword,
+        createdAt: new Date().toISOString(),
+      },
+    });
+    savedCount += 1;
+  }
+
+  return {
+    scannedChats: preview.scannedChats,
+    matchedCount: preview.messages.length,
+    savedCount,
+    skippedExistingCount,
+  };
 }
 
 export async function listJoinedChats(): Promise<JoinedChat[]> {
@@ -222,9 +497,7 @@ export async function initClient(): Promise<void> {
   const sessionStr = loadSession();
   const session = new StringSession(sessionStr);
 
-  client = new TelegramClient(session, appConfig.telegram.apiId, appConfig.telegram.apiHash, {
-    connectionRetries: 5,
-  });
+  client = new TelegramClient(session, appConfig.telegram.apiId, appConfig.telegram.apiHash, getClientConfig());
 
   if (sessionStr) {
     try {
@@ -247,22 +520,45 @@ export async function sendCode(phone: string): Promise<{ status: string }> {
 
   if (!client) {
     const session = new StringSession("");
-    client = new TelegramClient(session, appConfig.telegram.apiId, appConfig.telegram.apiHash, {
-      connectionRetries: 5,
-    });
+    client = new TelegramClient(session, appConfig.telegram.apiId, appConfig.telegram.apiHash, getClientConfig());
   }
 
-  await client.connect();
+  try {
+    // 添加连接超时控制
+    const connectPromise = client.connect();
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("connect_timeout")), 15000)
+    );
+    
+    await Promise.race([connectPromise, timeoutPromise]);
 
-  await client.sendCode(
-    {
-      apiId: appConfig.telegram.apiId,
-      apiHash: appConfig.telegram.apiHash,
-    },
-    phone
-  );
+    // 发送验证码
+    await client.sendCode(
+      {
+        apiId: appConfig.telegram.apiId,
+        apiHash: appConfig.telegram.apiHash,
+      },
+      phone
+    );
 
-  return { status: "code_sent" };
+    return { status: "code_sent" };
+  } catch (err: any) {
+    const errorMsg = err.message || String(err);
+    
+    // 详细的错误诊断
+    if (errorMsg.includes("connect_timeout") || errorMsg.includes("ETIMEDOUT")) {
+      throw new Error(
+        "连接 Telegram 超时，请检查网络和梯子设置。\n" +
+        "可能的原因:\n" +
+        "1. 网络连接不稳定\n" +
+        "2. 梯子未启动或配置错误\n" +
+        "3. 需要在启动时使用: proxychains -f /path/to/proxychains.conf node dist/index.js\n" +
+        "4. API ID/Hash 可能不正确"
+      );
+    }
+    
+    throw err;
+  }
 }
 
 export async function loginWithCode(
@@ -359,39 +655,16 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
       continue;
     }
 
-    let matched = true;
-    let matchedKeyword = "";
+    const match = matchFilterConditions(
+      {
+        chatId,
+        chatType,
+        content: message.text,
+      },
+      conditions,
+    );
 
-    for (const condition of conditions) {
-      let conditionMatched = false;
-
-      if (condition.type === "keyword") {
-        for (const keyword of condition.values) {
-          if (message.text.toLowerCase().includes(keyword.toLowerCase())) {
-            conditionMatched = true;
-            if (!matchedKeyword) {
-              matchedKeyword = keyword;
-            }
-            break;
-          }
-        }
-      } else if (condition.type === "group") {
-        if (chatType === "group") {
-          conditionMatched = condition.values.includes(chatId);
-        }
-      } else if (condition.type === "channel") {
-        if (chatType === "channel") {
-          conditionMatched = condition.values.includes(chatId);
-        }
-      }
-
-      if (!conditionMatched) {
-        matched = false;
-        break;
-      }
-    }
-
-    if (matched) {
+    if (match.matched) {
       // Check for duplicate
       const existing = await db.message.findFirst({
         where: {
@@ -403,25 +676,11 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
       if (existing) continue;
 
       // Build telegram link
-      let telegramLink = "";
-      if ((chat as any).username) {
-        telegramLink = `https://t.me/${(chat as any).username}/${message.id}`;
-      } else {
-        // For private groups, use c/ format
-        // Remove the -100 prefix for the link
-        const linkChatId = chatId.startsWith("-100")
-          ? chatId.slice(4)
-          : chatId.replace("-", "");
-        telegramLink = `https://t.me/c/${linkChatId}/${message.id}`;
-      }
+      const telegramLink = buildTelegramLink(chatId, chat as any, message.id);
 
       // Get sender info
       const sender = await message.getSender();
-      const senderName =
-        (sender as any)?.firstName
-          ? `${(sender as any).firstName}${(sender as any).lastName ? " " + (sender as any).lastName : ""}`
-          : (sender as any)?.title || "Unknown";
-      const senderId = sender ? sender.id.toString() : "";
+      const { senderName, senderId } = getSenderSummary(sender as any);
 
       await db.message.create({
         data: {
@@ -435,14 +694,14 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
           telegramLink,
           isRead: false,
           matchedFilterId: filter.id,
-          matchedKeyword: matchedKeyword || null,
+          matchedKeyword: match.matchedKeyword,
           createdAt: new Date().toISOString(),
         },
       });
 
       await forwardMatchedMessage({
         filterName: filter.name,
-        matchedKeyword: matchedKeyword || null,
+        matchedKeyword: match.matchedKeyword,
         chatTitle,
         senderName,
         content: message.text || "",

@@ -1,49 +1,47 @@
 import type { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
+import { backfillFilterHistory, previewHistoricalFilterMessages } from "../services/telegram.js";
+import {
+  parseConditions,
+  serializeConditions,
+  validateConditions,
+  type FilterCondition,
+} from "../services/filter-matching.js";
 
-type FilterConditionType = "keyword" | "group" | "channel";
+type HistoryScope = {
+  perChatLimit?: number;
+  totalLimit?: number;
+  chatIds?: string[];
+  since?: string;
+  until?: string;
+};
 
-interface FilterCondition {
-  type: FilterConditionType;
-  values: string[];
+function normalizeHistoryScope(scope?: HistoryScope): HistoryScope {
+  const chatIds = Array.isArray(scope?.chatIds)
+    ? scope?.chatIds.map((chatId) => chatId.trim()).filter(Boolean)
+    : undefined;
+  return {
+    perChatLimit: scope?.perChatLimit,
+    totalLimit: scope?.totalLimit,
+    chatIds,
+    since: scope?.since,
+    until: scope?.until,
+  };
 }
 
-function parseConditions(raw: string): FilterCondition[] {
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((item) => item && typeof item === "object")
-      .map((item) => ({
-        type: item.type,
-        values: Array.isArray(item.values)
-          ? item.values.filter((v: unknown) => typeof v === "string").map((v: string) => v.trim()).filter(Boolean)
-          : [],
-      }))
-      .filter((item): item is FilterCondition => (
-        (item.type === "keyword" || item.type === "group" || item.type === "channel") &&
-        item.values.length > 0
-      ));
-  } catch {
-    return [];
-  }
-}
+function validateHistoryScope(scope: HistoryScope): { valid: boolean; error?: string } {
+  // 路由层只做范围参数的格式与先后关系校验，具体扫描策略留给 service 层处理。
+  const sinceTs = scope.since ? Date.parse(scope.since) : NaN;
+  const untilTs = scope.until ? Date.parse(scope.until) : NaN;
 
-function validateConditions(conditions: FilterCondition[]): { valid: boolean; error?: string } {
-  if (!Array.isArray(conditions) || conditions.length === 0) {
-    return { valid: false, error: "conditions is required" };
+  if (scope.since && Number.isNaN(sinceTs)) {
+    return { valid: false, error: "since must be a valid datetime string" };
   }
-
-  for (const condition of conditions) {
-    if (!["keyword", "group", "channel"].includes(condition.type)) {
-      return { valid: false, error: "condition.type must be keyword, group, or channel" };
-    }
-    if (!Array.isArray(condition.values) || condition.values.length === 0) {
-      return { valid: false, error: "condition.values must be a non-empty array" };
-    }
-    if (condition.values.some((v) => typeof v !== "string" || !v.trim())) {
-      return { valid: false, error: "condition.values must contain non-empty strings" };
-    }
+  if (scope.until && Number.isNaN(untilTs)) {
+    return { valid: false, error: "until must be a valid datetime string" };
+  }
+  if (!Number.isNaN(sinceTs) && !Number.isNaN(untilTs) && sinceTs > untilTs) {
+    return { valid: false, error: "since must be less than or equal to until" };
   }
 
   return { valid: true };
@@ -64,6 +62,41 @@ function toApiFilter(row: {
 }
 
 export async function filterRoutes(app: FastifyInstance): Promise<void> {
+  app.post<{
+    Body: { conditions: FilterCondition[] } & HistoryScope;
+  }>("/api/filters/preview", async (request, reply) => {
+    const validation = validateConditions(request.body.conditions);
+    if (!validation.valid) {
+      return reply.status(400).send({ error: validation.error });
+    }
+
+    const scope = normalizeHistoryScope(request.body);
+    const scopeValidation = validateHistoryScope(scope);
+    if (!scopeValidation.valid) {
+      return reply.status(400).send({ error: scopeValidation.error });
+    }
+
+    try {
+      // 预览接口与回拉接口共用同一套范围参数，避免两边行为不一致。
+      const result = await previewHistoricalFilterMessages({
+        conditions: request.body.conditions,
+        perChatLimit: scope.perChatLimit,
+        totalLimit: scope.totalLimit,
+        chatIds: scope.chatIds,
+        since: scope.since,
+        until: scope.until,
+      });
+
+      return {
+        messages: result.messages,
+        scannedChats: result.scannedChats,
+        total: result.messages.length,
+      };
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message || "Failed to preview filter history" });
+    }
+  });
+
   // Get all filters
   app.get("/api/filters", async () => {
     const rows = await db.filter.findMany({
@@ -92,12 +125,7 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
     const row = await db.filter.create({
       data: {
         name: name.trim(),
-        conditions: JSON.stringify(
-          conditions.map((condition) => ({
-            type: condition.type,
-            values: condition.values.map((v) => v.trim()).filter(Boolean),
-          }))
-        ),
+        conditions: serializeConditions(conditions),
         createdAt: now,
         updatedAt: now,
       },
@@ -132,12 +160,7 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
         ...(updates.name !== undefined ? { name: updates.name.trim() } : {}),
         ...(updates.conditions !== undefined
           ? {
-              conditions: JSON.stringify(
-                updates.conditions.map((condition) => ({
-                  type: condition.type,
-                  values: condition.values.map((v) => v.trim()).filter(Boolean),
-                }))
-              ),
+              conditions: serializeConditions(updates.conditions),
             }
           : {}),
         updatedAt: new Date().toISOString(),
@@ -178,5 +201,36 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return toApiFilter(row);
+  });
+
+  app.post<{
+    Params: { id: string };
+    Body: HistoryScope;
+  }>("/api/filters/:id/backfill", async (request, reply) => {
+    const id = parseInt(request.params.id, 10);
+
+    const existing = await db.filter.findUnique({ where: { id } });
+    if (!existing) {
+      return reply.status(404).send({ error: "Filter not found" });
+    }
+
+    const scope = normalizeHistoryScope(request.body);
+    const scopeValidation = validateHistoryScope(scope);
+    if (!scopeValidation.valid) {
+      return reply.status(400).send({ error: scopeValidation.error });
+    }
+
+    try {
+      return await backfillFilterHistory({
+        filterId: existing.id,
+        conditions: parseConditions(existing.conditions),
+        perChatLimit: scope.perChatLimit,
+        chatIds: scope.chatIds,
+        since: scope.since,
+        until: scope.until,
+      });
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message || "Failed to backfill filter history" });
+    }
   });
 }

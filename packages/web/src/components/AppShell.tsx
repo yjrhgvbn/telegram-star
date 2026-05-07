@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BellRing, Rows3, Waypoints } from "lucide-react";
+import { BellRing, Rows3, SlidersHorizontal, Waypoints } from "lucide-react";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { TelegramLogin } from "@/components/TelegramLogin";
@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { AuthStatus } from "@/types";
 
 interface AppShellProps {
-  activeTab: "filtered" | "groups" | "notifications";
+  activeTab: "filtered" | "filters" | "groups" | "notifications";
   authStatus: AuthStatus;
   authLoading: boolean;
   onLoginSuccess: () => void;
@@ -25,6 +25,10 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
 
       if (value === "groups") {
         navigate("/groups");
+      }
+
+      if (value === "filters") {
+        navigate("/filters");
       }
 
       if (value === "notifications") {
@@ -66,6 +70,13 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
                 >
                   <Rows3 data-icon="inline-start" />
                   过滤的消息
+                </TabsTrigger>
+                <TabsTrigger
+                  value="filters"
+                  className="flex-none rounded-none px-1 pb-3 text-sm font-medium text-foreground/58 data-active:text-foreground sm:px-3"
+                >
+                  <SlidersHorizontal data-icon="inline-start" />
+                  过滤器维护
                 </TabsTrigger>
                 <TabsTrigger
                   value="groups"

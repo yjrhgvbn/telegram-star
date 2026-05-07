@@ -50,6 +50,31 @@ export interface LiveChatMessage {
   inDatabase: boolean;
 }
 
+export interface HistoricalFilterPreviewMessage extends LiveChatMessage {
+  matchedKeyword: string | null;
+}
+
+export interface FilterPreviewResponse {
+  messages: HistoricalFilterPreviewMessage[];
+  scannedChats: number;
+  total: number;
+}
+
+export interface FilterHistoryScope {
+  perChatLimit?: number;
+  totalLimit?: number;
+  chatIds?: string[];
+  since?: string;
+  until?: string;
+}
+
+export interface FilterBackfillResponse {
+  scannedChats: number;
+  matchedCount: number;
+  savedCount: number;
+  skippedExistingCount: number;
+}
+
 export interface MessagePagination {
   page: number;
   limit: number;

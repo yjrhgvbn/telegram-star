@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import useSWR from "swr";
 import { api } from "../api/client";
-import type { Filter, FilterCondition, JoinedChat } from "../types";
+import type { Filter, FilterCondition, FilterHistoryScope, JoinedChat } from "../types";
 
 export function useFilters() {
   const {
@@ -27,6 +27,18 @@ export function useFilters() {
     [mutateFilters]
   );
 
+  const updateFilter = useCallback(
+    async (id: number, data: { name?: string; conditions?: FilterCondition[] }) => {
+      const updated = await api.filters.update(id, data);
+      await mutateFilters(
+        (current) => (current ?? []).map((filter) => (filter.id === id ? updated : filter)),
+        { revalidate: false }
+      );
+      return updated;
+    },
+    [mutateFilters]
+  );
+
   const deleteFilter = useCallback(async (id: number) => {
     await api.filters.delete(id);
     await mutateFilters((current) => (current ?? []).filter((filter) => filter.id !== id), { revalidate: false });
@@ -39,6 +51,10 @@ export function useFilters() {
       { revalidate: false }
     );
   }, [mutateFilters]);
+
+  const backfillFilter = useCallback(async (id: number, data?: FilterHistoryScope) => {
+    return api.filters.backfill(id, data);
+  }, []);
 
   const refresh = useCallback(() => {
     void mutateFilters();
@@ -56,8 +72,10 @@ export function useFilters() {
     error: error instanceof Error ? error.message : null,
     chatsError: chatsError instanceof Error ? chatsError.message : null,
     createFilter,
+    updateFilter,
     deleteFilter,
     toggleFilter,
+    backfillFilter,
     refresh,
     refreshChats,
   };

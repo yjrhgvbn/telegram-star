@@ -19,7 +19,7 @@ export function MessagesPage() {
   const [page, setPage] = useState(1);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const { filters, chats, loading: filtersLoading, chatsLoading, createFilter, deleteFilter, toggleFilter } = useFilters();
+  const { filters, loading: filtersLoading } = useFilters();
   const { messages, pagination, loading: messagesLoading, toggleRead, refresh } = useMessages({
     page,
     limit: 20,
@@ -28,13 +28,6 @@ export function MessagesPage() {
     search: searchQuery,
   });
   useStats();
-
-  const handleCreateFilter = useCallback(
-    async (data: { name: string; conditions: Array<{ type: "keyword" | "group" | "channel"; values: string[] }> }) => {
-      await createFilter(data);
-    },
-    [createFilter]
-  );
 
   const handleSearch = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
@@ -88,12 +81,7 @@ export function MessagesPage() {
             <>
               <FilterPanel
                 filters={filters}
-                chats={chats}
                 loading={filtersLoading}
-                chatsLoading={chatsLoading}
-                onCreateFilter={handleCreateFilter}
-                onDeleteFilter={deleteFilter}
-                onToggleFilter={toggleFilter}
                 selectedFilterId={selectedFilterId}
                 onSelectFilter={(id) => {
                   setSelectedFilterId(id);
