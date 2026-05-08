@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Eye, LoaderCircle, Play, Plus, Save, Trash2 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
-import { MultiSelectPicker } from "@/components/MultiSelectPicker";
+import { JoinedChatPicker } from "@/components/JoinedChatPicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +28,6 @@ type DraftCondition = {
   type: FilterConditionType;
   values: string[];
   input: string;
-  pickerOpen: boolean;
 };
 
 const conditionTypeOptions: Array<{ value: FilterConditionType; label: string }> = [
@@ -42,7 +41,6 @@ function createDraftCondition(type: FilterConditionType = "keyword"): DraftCondi
     type,
     values: [],
     input: "",
-    pickerOpen: false,
   };
 }
 
@@ -56,7 +54,6 @@ function toDraftConditions(conditions: FilterCondition[]): DraftCondition[] {
     type: condition.type,
     values: [...condition.values],
     input: "",
-    pickerOpen: false,
   }));
 }
 
@@ -87,8 +84,6 @@ export function FiltersPage() {
   const { authStatus, authLoading, handleLoginSuccess } = useAuthStatus();
   const {
     filters,
-    chats,
-    chatsLoading,
     createFilter,
     updateFilter,
     deleteFilter,
@@ -105,7 +100,6 @@ export function FiltersPage() {
   const [previewMessages, setPreviewMessages] = useState<HistoricalFilterPreviewMessage[]>([]);
   const [previewSummary, setPreviewSummary] = useState<{ scannedChats: number; total: number } | null>(null);
   const [previewLimit, setPreviewLimit] = useState("50");
-  const [historyChatPickerOpen, setHistoryChatPickerOpen] = useState(false);
   const [historyChatIds, setHistoryChatIds] = useState<string[]>([]);
   const [historySince, setHistorySince] = useState("");
   const [historyUntil, setHistoryUntil] = useState("");
@@ -312,7 +306,6 @@ export function FiltersPage() {
 
   const renderConditionEditor = (condition: DraftCondition, index: number) => {
     const typeLabel = conditionTypeOptions.find((option) => option.value === condition.type)?.label ?? "条件";
-    const items = chats;
 
     return (
       <Card key={condition.id} className="border border-border/70 bg-background/60" size="sm">
@@ -393,17 +386,12 @@ export function FiltersPage() {
           ) : (
             <div className="space-y-2">
               <label className="text-xs text-muted-foreground">选择{typeLabel}</label>
-              <MultiSelectPicker
+              <JoinedChatPicker
                 label="已选"
-                items={items}
                 selected={condition.values}
                 searchPlaceholder={`搜索${typeLabel}名称或 ID`}
                 emptyText={`没有可选${typeLabel}`}
-                loading={chatsLoading}
-                open={condition.pickerOpen}
-                onOpenChange={(open) => updateCondition(condition.id, (current) => ({ ...current, pickerOpen: open }))}
                 onSelectionChange={(values) => updateCondition(condition.id, (current) => ({ ...current, values }))}
-                searchFields={["title", "id"]}
               />
             </div>
           )}
@@ -479,17 +467,12 @@ export function FiltersPage() {
 
                   <div className="space-y-1.5">
                     <label className="text-xs text-muted-foreground">指定会话（可选）</label>
-                    <MultiSelectPicker
+                    <JoinedChatPicker
                       label="已选"
-                      items={chats}
                       selected={historyChatIds}
                       searchPlaceholder="搜索会话名称或 ID"
                       emptyText="没有可选会话"
-                      loading={chatsLoading}
-                      open={historyChatPickerOpen}
-                      onOpenChange={setHistoryChatPickerOpen}
                       onSelectionChange={setHistoryChatIds}
-                      searchFields={["title", "id"]}
                     />
                     <p className="text-[11px] text-muted-foreground">不选择时默认扫描所有可访问会话。</p>
                   </div>
