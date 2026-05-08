@@ -1,4 +1,4 @@
-export type FilterConditionType = "keyword" | "group" | "channel";
+export type FilterConditionType = "keyword" | "chat";
 
 export interface FilterCondition {
   type: FilterConditionType;
@@ -17,7 +17,6 @@ export interface Filter {
 export interface JoinedChat {
   id: string;
   title: string;
-  type: "group" | "channel";
 }
 
 export interface Message {
@@ -41,7 +40,6 @@ export interface LiveChatMessage {
   id: number;
   chatId: string;
   chatTitle: string;
-  chatType: "group" | "channel";
   senderName: string;
   senderId: string;
   content: string;

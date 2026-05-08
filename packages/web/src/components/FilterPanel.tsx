@@ -1,4 +1,4 @@
-import { Settings2 } from "lucide-react";
+import { Plus, Settings2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,10 +27,10 @@ export function FilterPanel({
     switch (type) {
       case "keyword":
         return "🔑";
+      case "chat":
       case "group":
-        return "👥";
       case "channel":
-        return "📢";
+        return "💬";
       default:
         return "📌";
     }
@@ -40,10 +40,10 @@ export function FilterPanel({
     switch (type) {
       case "keyword":
         return "bg-amber-500/15 text-amber-700";
+      case "chat":
       case "group":
-        return "bg-sky-500/15 text-sky-700";
       case "channel":
-        return "bg-indigo-500/15 text-indigo-700";
+        return "bg-sky-500/15 text-sky-700";
       default:
         return "";
     }
@@ -57,16 +57,14 @@ export function FilterPanel({
     return conditions
       .map((condition) => {
         if (condition.type === "keyword") return `关键词 ${condition.values.length}`;
-        if (condition.type === "group") return `群组 ${condition.values.length}`;
-        return `频道 ${condition.values.length}`;
+        return `会话 ${condition.values.length}`;
       })
       .join(" · ");
   };
 
   const getFilterIcon = (conditions: FilterCondition[]) => {
     if (conditions.some((condition) => condition.type === "keyword")) return "🔑";
-    if (conditions.some((condition) => condition.type === "group")) return "👥";
-    if (conditions.some((condition) => condition.type === "channel")) return "📢";
+    if (conditions.some((condition) => condition.type === "chat")) return "💬";
     return "📌";
   };
 
@@ -77,9 +75,9 @@ export function FilterPanel({
           <span>🎯</span>
           <span>过滤器</span>
         </h2>
-        <Button size="sm" variant="outline" onClick={() => navigate("/filters")}>
-          <Settings2 data-icon="inline-start" />
-          管理
+        <Button size="sm" variant="outline" onClick={() => navigate("/filters/new")}>
+          <Plus data-icon="inline-start" />
+          新建
         </Button>
       </div>
       <Separator />
@@ -112,37 +110,56 @@ export function FilterPanel({
             </div>
           ) : (
             filters.map((filter) => (
-              <button
+              <div
                 key={filter.id}
                 className={cn(
-                  "group flex w-full items-start gap-2 rounded-xl border px-2.5 py-2.5 text-left transition",
+                  "group flex w-full items-start gap-2 rounded-xl border px-2.5 py-2.5 transition",
                   selectedFilterId === String(filter.id) ? "border-primary/30 bg-primary/10 shadow-sm" : "border-transparent hover:bg-accent/70",
                   !filter.enabled && "opacity-55"
                 )}
-                onClick={() => onSelectFilter(String(filter.id))}
               >
-                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-background/80 ring-1 ring-border/70">
-                  {getFilterIcon(filter.conditions)}
-                </span>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-semibold leading-none">{filter.name}</p>
-                    {!filter.enabled && <Badge variant="outline">已停用</Badge>}
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                  onClick={() => onSelectFilter(String(filter.id))}
+                >
+                  <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-background/80 ring-1 ring-border/70">
+                    {getFilterIcon(filter.conditions)}
+                  </span>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-semibold leading-none">{filter.name}</p>
+                      {!filter.enabled && <Badge variant="outline">已停用</Badge>}
+                    </div>
+                    <p className="truncate text-[11px] text-muted-foreground">{getConditionSummary(filter.conditions)}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {filter.conditions.map((condition, index) => (
+                        <Badge
+                          key={`${filter.id}-${condition.type}-${index}`}
+                          variant="outline"
+                          className={cn("max-w-full rounded-md px-1.5 py-0 text-[11px] font-medium", getTypeBadge(condition.type))}
+                        >
+                          {getTypeIcon(condition.type)} {condition.values.length}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                  <p className="truncate text-[11px] text-muted-foreground">{getConditionSummary(filter.conditions)}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {filter.conditions.map((condition, index) => (
-                      <Badge
-                        key={`${filter.id}-${condition.type}-${index}`}
-                        variant="outline"
-                        className={cn("max-w-full rounded-md px-1.5 py-0 text-[11px] font-medium", getTypeBadge(condition.type))}
-                      >
-                        {getTypeIcon(condition.type)} {condition.values.length}
-                      </Badge>
-                    ))}
-                  </div>
+                </button>
+                <div className="pt-0.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="shrink-0"
+                    aria-label={`配置过滤器 ${filter.name}`}
+                    onClick={() => {
+                      navigate(`/filters/${filter.id}`);
+                    }}
+                  >
+                    <Settings2 />
+                  </Button>
                 </div>
-              </button>
+              </div>
             ))
           )}
         </div>

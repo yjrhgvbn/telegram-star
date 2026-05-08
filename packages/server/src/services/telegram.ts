@@ -16,14 +16,12 @@ import {
 export interface JoinedChat {
   id: string;
   title: string;
-  type: "group" | "channel";
 }
 
 export interface LiveChatMessage {
   id: number;
   chatId: string;
   chatTitle: string;
-  chatType: "group" | "channel";
   senderName: string;
   senderId: string;
   content: string;
@@ -71,18 +69,9 @@ export function getClient(): TelegramClient | null {
   return client;
 }
 
-function getEntityType(entity: any): "group" | "channel" | "other" {
-  if (!entity) return "other";
-
-  if (entity.className === "Channel") {
-    return entity.broadcast ? "channel" : "group";
-  }
-
-  if (entity.className === "Chat") {
-    return "group";
-  }
-
-  return "other";
+function isValidChat(entity: any): boolean {
+  if (!entity) return false;
+  return entity.className === "Channel" || entity.className === "Chat";
 }
 
 function buildTelegramLink(chatId: string, chat: any, messageId: number): string {
@@ -103,37 +92,15 @@ function getSenderSummary(sender: any): { senderName: string; senderId: string }
 }
 
 function getScopedChatIds(conditions: FilterCondition[]) {
-  const groupCondition = conditions.find((condition) => condition.type === "group");
-  const channelCondition = conditions.find((condition) => condition.type === "channel");
-
-  return {
-    groupIds: new Set(groupCondition?.values ?? []),
-    channelIds: new Set(channelCondition?.values ?? []),
-  };
+  const chatCondition = conditions.find((condition) => condition.type === "chat");
+  return new Set(chatCondition?.values ?? []);
 }
 
 function shouldInspectChat(
   chatId: string,
-  chatType: "group" | "channel",
   scopedChatIds: ReturnType<typeof getScopedChatIds>,
 ): boolean {
-  if (chatType === "group" && scopedChatIds.groupIds.size > 0) {
-    return scopedChatIds.groupIds.has(chatId);
-  }
-
-  if (chatType === "channel" && scopedChatIds.channelIds.size > 0) {
-    return scopedChatIds.channelIds.has(chatId);
-  }
-
-  if (chatType === "group" && scopedChatIds.channelIds.size > 0 && scopedChatIds.groupIds.size === 0) {
-    return false;
-  }
-
-  if (chatType === "channel" && scopedChatIds.groupIds.size > 0 && scopedChatIds.channelIds.size === 0) {
-    return false;
-  }
-
-  return true;
+  return scopedChatIds.size === 0 || scopedChatIds.has(chatId);
 }
 
 function getMessageTimestampMs(message: any): number {
@@ -233,13 +200,12 @@ export async function previewHistoricalFilterMessages(options: {
 
   for (const dialog of dialogs) {
     const entity = (dialog as any).entity;
-    const chatType = getEntityType(entity);
-    if (chatType === "other") {
+    if (!isValidChat(entity)) {
       continue;
     }
 
     const chatId = entity?.id?.toString?.() || "";
-    if (!chatId || !shouldInspectChat(chatId, chatType, scopedChatIds)) {
+    if (!chatId || !shouldInspectChat(chatId, scopedChatIds)) {
       continue;
     }
     if (selectedChatIdSet.size > 0 && !selectedChatIdSet.has(chatId)) {
@@ -282,7 +248,6 @@ export async function previewHistoricalFilterMessages(options: {
       const match = matchFilterConditions(
         {
           chatId,
-          chatType,
           content: item.message,
         },
         options.conditions,
@@ -298,7 +263,6 @@ export async function previewHistoricalFilterMessages(options: {
         id: item.id,
         chatId,
         chatTitle: entity?.title || entity?.username || chatId,
-        chatType,
         senderName,
         senderId,
         content: item.message,
@@ -381,15 +345,14 @@ export async function listJoinedChats(): Promise<JoinedChat[]> {
 
   for (const dialog of dialogs) {
     const entity = (dialog as any).entity;
-    const entityType = getEntityType(entity);
-    if (entityType === "other") continue;
+    if (!isValidChat(entity)) continue;
 
     const id = entity?.id?.toString?.() || "";
     if (!id || seen.has(id)) continue;
 
     const title = entity?.title || entity?.username || id;
     seen.add(id);
-    chats.push({ id, title, type: entityType });
+    chats.push({ id, title });
   }
 
   return chats.sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
@@ -423,8 +386,7 @@ export async function listSingleChatMessages(options: {
   }
 
   const entity = (targetDialog as any).entity;
-  const entityType = getEntityType(entity);
-  if (entityType === "other") {
+  if (!isValidChat(entity)) {
     throw new Error("Unsupported chat type");
   }
 
@@ -468,7 +430,6 @@ export async function listSingleChatMessages(options: {
       id: item.id,
       chatId,
       chatTitle,
-      chatType: entityType,
       senderName,
       senderId,
       content: item.message,
@@ -646,8 +607,6 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
 
   const chatId = chat.id.toString();
   const chatTitle = (chat as any).title || (chat as any).firstName || chatId;
-  const chatType = getEntityType(chat as any);
-
   // Check each filter
   for (const filter of activeFilters) {
     const conditions = parseConditions(filter.conditions);
@@ -658,7 +617,6 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
     const match = matchFilterConditions(
       {
         chatId,
-        chatType,
         content: message.text,
       },
       conditions,

@@ -118,7 +118,7 @@ export function GroupsPage() {
                   onClick={() => setSelectedLiveChatId(chat.id)}
                 >
                   <p className="truncate text-sm font-medium">{chat.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{chat.type === "group" ? "群组" : "频道"}</p>
+
                 </button>
               ))
             )}

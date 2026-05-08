@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { Eye, LoaderCircle, Play, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Eye, LoaderCircle, Play, Plus, Save, Trash2 } from "lucide-react";
+import { useParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { MultiSelectPicker } from "@/components/MultiSelectPicker";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,6 @@ import {
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useFilters } from "@/hooks/useFilters";
 import { api } from "@/api/client";
-import { cn } from "@/lib/utils";
 import type {
   FilterCondition,
   FilterConditionType,
@@ -33,8 +33,7 @@ type DraftCondition = {
 
 const conditionTypeOptions: Array<{ value: FilterConditionType; label: string }> = [
   { value: "keyword", label: "关键词" },
-  { value: "group", label: "群组" },
-  { value: "channel", label: "频道" },
+  { value: "chat", label: "会话" },
 ];
 
 function createDraftCondition(type: FilterConditionType = "keyword"): DraftCondition {
@@ -84,19 +83,17 @@ function normalizeConditions(conditions: DraftCondition[]): FilterCondition[] {
 }
 
 export function FiltersPage() {
+  const { filterId: routeFilterId } = useParams<{ filterId?: string }>();
   const { authStatus, authLoading, handleLoginSuccess } = useAuthStatus();
   const {
     filters,
     chats,
-    loading,
     chatsLoading,
     createFilter,
     updateFilter,
     deleteFilter,
     toggleFilter,
     backfillFilter,
-    refresh,
-    refreshChats,
   } = useFilters();
 
   const [selectedFilterId, setSelectedFilterId] = useState<string>("new");
@@ -115,9 +112,16 @@ export function FiltersPage() {
   const [backfillLoading, setBackfillLoading] = useState(false);
   const [backfillSummary, setBackfillSummary] = useState<string>("");
 
-  const groups = useMemo(() => chats.filter((chat) => chat.type === "group"), [chats]);
-  const channels = useMemo(() => chats.filter((chat) => chat.type === "channel"), [chats]);
   const selectedFilter = filters.find((filter) => String(filter.id) === selectedFilterId) ?? null;
+
+  useEffect(() => {
+    if (!routeFilterId || routeFilterId === "new") {
+      setSelectedFilterId("new");
+      return;
+    }
+
+    setSelectedFilterId(routeFilterId);
+  }, [routeFilterId]);
 
   useEffect(() => {
     if (selectedFilterId === "new") {
@@ -205,15 +209,23 @@ export function FiltersPage() {
 
   const buildPayload = () => {
     const normalized = normalizeConditions(conditions);
+    const keywordConditions = normalized.filter((condition) => condition.type === "keyword");
+    const chatValues = Array.from(
+      new Set(normalized.filter((condition) => condition.type === "chat").flatMap((condition) => condition.values)),
+    );
+    const mergedConditions = chatValues.length > 0
+      ? [...keywordConditions, { type: "chat" as const, values: chatValues }]
+      : keywordConditions;
+
     if (!name.trim()) {
       throw new Error("过滤器名称不能为空");
     }
-    if (normalized.length === 0) {
+    if (mergedConditions.length === 0) {
       throw new Error("至少添加一个有效条件");
     }
     return {
       name: name.trim(),
-      conditions: normalized,
+      conditions: mergedConditions,
     };
   };
 
@@ -300,7 +312,7 @@ export function FiltersPage() {
 
   const renderConditionEditor = (condition: DraftCondition, index: number) => {
     const typeLabel = conditionTypeOptions.find((option) => option.value === condition.type)?.label ?? "条件";
-    const items = condition.type === "group" ? groups : channels;
+    const items = chats;
 
     return (
       <Card key={condition.id} className="border border-border/70 bg-background/60" size="sm">
@@ -361,7 +373,7 @@ export function FiltersPage() {
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {condition.values.length === 0 ? (
-                  <span className="text-xs text-muted-foreground">尚未添加 {typeLabel}</span>
+                  <span className="text-xs text-muted-foreground">尚未添加{typeLabel}</span>
                 ) : (
                   condition.values.map((value) => (
                     <Badge key={value} variant="secondary" className="gap-1">
@@ -380,7 +392,7 @@ export function FiltersPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              <label className="text-xs text-muted-foreground">选择 {typeLabel}</label>
+              <label className="text-xs text-muted-foreground">选择{typeLabel}</label>
               <MultiSelectPicker
                 label="已选"
                 items={items}
@@ -402,62 +414,12 @@ export function FiltersPage() {
 
   return (
     <AppShell
-      activeTab="filters"
+      activeTab="filtered"
       authStatus={authStatus}
       authLoading={authLoading}
       onLoginSuccess={handleLoginSuccess}
     >
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <aside className="w-full border-r border-border/60 bg-card/80 lg:w-[320px]">
-          <div className="border-b border-border/60 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-medium">过滤器列表</p>
-                <p className="mt-1 text-xs text-muted-foreground">创建、编辑、删除和主动拉取历史消息</p>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => { void refresh(); void refreshChats(); }}>
-                <RefreshCw data-icon="inline-start" className={cn((loading || chatsLoading) && "animate-spin")} />
-                刷新
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-2 p-2">
-            <Button type="button" className="w-full justify-start" onClick={() => setSelectedFilterId("new")}>
-              <Plus data-icon="inline-start" />
-              新建过滤器
-            </Button>
-
-            <div className="max-h-[calc(100vh-220px)] space-y-1 overflow-auto pr-1">
-              {filters.map((filter) => (
-                <button
-                  key={filter.id}
-                  type="button"
-                  className={cn(
-                    "w-full rounded-xl border px-3 py-2 text-left transition",
-                    selectedFilterId === String(filter.id)
-                      ? "border-primary/40 bg-primary/10"
-                      : "border-border/50 bg-background/70 hover:bg-muted/60"
-                  )}
-                  onClick={() => setSelectedFilterId(String(filter.id))}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-medium">{filter.name}</p>
-                    <Badge variant={filter.enabled ? "secondary" : "outline"}>{filter.enabled ? "启用中" : "已停用"}</Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{filter.conditions.length} 个条件</p>
-                </button>
-              ))}
-
-              {filters.length === 0 && (
-                <div className="rounded-xl border border-dashed border-border bg-background/60 px-3 py-8 text-center text-sm text-muted-foreground">
-                  暂无过滤器
-                </div>
-              )}
-            </div>
-          </div>
-        </aside>
-
+      <div className="flex min-h-0 flex-1 flex-col">
         <main className="min-w-0 flex-1 overflow-auto p-4 sm:p-6">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
             <div className="space-y-4">
@@ -575,7 +537,6 @@ export function FiltersPage() {
                       previewMessages.map((message) => (
                         <div key={`${message.chatId}-${message.id}`} className="rounded-xl border border-border/70 bg-background/65 p-3">
                           <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <Badge variant="outline">{message.chatType === "group" ? "群组" : "频道"}</Badge>
                             <span>{message.chatTitle}</span>
                             <span>·</span>
                             <span>{message.senderName || "Unknown"}</span>

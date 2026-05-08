@@ -1,4 +1,4 @@
-export type FilterConditionType = "keyword" | "group" | "channel";
+export type FilterConditionType = "keyword" | "chat";
 
 export interface FilterCondition {
   type: FilterConditionType;
@@ -7,7 +7,6 @@ export interface FilterCondition {
 
 export interface FilterMatchInput {
   chatId: string;
-  chatType: "group" | "channel" | "other";
   content: string;
 }
 
@@ -36,7 +35,7 @@ export function parseConditions(raw: string): FilterCondition[] {
       }))
       .filter(
         (item): item is FilterCondition =>
-          (item.type === "keyword" || item.type === "group" || item.type === "channel") &&
+          (item.type === "keyword" || item.type === "chat") &&
           item.values.length > 0,
       );
   } catch {
@@ -59,8 +58,8 @@ export function validateConditions(conditions: FilterCondition[]): { valid: bool
   }
 
   for (const condition of conditions) {
-    if (!condition || !["keyword", "group", "channel"].includes(condition.type)) {
-      return { valid: false, error: "condition.type must be keyword, group, or channel" };
+    if (!condition || !["keyword", "chat"].includes(condition.type)) {
+      return { valid: false, error: "condition.type must be keyword or chat" };
     }
 
     if (!Array.isArray(condition.values) || condition.values.length === 0) {
@@ -76,9 +75,7 @@ export function validateConditions(conditions: FilterCondition[]): { valid: bool
 }
 
 export function hasConflictingChatConditions(conditions: FilterCondition[]): boolean {
-  const hasGroup = conditions.some((condition) => condition.type === "group");
-  const hasChannel = conditions.some((condition) => condition.type === "channel");
-  return hasGroup && hasChannel;
+  return conditions.filter((condition) => condition.type === "chat").length > 1;
 }
 
 export function matchFilterConditions(
@@ -105,12 +102,8 @@ export function matchFilterConditions(
       }
     }
 
-    if (condition.type === "group") {
-      conditionMatched = input.chatType === "group" && condition.values.includes(input.chatId);
-    }
-
-    if (condition.type === "channel") {
-      conditionMatched = input.chatType === "channel" && condition.values.includes(input.chatId);
+    if (condition.type === "chat") {
+      conditionMatched = condition.values.includes(input.chatId);
     }
 
     if (!conditionMatched) {
