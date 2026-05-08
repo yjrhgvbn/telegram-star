@@ -78,7 +78,7 @@ export function MessagesPage() {
       authLoading={authLoading}
       onLoginSuccess={handleLoginSuccess}
     >
-      <div className="mt-0 flex min-h-0 flex-1">
+      <div className="mt-0 flex h-full min-h-0 flex-1">
         {/*
           侧边栏（过滤器列表）：
           - 大屏：始终显示
@@ -107,7 +107,7 @@ export function MessagesPage() {
         */}
         <main
           className={cn(
-            "flex-col",
+            "flex-col min-h-0",
             isGroupSelected
               ? "flex min-w-0 flex-1"
               : "hidden sm:flex sm:min-w-0 sm:flex-1"
@@ -197,7 +197,7 @@ export function MessagesPage() {
             </div>
           </div>
 
-          <div className="flex-1 p-4 sm:p-6">
+          <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6">
             <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Sparkles className="size-4" />
               <span>智能排序已开启，最新匹配消息优先展示</span>

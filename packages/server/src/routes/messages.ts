@@ -1,6 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
 import type { Prisma } from "../generated/prisma/client.js";
+import { syncReadByTelegramInteractions } from "../services/telegram.js";
+
+// 低频兜底：每 30s 最多对 Telegram 发起一次拉取式互动同步，
+// 实时链路（Real-time Reaction 监听）会先捕获大多数场景。
+const INTERACTION_SYNC_INTERVAL_MS = 30_000;
+let lastInteractionSyncMs = 0;
 
 export async function messageRoutes(app: FastifyInstance): Promise<void> {
   // Get messages with pagination and filtering
@@ -42,12 +48,29 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
             select: { name: true },
           },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { messageDate: "desc" },
         take: limit,
         skip: offset,
       }),
       db.message.count({ where }),
     ]);
+
+    const interactedReadIds = await (async () => {
+      const now = Date.now();
+      if (now - lastInteractionSyncMs < INTERACTION_SYNC_INTERVAL_MS) {
+        // 距上次同步不足 30s，跳过（实时 Reaction 监听已覆盖大多数场景）
+        return new Set<number>();
+      }
+      lastInteractionSyncMs = now;
+      return syncReadByTelegramInteractions(
+        data.map((row) => ({
+          id: row.id,
+          chatId: row.chatId,
+          telegramMessageId: row.telegramMessageId,
+          isRead: row.isRead,
+        })),
+      );
+    })();
 
     const total = totalResult;
 
@@ -62,7 +85,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
         content: row.content,
         messageDate: row.messageDate,
         telegramLink: row.telegramLink,
-        isRead: row.isRead,
+        isRead: interactedReadIds.has(row.id) ? true : row.isRead,
         matchedFilterId: row.matchedFilterId,
         matchedKeyword: row.matchedKeyword,
         createdAt: row.createdAt,
