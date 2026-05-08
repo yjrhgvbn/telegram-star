@@ -10,6 +10,7 @@
      <Routes>
        <Route path="/" element={<Navigate to="/messages" replace />} />
        <Route path="/messages" element={<MessagesPage />} />
+      <Route path="/messages/:filterId" element={<MessagesPage />} />
       <Route path="/filters" element={<FiltersPage />} />
        <Route path="/groups" element={<GroupsPage />} />
        <Route path="/notifications" element={<NotificationsPage />} />

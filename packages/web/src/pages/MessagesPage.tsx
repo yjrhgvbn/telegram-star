@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { LogOut, RefreshCw, Search, Sparkles, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, RefreshCw, Search, Sparkles } from "lucide-react";
 import { useMessages, useStats } from "@/hooks/useMessages";
 import { useFilters } from "@/hooks/useFilters";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
@@ -11,13 +12,20 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export function MessagesPage() {
-  const { authStatus, authLoading, handleLoginSuccess, handleLogout } = useAuthStatus();
+  // rawFilterId: undefined = /messages, "all" = 全部消息, other = 指定过滤器
+  const { filterId: rawFilterId } = useParams<{ filterId?: string }>();
+  const navigate = useNavigate();
 
-  const [selectedFilterId, setSelectedFilterId] = useState("");
+  // 是否已选中分组（包含"全部消息"的消息列表视图）
+  const isGroupSelected = rawFilterId !== undefined;
+  // 传递给 API 的过滤器 ID："all" 视作空字符串（全部消息）
+  const selectedFilterId = rawFilterId === "all" ? "" : (rawFilterId ?? "");
+
+  const { authStatus, authLoading, handleLoginSuccess } = useAuthStatus();
+
   const [readFilter, setReadFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const { filters, loading: filtersLoading } = useFilters();
   const { messages, pagination, loading: messagesLoading, toggleRead, refresh } = useMessages({
@@ -28,6 +36,24 @@ export function MessagesPage() {
     search: searchQuery,
   });
   useStats();
+
+  // 切换过滤器时重置分页
+  useEffect(() => {
+    setPage(1);
+  }, [rawFilterId]);
+
+  // 选择过滤器：更新路由，由路由驱动状态
+  const handleSelectFilter = useCallback(
+    (id: string) => {
+      navigate(id === "" ? "/messages/all" : `/messages/${id}`);
+    },
+    [navigate]
+  );
+
+  // 小屏返回分组列表
+  const handleBack = useCallback(() => {
+    navigate("/messages");
+  }, [navigate]);
 
   const handleSearch = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
@@ -53,55 +79,50 @@ export function MessagesPage() {
       onLoginSuccess={handleLoginSuccess}
     >
       <div className="mt-0 flex min-h-0 flex-1">
+        {/*
+          侧边栏（过滤器列表）：
+          - 大屏：始终显示
+          - 小屏：仅在未选中分组时（/messages）显示，占满全宽
+        */}
         <aside
           className={cn(
-            "hidden border-r border-border/60 bg-card/85 backdrop-blur-xl md:flex md:flex-col",
-            sidebarOpen ? "md:w-[320px]" : "md:w-18"
+            "border-r border-border/60 bg-card/85 backdrop-blur-xl",
+            isGroupSelected
+              ? "hidden md:flex md:flex-col md:w-[320px]"
+              : "flex w-full flex-col sm:w-[320px]"
           )}
         >
-          <div className="flex items-center gap-3 border-b border-border/70 px-4 py-4">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-primary/15 text-lg">⭐</div>
-            {sidebarOpen && (
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">Telegram Star</p>
-                <p className="text-xs text-muted-foreground">更友好的消息追踪台</p>
-              </div>
-            )}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              aria-label="折叠侧栏"
-            >
-              {sidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
-            </Button>
-          </div>
-
-          {sidebarOpen && (
-            <>
-              <FilterPanel
-                filters={filters}
-                loading={filtersLoading}
-                selectedFilterId={selectedFilterId}
-                onSelectFilter={(id) => {
-                  setSelectedFilterId(id);
-                  setPage(1);
-                }}
-              />
-
-              {authStatus.authorized && (
-                <div className="border-t border-border/70 p-3">
-                  <Button variant="ghost" className="w-full justify-start" onClick={handleLogout}>
-                    <LogOut data-icon="inline-start" />
-                    退出登录
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
+          <FilterPanel
+            filters={filters}
+            loading={filtersLoading}
+            selectedFilterId={selectedFilterId}
+            onSelectFilter={handleSelectFilter}
+          />
         </aside>
 
-        <main className="flex min-w-0 flex-1 flex-col">
+        {/*
+          主内容区（消息列表）：
+          - 大屏：始终显示
+          - 小屏：仅在已选中分组时（/messages/:filterId）显示
+        */}
+        <main
+          className={cn(
+            "flex-col",
+            isGroupSelected
+              ? "flex min-w-0 flex-1"
+              : "hidden sm:flex sm:min-w-0 sm:flex-1"
+          )}
+        >
+          {/* 小屏返回按钮 */}
+          {isGroupSelected && (
+            <div className="flex items-center border-b border-border/60 bg-background/55 px-3 py-2 md:hidden">
+              <Button variant="ghost" size="sm" onClick={handleBack}>
+                <ArrowLeft className="mr-1 size-4" />
+                返回分组
+              </Button>
+            </div>
+          )}
+
           <div className="border-b border-border/60 bg-background/55 px-4 py-3 sm:px-6">
             <div className="flex flex-wrap items-center gap-3">
               <form className="min-w-55 flex-1" onSubmit={handleSearch}>
