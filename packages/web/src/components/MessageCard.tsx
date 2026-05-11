@@ -33,8 +33,8 @@ export function MessageCard({ message, onToggleRead, searchQuery }: Props) {
     <Card
       className={cn(
         "border border-border/70 bg-card/75 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
-        !message.isRead && "ring-1 ring-primary/20",
-        message.isRead && "opacity-80"
+        !message.isRead && "border-primary/35 bg-primary/5 ring-1 ring-primary/25",
+        message.isRead && "bg-muted/20 opacity-80"
       )}
     >
       <CardHeader className="pb-2">
@@ -54,10 +54,7 @@ export function MessageCard({ message, onToggleRead, searchQuery }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
-            {message.filterName && (
-              <Badge variant="secondary" className="max-w-30 truncate">{message.filterName}</Badge>
-            )}
-            <Badge variant={message.isRead ? "outline" : "default"}>
+            <Badge variant={message.isRead ? "secondary" : "default"}>
               {message.isRead ? "已读" : "未读"}
             </Badge>
           </div>
@@ -79,12 +76,12 @@ export function MessageCard({ message, onToggleRead, searchQuery }: Props) {
 
         <div className="flex items-center gap-2">
           <Button
-            variant={message.isRead ? "secondary" : "outline"}
+            variant={message.isRead ? "outline" : "default"}
             size="sm"
             onClick={() => onToggleRead(message.id)}
             title={message.isRead ? "标记为未读" : "标记为已读"}
           >
-            {message.isRead ? "标记未读" : "标记已读"}
+            {message.isRead ? "恢复未读" : "标记已读"}
           </Button>
 
           {message.telegramLink && (
@@ -101,8 +98,9 @@ export function MessageCard({ message, onToggleRead, searchQuery }: Props) {
         </div>
       </CardContent>
 
-      <CardFooter className="justify-end border-t border-border/70 bg-muted/30 py-2 text-xs text-muted-foreground">
-        消息 ID #{message.id}
+      <CardFooter className="flex items-center justify-between border-t border-border/70 bg-muted/30 py-2 text-xs text-muted-foreground">
+        <span>状态：{message.isRead ? "已读" : "未读"}</span>
+        <span>消息 ID #{message.id}</span>
       </CardFooter>
     </Card>
   );

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Search, Sparkles } from "lucide-react";
+import { ArrowLeft, RefreshCw, Search } from "lucide-react";
 import { useMessages, useStats } from "@/hooks/useMessages";
 import { useFilters } from "@/hooks/useFilters";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
@@ -64,13 +64,6 @@ export function MessagesPage() {
     [refresh]
   );
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refresh();
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [refresh]);
-
   return (
     <AppShell
       activeTab="filtered"
@@ -123,7 +116,7 @@ export function MessagesPage() {
             </div>
           )}
 
-          <div className="border-b border-border/60 bg-background/55 px-4 py-3 sm:px-6">
+          <div className="border-b border-border/60 bg-background/55 px-4 py-2 sm:px-6">
             <div className="flex flex-wrap items-center gap-3">
               <form className="min-w-55 flex-1" onSubmit={handleSearch}>
                 <div className="relative">
@@ -198,10 +191,6 @@ export function MessagesPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6">
-            <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <Sparkles className="size-4" />
-              <span>智能排序已开启，最新匹配消息优先展示</span>
-            </div>
             <MessageList
               messages={messages}
               pagination={pagination}

@@ -57,22 +57,10 @@ async function sendFeishuNotification(payload: ForwardPayload): Promise<void> {
   if (!webhookUrl) {
     return;
   }
-
-  const keywordInfo = payload.matchedKeyword ? ` (keyword: ${payload.matchedKeyword})` : "";
-  const text = [
-    `Telegram matched message${keywordInfo}`,
-    `Filter: ${payload.filterName}`,
-    `Chat: ${payload.chatTitle}`,
-    `Sender: ${payload.senderName}`,
-    `Time: ${payload.messageDate}`,
-    `Content: ${payload.content}`,
-    `Source: ${payload.telegramLink}`,
-  ].join("\n");
-
   await postJson(webhookUrl, {
     msg_type: "text",
     content: {
-      text,
+      text: payload.content,
     },
   });
 }

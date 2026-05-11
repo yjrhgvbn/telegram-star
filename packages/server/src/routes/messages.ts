@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
 import type { Prisma } from "../generated/prisma/client.js";
+import { appConfig } from "../config.js";
 import { syncReadByTelegramInteractions } from "../services/telegram.js";
+import { subscribeToMessageEvents, emitMessageEvent } from "../services/messageEvents.js";
 
 // 低频兜底：每 30s 最多对 Telegram 发起一次拉取式互动同步，
 // 实时链路（Real-time Reaction 监听）会先捕获大多数场景。
@@ -127,6 +129,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       data: { isRead: true },
     });
 
+    emitMessageEvent("read");
     return { success: true, count: ids.length };
   });
 
@@ -151,5 +154,49 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       unread: unreadResult,
       today: Number(todayResult[0]?.count || 0),
     };
+  });
+
+  /**
+   * SSE 端点：客户端订阅后，服务端在新消息入库或已读状态变更时立即推送事件，
+   * 客户端收到后触发 SWR revalidate，替代固定间隔轮询。
+   */
+  app.get("/api/messages/events", (request, reply) => {
+    const origin = request.headers.origin || appConfig.cors.origin;
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      // 禁止 Nginx/CDN 缓冲，确保事件实时送达
+      "X-Accel-Buffering": "no",
+      // 为 SSE 流显式设置 CORS 头（绕过 writeHead 后 CORS 中间件失效的问题）
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Credentials": "true",
+    });
+    reply.raw.flushHeaders();
+
+    const send = (type: string) => {
+      if (!reply.raw.writableEnded) {
+        reply.raw.write(`data: ${type}\n\n`);
+      }
+    };
+
+    const unsubscribe = subscribeToMessageEvents(send);
+
+    // 每 25s 发送一次注释保活，防止代理/浏览器因超时关闭连接
+    const keepAlive = setInterval(() => {
+      if (!reply.raw.writableEnded) {
+        reply.raw.write(": keep-alive\n\n");
+      } else {
+        clearInterval(keepAlive);
+      }
+    }, 25_000);
+
+    reply.raw.on("close", () => {
+      clearInterval(keepAlive);
+      unsubscribe();
+    });
+
+    // 返回永不 resolve 的 Promise，让 Fastify 保持连接
+    return new Promise<void>(() => {});
   });
 }

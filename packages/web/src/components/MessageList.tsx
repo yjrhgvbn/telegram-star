@@ -47,7 +47,6 @@ export function MessageList({ messages, pagination, loading, onToggleRead, onPag
     <div className="space-y-4">
       <div className="space-y-3">
         {messages.map((msg) => (
-          // <div key={msg.id} className="animate-in fade-in-0 slide-in-from-bottom-1" style={{ animationDelay: `${index * 20}ms` }}>
           <div key={msg.id}>
             <MessageCard message={msg} onToggleRead={onToggleRead} searchQuery={searchQuery} />
           </div>

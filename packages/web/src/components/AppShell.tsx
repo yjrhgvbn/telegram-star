@@ -51,7 +51,7 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
 
       {!authStatus.authorized && <TelegramLogin authStatus={authStatus} onLoginSuccess={onLoginSuccess} />}
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="relative z-10 flex h-screen flex-col gap-0 overflow-scroll">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="relative z-10 h-screen flex-col gap-0 flex overflow-scroll">
         <header className="sticky top-0 z-20 border-border/60 bg-background/80 backdrop-blur-md">
           <div className="px-4 sm:px-6 flex h-16 items-center gap-8">
             <h1 className="hidden py-4 text-lg font-semibold tracking-tight sm:block">Telegram Star</h1>
