@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw, Search } from "lucide-react";
 import { useMessages, useStats } from "@/hooks/useMessages";
@@ -25,22 +25,15 @@ export function MessagesPage() {
 
   const [readFilter, setReadFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [page, setPage] = useState(1);
 
   const { filters, loading: filtersLoading } = useFilters();
-  const { messages, pagination, loading: messagesLoading, toggleRead, refresh } = useMessages({
-    page,
+  const { messages, hasMore, isLoadingMore, loading: messagesLoading, toggleRead, refresh, loadMore } = useMessages({
     limit: 20,
     isRead: readFilter,
     filterId: selectedFilterId,
     search: searchQuery,
   });
   useStats();
-
-  // 切换过滤器时重置分页
-  useEffect(() => {
-    setPage(1);
-  }, [rawFilterId]);
 
   // 选择过滤器：更新路由，由路由驱动状态
   const handleSelectFilter = useCallback(
@@ -58,7 +51,7 @@ export function MessagesPage() {
   const handleSearch = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      setPage(1);
+
       refresh();
     },
     [refresh]
@@ -134,10 +127,7 @@ export function MessagesPage() {
                       variant="ghost"
                       size="icon-sm"
                       className="absolute top-1/2 right-1 -translate-y-1/2"
-                      onClick={() => {
-                        setSearchQuery("");
-                        setPage(1);
-                      }}
+                      onClick={() => setSearchQuery("")}
                     >
                       ×
                     </Button>
@@ -151,10 +141,7 @@ export function MessagesPage() {
                   size="sm"
                   variant={readFilter === "" ? "default" : "ghost"}
                   className="rounded-full"
-                  onClick={() => {
-                    setReadFilter("");
-                    setPage(1);
-                  }}
+                  onClick={() => setReadFilter("")}
                 >
                   全部
                 </Button>
@@ -163,10 +150,7 @@ export function MessagesPage() {
                   size="sm"
                   variant={readFilter === "false" ? "default" : "ghost"}
                   className="rounded-full"
-                  onClick={() => {
-                    setReadFilter("false");
-                    setPage(1);
-                  }}
+                  onClick={() => setReadFilter("false")}
                 >
                   未读
                 </Button>
@@ -175,10 +159,7 @@ export function MessagesPage() {
                   size="sm"
                   variant={readFilter === "true" ? "default" : "ghost"}
                   className="rounded-full"
-                  onClick={() => {
-                    setReadFilter("true");
-                    setPage(1);
-                  }}
+                  onClick={() => setReadFilter("true")}
                 >
                   已读
                 </Button>
@@ -193,10 +174,11 @@ export function MessagesPage() {
           <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6">
             <MessageList
               messages={messages}
-              pagination={pagination}
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
               loading={messagesLoading}
               onToggleRead={toggleRead}
-              onPageChange={setPage}
+              onLoadMore={loadMore}
               searchQuery={searchQuery}
             />
           </div>
