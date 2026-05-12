@@ -4,6 +4,7 @@ import type { Prisma } from "../generated/prisma/client.js";
 import { appConfig } from "../config.js";
 import { syncReadByTelegramInteractions } from "../services/telegram.js";
 import { subscribeToMessageEvents, emitMessageEvent } from "../services/messageEvents.js";
+import { listReadSyncLogs, writeReadSyncLog } from "../services/readSyncLog.js";
 
 // 低频兜底：每 30s 最多对 Telegram 发起一次拉取式互动同步，
 // 实时链路（Real-time Reaction 监听）会先捕获大多数场景。
@@ -61,10 +62,17 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       const now = Date.now();
       if (now - lastInteractionSyncMs < INTERACTION_SYNC_INTERVAL_MS) {
         // 距上次同步不足 30s，跳过（实时 Reaction 监听已覆盖大多数场景）
+        request.log.debug({
+          intervalMs: INTERACTION_SYNC_INTERVAL_MS,
+          elapsedMs: now - lastInteractionSyncMs,
+          page,
+          limit,
+          resultCount: data.length,
+        }, "[ReadSync][fallback] skipped due to interval");
         return new Set<number>();
       }
       lastInteractionSyncMs = now;
-      return syncReadByTelegramInteractions(
+      const markedIds = await syncReadByTelegramInteractions(
         data.map((row) => ({
           id: row.id,
           chatId: row.chatId,
@@ -72,6 +80,14 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
           isRead: row.isRead,
         })),
       );
+      request.log.info({
+        page,
+        limit,
+        resultCount: data.length,
+        markedCount: markedIds.size,
+        markedIds: Array.from(markedIds),
+      }, "[ReadSync][fallback] sync completed");
+      return markedIds;
     })();
 
     const total = totalResult;
@@ -111,10 +127,32 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ error: "Message not found" });
     }
 
-    return db.message.update({
+    const updated = await db.message.update({
       where: { id },
       data: { isRead: !existing.isRead },
     });
+
+    request.log.info({
+      id,
+      previousIsRead: existing.isRead,
+      nextIsRead: updated.isRead,
+      source: "manual-toggle",
+    }, "[ReadSync][manual] toggled read state");
+    if (updated.isRead) {
+      await writeReadSyncLog({
+        level: "info",
+        source: "手动操作",
+        action: "标记已读",
+        message: "通过手动切换将消息标记为已读",
+        rowId: id,
+        details: {
+          之前状态: existing.isRead,
+          当前状态: updated.isRead,
+        },
+      });
+    }
+
+    return updated;
   });
 
   // Batch mark as read
@@ -129,8 +167,30 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       data: { isRead: true },
     });
 
+    request.log.info({
+      idsCount: ids.length,
+      ids,
+      source: "manual-batch",
+    }, "[ReadSync][manual] batch marked as read");
+    await writeReadSyncLog({
+      level: "info",
+      source: "手动操作",
+      action: "批量标记已读",
+      message: "通过手动批量操作将消息标记为已读",
+      details: {
+        标记数量: ids.length,
+        标记ID列表: ids,
+      },
+    });
+
     emitMessageEvent("read");
     return { success: true, count: ids.length };
+  });
+
+  app.get<{ Querystring: { limit?: string } }>("/api/messages/read-sync-logs", async (request) => {
+    const limit = parseInt(request.query.limit || "100", 10);
+    const logs = await listReadSyncLogs(limit);
+    return { data: logs };
   });
 
   // Get statistics

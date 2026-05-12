@@ -104,3 +104,16 @@ export interface NotificationSettings {
   sources: NotificationSource[];
   feishuWebhookUrl: string;
 }
+
+export interface ReadSyncLog {
+  id: number;
+  level: "info" | "warn" | "error";
+  source: string;
+  action: string;
+  message: string;
+  chatId: string | null;
+  telegramMessageId: number | null;
+  rowId: number | null;
+  details: Record<string, unknown> | null;
+  createdAt: string;
+}

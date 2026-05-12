@@ -10,6 +10,7 @@ import type {
   FilterPreviewResponse,
   FilterBackfillResponse,
   FilterHistoryScope,
+  ReadSyncLog,
 } from "../types";
 
 const BASE = "/api";
@@ -115,6 +116,11 @@ export const api = {
         body: JSON.stringify({ ids }),
       }),
     stats: () => request<Stats>("/messages/stats"),
+    readSyncLogs: (limit = 100) => {
+      const searchParams = new URLSearchParams();
+      searchParams.set("limit", String(limit));
+      return request<{ data: ReadSyncLog[] }>(`/messages/read-sync-logs?${searchParams.toString()}`);
+    },
   },
 
   notifications: {

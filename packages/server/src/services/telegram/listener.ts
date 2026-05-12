@@ -14,6 +14,7 @@ import { matchFilterConditions, parseConditions } from "../filter-matching.js";
 import { getClient, isClientConnected } from "./client.js";
 import { buildDialogEntityMap, buildTelegramLink, getSenderSummary } from "./utils.js";
 import { emitMessageEvent } from "../messageEvents.js";
+import { writeReadSyncLog } from "../readSyncLog.js";
 
 // --- Reaction 信号检测 ---
 
@@ -24,7 +25,11 @@ import { emitMessageEvent } from "../messageEvents.js";
 function hasUserReactionSignal(message: any): boolean {
   const results = message?.reactions?.results;
   if (!Array.isArray(results)) return false;
-  return results.some((r: any) => r?.chosen === true || r?.chosenOrder !== undefined);
+  // chosen=true 是最明确的自有 reaction 信号；
+  // chosenOrder 仅在是非负整数时视为有效，避免 null/异常值导致误判。
+  return results.some((r: any) =>
+    r?.chosen === true || (typeof r?.chosenOrder === "number" && Number.isInteger(r.chosenOrder) && r.chosenOrder >= 0),
+  );
 }
 
 // --- 实时链路：Raw 事件 ---
@@ -54,7 +59,10 @@ async function handleInteractionUpdate(update: any): Promise<void> {
   if (!chatId) return;
 
   // 仅当 reaction 来自当前用户时才触发已读
-  if (!hasUserReactionSignal({ reactions: update.reactions })) return;
+  const reactionSignalMatched = hasUserReactionSignal({ reactions: update.reactions });
+  if (!reactionSignalMatched) {
+    return;
+  }
 
   const row = await db.message.findFirst({
     where: { chatId, telegramMessageId: msgId, isRead: false },
@@ -65,7 +73,22 @@ async function handleInteractionUpdate(update: any): Promise<void> {
   await db.message.update({ where: { id: row.id }, data: { isRead: true } });
   emitMessageEvent("read");
 
-  console.log(`[Telegram] Real-time: marked message ${msgId} in chat ${chatId} as read via reaction`);
+  console.info("[ReadSync][realtime] marked as read", {
+    rowId: row.id,
+    chatId,
+    telegramMessageId: msgId,
+    reason: "reaction",
+  });
+  await writeReadSyncLog({
+    level: "info",
+    source: "实时同步",
+    action: "标记已读",
+    message: "通过实时 Reaction 同步将消息标记为已读",
+    rowId: row.id,
+    chatId,
+    telegramMessageId: msgId,
+    details: { 原因: "reaction", 来源: "UpdateMessageReactions" },
+  });
 }
 
 // --- 低频兜底：拉取式同步 ---
@@ -101,6 +124,7 @@ export async function syncReadByTelegramInteractions(
   }
 
   const shouldMarkReadIds = new Set<number>();
+  let scannedCount = 0;
 
   for (const [chatId, refs] of byChat.entries()) {
     const entity = entityMap.get(chatId);
@@ -111,6 +135,7 @@ export async function syncReadByTelegramInteractions(
 
     const history = await client.getMessages(entity, { ids });
     for (const raw of history as any[]) {
+      scannedCount += 1;
       const telegramMessageId = Number(raw?.id || 0);
       const rowId = idToRowId.get(telegramMessageId);
       if (rowId && hasUserReactionSignal(raw)) {
@@ -124,6 +149,29 @@ export async function syncReadByTelegramInteractions(
   await db.message.updateMany({
     where: { id: { in: Array.from(shouldMarkReadIds) }, isRead: false },
     data: { isRead: true },
+  });
+
+  console.info("[ReadSync][fallback] marked rows as read", {
+    inputCount: messages.length,
+    unreadCount: unread.length,
+    scannedCount,
+    markedCount: shouldMarkReadIds.size,
+    markedIds: Array.from(shouldMarkReadIds),
+    reason: "reaction-signal",
+  });
+  await writeReadSyncLog({
+    level: "info",
+    source: "兜底同步",
+    action: "批量标记已读",
+    message: "通过兜底同步将消息批量标记为已读",
+    details: {
+      输入消息数: messages.length,
+      未读消息数: unread.length,
+      扫描消息数: scannedCount,
+      标记数量: shouldMarkReadIds.size,
+      标记ID列表: Array.from(shouldMarkReadIds),
+      原因: "reaction-signal",
+    },
   });
 
   return shouldMarkReadIds;
