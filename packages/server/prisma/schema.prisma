@@ -54,3 +54,13 @@ model ReadSyncLog {
   @@index([source])
   @@map("read_sync_logs")
 }
+
+model NotificationSetting {
+  id        Int    @id @default(autoincrement())
+  configKey String @unique @map("config_key")
+  configJson String @map("config_json")
+  createdAt String @map("created_at")
+  updatedAt String @map("updated_at")
+
+  @@map("notification_settings")
+}

@@ -1,6 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
-import { appConfig } from "../config.js";
+import { db } from "../db/index.js";
 
 export type NotificationSource = "feishu";
 
@@ -9,7 +7,7 @@ export interface NotificationSettings {
   feishuWebhookUrl: string;
 }
 
-interface NotificationSettingsInput {
+export interface NotificationSettingsInput {
   sources?: string[];
   feishuWebhookUrl?: string;
 }
@@ -28,29 +26,11 @@ function sanitizeSources(input: string[] | undefined): NotificationSource[] {
   return Array.from(new Set(normalized));
 }
 
-function fromEnvironment(): NotificationSettings {
+function defaultSettings(): NotificationSettings {
   return {
     sources: [],
     feishuWebhookUrl: "",
   };
-}
-
-function parseStoredSettings(raw: string): NotificationSettingsInput {
-  try {
-    const parsed = JSON.parse(raw) as NotificationSettingsInput;
-    if (!parsed || typeof parsed !== "object") {
-      return {};
-    }
-
-    return {
-      sources: Array.isArray(parsed.sources)
-        ? parsed.sources.filter((item): item is string => typeof item === "string")
-        : undefined,
-      feishuWebhookUrl: typeof parsed.feishuWebhookUrl === "string" ? parsed.feishuWebhookUrl : undefined,
-    };
-  } catch {
-    return {};
-  }
 }
 
 function mergeSettings(base: NotificationSettings, update: NotificationSettingsInput): NotificationSettings {
@@ -61,51 +41,85 @@ function mergeSettings(base: NotificationSettings, update: NotificationSettingsI
   };
 }
 
-function loadFromFile(): NotificationSettingsInput {
-  const settingsPath = appConfig.notifications.settingsPath;
-  if (!existsSync(settingsPath)) {
-    return {};
+function parseSourcesJson(raw: string): NotificationSource[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return sanitizeSources(parsed.filter((item): item is string => typeof item === "string"));
+  } catch {
+    return [];
+  }
+}
+
+function parseConfigJson(raw: string): NotificationSettings {
+  try {
+    const parsed = JSON.parse(raw) as {
+      sources?: unknown;
+      feishuWebhookUrl?: unknown;
+    };
+
+    return {
+      sources: parseSourcesJson(JSON.stringify(parsed?.sources ?? [])),
+      feishuWebhookUrl: typeof parsed?.feishuWebhookUrl === "string" ? parsed.feishuWebhookUrl : "",
+    };
+  } catch {
+    return defaultSettings();
+  }
+}
+
+function toPublicSettings(row: {
+  configJson: string;
+}): NotificationSettings {
+  return parseConfigJson(row.configJson);
+}
+
+const CONFIG_KEY = "notifications/default";
+
+async function ensureSettingsRow(): Promise<{
+  id: number;
+  configKey: string;
+  configJson: string;
+  createdAt: string;
+  updatedAt: string;
+}> {
+  const existing = await db.notificationSetting.findUnique({ where: { configKey: CONFIG_KEY } });
+  if (existing) {
+    return existing;
   }
 
-  const raw = readFileSync(settingsPath, "utf-8");
-  return parseStoredSettings(raw);
+  const initial = defaultSettings();
+  const now = new Date().toISOString();
+
+  return db.notificationSetting.create({
+    data: {
+      configKey: CONFIG_KEY,
+      configJson: JSON.stringify(initial),
+      createdAt: now,
+      updatedAt: now,
+    },
+  });
 }
 
-function saveToFile(settings: NotificationSettings): void {
-  const settingsPath = appConfig.notifications.settingsPath;
-  const dir = dirname(settingsPath);
-  mkdirSync(dir, { recursive: true });
-
-  writeFileSync(
-    settingsPath,
-    JSON.stringify(
-      {
-        sources: settings.sources,
-        feishuWebhookUrl: settings.feishuWebhookUrl,
-      },
-      null,
-      2
-    ),
-    "utf-8"
-  );
+export async function getNotificationSettings(): Promise<NotificationSettings> {
+  const row = await ensureSettingsRow();
+  return toPublicSettings(row);
 }
 
-let cachedSettings: NotificationSettings | null = null;
-
-export function getNotificationSettings(): NotificationSettings {
-  if (cachedSettings) {
-    return cachedSettings;
-  }
-
-  const defaults = fromEnvironment();
-  cachedSettings = mergeSettings(defaults, loadFromFile());
-  return cachedSettings;
-}
-
-export function updateNotificationSettings(input: NotificationSettingsInput): NotificationSettings {
-  const current = getNotificationSettings();
+export async function updateNotificationSettings(input: NotificationSettingsInput): Promise<NotificationSettings> {
+  const row = await ensureSettingsRow();
+  const current = toPublicSettings(row);
   const next = mergeSettings(current, input);
-  saveToFile(next);
-  cachedSettings = next;
-  return next;
+  const now = new Date().toISOString();
+
+  const updated = await db.notificationSetting.update({
+    where: { configKey: CONFIG_KEY },
+    data: {
+      configJson: JSON.stringify(next),
+      updatedAt: now,
+    },
+  });
+
+  return toPublicSettings(updated);
 }

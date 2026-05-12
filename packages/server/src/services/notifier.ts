@@ -52,7 +52,7 @@ function postJson(urlString: string, payload: unknown): Promise<void> {
 }
 
 async function sendFeishuNotification(payload: ForwardPayload): Promise<void> {
-  const settings = getNotificationSettings();
+  const settings = await getNotificationSettings();
   const webhookUrl = settings.feishuWebhookUrl;
   if (!webhookUrl) {
     return;
@@ -66,7 +66,7 @@ async function sendFeishuNotification(payload: ForwardPayload): Promise<void> {
 }
 
 export async function forwardMatchedMessage(payload: ForwardPayload): Promise<void> {
-  const settings = getNotificationSettings();
+  const settings = await getNotificationSettings();
   const sources = settings.sources;
   if (sources.length === 0) {
     return;
