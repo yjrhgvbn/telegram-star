@@ -10,6 +10,7 @@ export interface Filter {
   name: string;
   conditions: FilterCondition[];
   enabled: boolean;
+  autoLocateUnreadNearRead: boolean;
   createdAt: string;
   updatedAt: string;
 }

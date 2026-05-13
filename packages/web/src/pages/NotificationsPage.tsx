@@ -133,7 +133,7 @@ export function NotificationsPage() {
                     placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."
                   />
                   <p className="text-xs text-muted-foreground">
-                    保存后将写入服务器侧配置文件，并覆盖运行时通知设置。
+                    保存后将写入数据库配置，并覆盖运行时通知设置。
                   </p>
                 </div>
               </CardContent>

@@ -52,6 +52,7 @@ function toApiFilter(row: {
   name: string;
   conditions: string;
   enabled: boolean;
+  autoLocateUnreadNearRead: boolean;
   createdAt: string;
   updatedAt: string;
 }) {
@@ -100,7 +101,7 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
   // Get all filters
   app.get("/api/filters", async () => {
     const rows = await db.filter.findMany({
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
     });
 
     return rows.map(toApiFilter);
@@ -108,11 +109,15 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
 
   // Create filter
   app.post<{
-    Body: { name: string; conditions: FilterCondition[] };
+    Body: { name: string; conditions: FilterCondition[]; autoLocateUnreadNearRead?: boolean };
   }>("/api/filters", async (request, reply) => {
-    const { name, conditions } = request.body;
+    const { name, conditions, autoLocateUnreadNearRead } = request.body;
     if (!name?.trim()) {
       return reply.status(400).send({ error: "name is required" });
+    }
+
+    if (autoLocateUnreadNearRead !== undefined && typeof autoLocateUnreadNearRead !== "boolean") {
+      return reply.status(400).send({ error: "autoLocateUnreadNearRead must be a boolean" });
     }
 
     const validation = validateConditions(conditions);
@@ -126,6 +131,7 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
       data: {
         name: name.trim(),
         conditions: serializeConditions(conditions),
+        autoLocateUnreadNearRead: autoLocateUnreadNearRead ?? true,
         createdAt: now,
         updatedAt: now,
       },
@@ -137,7 +143,7 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
   // Update filter
   app.put<{
     Params: { id: string };
-    Body: { name?: string; conditions?: FilterCondition[] };
+    Body: { name?: string; conditions?: FilterCondition[]; autoLocateUnreadNearRead?: boolean };
   }>("/api/filters/:id", async (request, reply) => {
     const id = parseInt(request.params.id);
     const updates = request.body;
@@ -154,6 +160,10 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    if (updates.autoLocateUnreadNearRead !== undefined && typeof updates.autoLocateUnreadNearRead !== "boolean") {
+      return reply.status(400).send({ error: "autoLocateUnreadNearRead must be a boolean" });
+    }
+
     const row = await db.filter.update({
       where: { id },
       data: {
@@ -162,6 +172,9 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
           ? {
               conditions: serializeConditions(updates.conditions),
             }
+          : {}),
+        ...(updates.autoLocateUnreadNearRead !== undefined
+          ? { autoLocateUnreadNearRead: updates.autoLocateUnreadNearRead }
           : {}),
         updatedAt: new Date().toISOString(),
       },

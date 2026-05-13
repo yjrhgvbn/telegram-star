@@ -35,6 +35,11 @@ export function MessagesPage() {
   });
   useStats();
 
+  const selectedFilterAutoLocate = filters.find((item) => String(item.id) === selectedFilterId)?.autoLocateUnreadNearRead;
+  const autoLocateUnreadNearRead = selectedFilterId === "" ? true : (selectedFilterAutoLocate ?? true);
+
+  const autoLocateContextKey = `${selectedFilterId}|${readFilter}|${searchQuery}|${autoLocateUnreadNearRead ? "1" : "0"}`;
+
   // 选择过滤器：更新路由，由路由驱动状态
   const handleSelectFilter = useCallback(
     (id: string) => {
@@ -180,6 +185,8 @@ export function MessagesPage() {
               onToggleRead={toggleRead}
               onLoadMore={loadMore}
               searchQuery={searchQuery}
+              autoLocateEnabled={autoLocateUnreadNearRead}
+              autoLocateContextKey={autoLocateContextKey}
             />
           </div>
         </main>

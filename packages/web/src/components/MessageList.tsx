@@ -13,9 +13,44 @@ interface Props {
   onToggleRead: (id: number) => void;
   onLoadMore: () => void;
   searchQuery?: string;
+  autoLocateEnabled?: boolean;
+  autoLocateContextKey?: string;
 }
 
-export function MessageList({ messages, hasMore, isLoadingMore, loading, onToggleRead, onLoadMore, searchQuery }: Props) {
+function findAnchorUnreadIndex(messages: Message[]): number {
+  if (messages.length === 0) return -1;
+
+  // 列表按时间倒序：第一个已读可视为“最近已读”
+  const nearestReadIndex = messages.findIndex((m) => m.isRead);
+  if (nearestReadIndex === -1) {
+    return messages.findIndex((m) => !m.isRead);
+  }
+
+  // 优先选择最近已读后面的未读（时间更早的一侧）
+  if (nearestReadIndex + 1 < messages.length && !messages[nearestReadIndex + 1].isRead) {
+    return nearestReadIndex + 1;
+  }
+
+  // 其次选择前面的未读
+  if (nearestReadIndex - 1 >= 0 && !messages[nearestReadIndex - 1].isRead) {
+    return nearestReadIndex - 1;
+  }
+
+  // 最后兜底为任意第一条未读
+  return messages.findIndex((m) => !m.isRead);
+}
+
+export function MessageList({
+  messages,
+  hasMore,
+  isLoadingMore,
+  loading,
+  onToggleRead,
+  onLoadMore,
+  searchQuery,
+  autoLocateEnabled = true,
+  autoLocateContextKey,
+}: Props) {
   // 哨兵元素：进入视口时触发加载下一页
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -40,18 +75,22 @@ export function MessageList({ messages, hasMore, isLoadingMore, loading, onToggl
   const firstUnreadRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    if (!autoLocateEnabled) {
+      return;
+    }
+
     if (!loading && !scrolledToUnreadRef.current && firstUnreadRef.current) {
       scrolledToUnreadRef.current = true;
       firstUnreadRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [loading]);
+  }, [loading, autoLocateEnabled]);
 
   // 过滤条件变化时重置"已滚动"标记（通过 messages 引用变化感知）
   useEffect(() => {
     scrolledToUnreadRef.current = false;
     firstUnreadRef.current = null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery]);
+  }, [searchQuery, autoLocateContextKey]);
 
   if (loading) {
     return (
@@ -80,8 +119,8 @@ export function MessageList({ messages, hasMore, isLoadingMore, loading, onToggl
     );
   }
 
-  // 找出第一条未读消息的索引
-  const firstUnreadIndex = messages.findIndex((m) => !m.isRead);
+  // 找出“最近已读相邻”的未读消息索引
+  const anchorUnreadIndex = findAnchorUnreadIndex(messages);
 
   return (
     <div className="space-y-3">
@@ -90,7 +129,7 @@ export function MessageList({ messages, hasMore, isLoadingMore, loading, onToggl
           key={msg.id}
           ref={(el) => {
             // 捕获第一条未读消息的 DOM 节点
-            if (index === firstUnreadIndex && !scrolledToUnreadRef.current) {
+            if (autoLocateEnabled && index === anchorUnreadIndex && !scrolledToUnreadRef.current) {
               firstUnreadRef.current = el;
             }
           }}

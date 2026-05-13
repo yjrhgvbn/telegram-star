@@ -53,12 +53,12 @@ export const api = {
 
   filters: {
     list: () => request<Filter[]>("/filters"),
-    create: (data: { name: string; conditions: FilterCondition[] }) =>
+    create: (data: { name: string; conditions: FilterCondition[]; autoLocateUnreadNearRead?: boolean }) =>
       request<Filter>("/filters", {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    update: (id: number, data: { name?: string; conditions?: FilterCondition[] }) =>
+    update: (id: number, data: { name?: string; conditions?: FilterCondition[]; autoLocateUnreadNearRead?: boolean }) =>
       request<Filter>(`/filters/${id}`, {
         method: "PUT",
         body: JSON.stringify(data),

@@ -93,6 +93,7 @@ export function FiltersPage() {
 
   const [selectedFilterId, setSelectedFilterId] = useState<string>("new");
   const [name, setName] = useState("");
+  const [autoLocateUnreadNearRead, setAutoLocateUnreadNearRead] = useState(true);
   const [conditions, setConditions] = useState<DraftCondition[]>([createDraftCondition()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -120,6 +121,7 @@ export function FiltersPage() {
   useEffect(() => {
     if (selectedFilterId === "new") {
       setName("");
+      setAutoLocateUnreadNearRead(true);
       setConditions([createDraftCondition()]);
       setError("");
       setPreviewMessages([]);
@@ -133,6 +135,7 @@ export function FiltersPage() {
     }
 
     setName(selectedFilter.name);
+    setAutoLocateUnreadNearRead(selectedFilter.autoLocateUnreadNearRead);
     setConditions(toDraftConditions(selectedFilter.conditions));
     setError("");
     setPreviewMessages([]);
@@ -220,6 +223,7 @@ export function FiltersPage() {
     return {
       name: name.trim(),
       conditions: mergedConditions,
+      autoLocateUnreadNearRead,
     };
   };
 
@@ -423,6 +427,16 @@ export function FiltersPage() {
                     <label className="text-xs text-muted-foreground">过滤器名称</label>
                     <Input placeholder="例如：BTC 讨论 / Solana 频道观察" value={name} onChange={(event) => setName(event.target.value)} />
                   </div>
+
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={autoLocateUnreadNearRead}
+                      onChange={(event) => setAutoLocateUnreadNearRead(event.target.checked)}
+                    />
+                    自动定位到最近已读相邻的未读消息
+                  </label>
 
                   <div className="space-y-3">{conditions.map(renderConditionEditor)}</div>
 

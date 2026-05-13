@@ -19,16 +19,16 @@ export function useFilters() {
   } = useSWR<JoinedChat[]>("joined-chats", api.chats.list);
 
   const createFilter = useCallback(
-    async (data: { name: string; conditions: FilterCondition[] }) => {
+    async (data: { name: string; conditions: FilterCondition[]; autoLocateUnreadNearRead?: boolean }) => {
       const created = await api.filters.create(data);
-      await mutateFilters((current) => [...(current ?? []), created], { revalidate: false });
+      await mutateFilters((current) => [created, ...(current ?? [])], { revalidate: false });
       return created;
     },
     [mutateFilters]
   );
 
   const updateFilter = useCallback(
-    async (id: number, data: { name?: string; conditions?: FilterCondition[] }) => {
+    async (id: number, data: { name?: string; conditions?: FilterCondition[]; autoLocateUnreadNearRead?: boolean }) => {
       const updated = await api.filters.update(id, data);
       await mutateFilters(
         (current) => (current ?? []).map((filter) => (filter.id === id ? updated : filter)),

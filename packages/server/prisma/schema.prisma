@@ -12,6 +12,7 @@ model Filter {
   name      String
   conditions String
   enabled   Boolean     @default(true)
+  autoLocateUnreadNearRead Boolean @default(true) @map("auto_locate_unread_near_read")
   createdAt String      @map("created_at")
   updatedAt String      @map("updated_at")
   messages  Message[]
