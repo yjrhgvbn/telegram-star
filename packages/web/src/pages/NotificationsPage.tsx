@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { cn } from "@/lib/utils";
-import type { ReadSyncLog } from "@/types";
 
 export function NotificationsPage() {
   const { authStatus, authLoading, handleLoginSuccess } = useAuthStatus();
@@ -19,9 +18,6 @@ export function NotificationsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [logLoading, setLogLoading] = useState(false);
-  const [logError, setLogError] = useState<string | null>(null);
-  const [readSyncLogs, setReadSyncLogs] = useState<ReadSyncLog[]>([]);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -57,26 +53,9 @@ export function NotificationsPage() {
     }
   }, [enabledFeishu, feishuWebhookUrl]);
 
-  const loadReadSyncLogs = useCallback(async () => {
-    try {
-      setLogLoading(true);
-      setLogError(null);
-      const res = await api.messages.readSyncLogs(120);
-      setReadSyncLogs(res.data);
-    } catch (err: any) {
-      setLogError(err.message || "加载已读同步日志失败");
-    } finally {
-      setLogLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     void loadSettings();
   }, [loadSettings]);
-
-  useEffect(() => {
-    void loadReadSyncLogs();
-  }, [loadReadSyncLogs]);
 
   useEffect(() => {
     if (!saveSuccess) {
@@ -159,58 +138,7 @@ export function NotificationsPage() {
               )}
             </div>
 
-            <Card className="border border-border/70 bg-card/70">
-              <CardHeader className="flex-row items-center justify-between space-y-0">
-                <div>
-                  <CardTitle>已读同步日志</CardTitle>
-                  <CardDescription>仅展示最近 30 天关键日志，自动清理过期记录。</CardDescription>
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={loadReadSyncLogs} disabled={logLoading}>
-                  <RefreshCw className={cn(logLoading && "animate-spin")} data-icon="inline-start" />
-                  刷新日志
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {logError && (
-                  <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                    {logError}
-                  </div>
-                )}
-
-                {logLoading ? (
-                  <p className="text-sm text-muted-foreground">加载日志中...</p>
-                ) : readSyncLogs.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">暂无日志</p>
-                ) : (
-                  <div className="max-h-115 space-y-2 overflow-y-auto pr-1">
-                    {readSyncLogs.map((log) => (
-                      <div key={log.id} className="rounded-lg border border-border/60 bg-background/60 p-3">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <Badge variant="secondary" className="h-6 rounded-full px-2 text-[11px]">
-                            {log.source}
-                          </Badge>
-                          <Badge variant="outline" className="h-6 rounded-full px-2 text-[11px]">
-                            {log.action}
-                          </Badge>
-                          <span>{new Date(log.createdAt).toLocaleString()}</span>
-                        </div>
-                        <p className="mt-2 text-sm font-medium">{log.message}</p>
-                        <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                          {log.chatId && <span>chat: {log.chatId}</span>}
-                          {typeof log.telegramMessageId === "number" && <span>tgMsg: {log.telegramMessageId}</span>}
-                          {typeof log.rowId === "number" && <span>row: {log.rowId}</span>}
-                        </div>
-                        {log.details && (
-                          <pre className="mt-2 overflow-x-auto rounded-md bg-muted/50 p-2 text-[11px] leading-4 text-muted-foreground">
-                            {JSON.stringify(log.details, null, 2)}
-                          </pre>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+      
           </div>
         </main>
       </div>

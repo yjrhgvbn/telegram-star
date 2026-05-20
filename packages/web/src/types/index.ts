@@ -57,14 +57,14 @@ export interface FilterPreviewResponse {
   messages: HistoricalFilterPreviewMessage[];
   scannedChats: number;
   total: number;
+  nextPage?: number;
 }
 
 export interface FilterHistoryScope {
   perChatLimit?: number;
   totalLimit?: number;
-  chatIds?: string[];
-  since?: string;
-  until?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export interface FilterBackfillResponse {

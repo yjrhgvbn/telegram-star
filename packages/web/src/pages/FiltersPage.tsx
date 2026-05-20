@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Eye, LoaderCircle, Play, Plus, Save, Trash2 } from "lucide-react";
+import { LoaderCircle, Plus, Save, Trash2 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { JoinedChatPicker } from "@/components/JoinedChatPicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -14,9 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { api } from "@/api/client";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useFilters } from "@/hooks/useFilters";
-import { api } from "@/api/client";
 import type {
   FilterCondition,
   FilterConditionType,
@@ -88,7 +88,6 @@ export function FiltersPage() {
     updateFilter,
     deleteFilter,
     toggleFilter,
-    backfillFilter,
   } = useFilters();
 
   const [selectedFilterId, setSelectedFilterId] = useState<string>("new");
@@ -98,13 +97,10 @@ export function FiltersPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [backfillLoading, setBackfillLoading] = useState(false);
   const [previewMessages, setPreviewMessages] = useState<HistoricalFilterPreviewMessage[]>([]);
   const [previewSummary, setPreviewSummary] = useState<{ scannedChats: number; total: number } | null>(null);
-  const [previewLimit, setPreviewLimit] = useState("50");
-  const [historyChatIds, setHistoryChatIds] = useState<string[]>([]);
-  const [historySince, setHistorySince] = useState("");
-  const [historyUntil, setHistoryUntil] = useState("");
-  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [previewLimit, setPreviewLimit] = useState("200");
   const [backfillSummary, setBackfillSummary] = useState<string>("");
 
   const selectedFilter = filters.find((filter) => String(filter.id) === selectedFilterId) ?? null;
@@ -174,36 +170,6 @@ export function FiltersPage() {
     });
   };
 
-  const toIsoOrUndefined = (datetimeLocal: string): string | undefined => {
-    if (!datetimeLocal) {
-      return undefined;
-    }
-
-    // datetime-local 是本地时间，统一转成 ISO 后再交给后端，避免时区解释不一致。
-    const ts = Date.parse(datetimeLocal);
-    if (Number.isNaN(ts)) {
-      throw new Error("时间格式无效，请重新选择时间");
-    }
-
-    return new Date(ts).toISOString();
-  };
-
-  const buildHistoryScope = () => {
-    const since = toIsoOrUndefined(historySince);
-    const until = toIsoOrUndefined(historyUntil);
-    if (since && until && Date.parse(since) > Date.parse(until)) {
-      throw new Error("开始时间不能晚于结束时间");
-    }
-
-    // 预览与回拉都复用同一份范围参数，确保用户看到的预览和实际写入结果一致。
-    return {
-      perChatLimit: Number(previewLimit) || 50,
-      chatIds: historyChatIds,
-      since,
-      until,
-    };
-  };
-
   const buildPayload = () => {
     const normalized = normalizeConditions(conditions);
     const keywordConditions = normalized.filter((condition) => condition.type === "keyword");
@@ -247,17 +213,13 @@ export function FiltersPage() {
       setPreviewLoading(true);
       setError("");
       const payload = buildPayload();
-      const scope = buildHistoryScope();
       const result = await api.filters.preview({
         conditions: payload.conditions,
-        perChatLimit: scope.perChatLimit,
-        totalLimit: 30,
-        chatIds: scope.chatIds,
-        since: scope.since,
-        until: scope.until,
+        perChatLimit: Number(previewLimit) || 200,
       });
       setPreviewMessages(result.messages);
       setPreviewSummary({ scannedChats: result.scannedChats, total: result.total });
+      setBackfillSummary("");
     } catch (err: any) {
       setError(err.message || "预览失败");
       setPreviewMessages([]);
@@ -276,14 +238,15 @@ export function FiltersPage() {
     try {
       setBackfillLoading(true);
       setError("");
-      const scope = buildHistoryScope();
-      const result = await backfillFilter(selectedFilter.id, {
-        perChatLimit: scope.perChatLimit,
-        chatIds: scope.chatIds,
-        since: scope.since,
-        until: scope.until,
+      buildPayload();
+      const result = await api.filters.backfill(selectedFilter.id, {
+        perChatLimit: Number(previewLimit) || 200,
       });
-      setBackfillSummary(`扫描 ${result.scannedChats} 个会话，命中 ${result.matchedCount} 条，新增 ${result.savedCount} 条，跳过已存在 ${result.skippedExistingCount} 条`);
+      setBackfillSummary(
+        `扫描 ${result.scannedChats} 个会话，命中 ${result.matchedCount} 条，新增 ${result.savedCount} 条，跳过已存在 ${result.skippedExistingCount} 条`,
+      );
+      setPreviewMessages([]);
+      setPreviewSummary(null);
     } catch (err: any) {
       setError(err.message || "历史拉取失败");
     } finally {
@@ -308,25 +271,20 @@ export function FiltersPage() {
     }
   };
 
-  const renderConditionEditor = (condition: DraftCondition, index: number) => {
+
+  const renderConditionEditor = (condition: DraftCondition) => {
     const typeLabel = conditionTypeOptions.find((option) => option.value === condition.type)?.label ?? "条件";
 
     return (
       <Card key={condition.id} className="border border-border/70 bg-background/60" size="sm">
-        <CardHeader className="border-b border-border/60">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <CardTitle>条件 {index + 1}</CardTitle>
-              <CardDescription>当前条件与其他条件之间固定为 AND 关系</CardDescription>
-            </div>
-            <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeCondition(condition.id)}>
-              <Trash2 />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3 pt-4">
+        <CardContent className="space-y-2">
           <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground">条件类型</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs text-muted-foreground">条件类型</label>
+              <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeCondition(condition.id)}>
+                <Trash2 />
+              </Button>
+            </div>
             <Select
               value={condition.type}
               onValueChange={(value) =>
@@ -364,7 +322,7 @@ export function FiltersPage() {
                     }
                   }}
                 />
-                <Button type="button" variant="secondary" onClick={() => appendKeywordValues(condition.id)}>
+                <Button type="button" variant="secondary" size="sm" onClick={() => appendKeywordValues(condition.id)}>
                   添加
                 </Button>
               </div>
@@ -412,23 +370,22 @@ export function FiltersPage() {
       onLoginSuccess={handleLoginSuccess}
     >
       <div className="flex min-h-0 flex-1 flex-col">
-        <main className="min-w-0 flex-1 overflow-auto p-4 sm:p-6">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
-            <div className="space-y-4">
-              <Card className="border border-border/70 bg-card/70">
-                <CardHeader>
+        <main className="min-w-0 flex-1 overflow-auto p-2 sm:p-3">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(330px,0.9fr)]">
+            <div className="space-y-2.5">
+              <Card className="border border-border/70 bg-card/70" size="sm">
+                <CardHeader className="pt-2 pb-2">
                   <CardTitle>{selectedFilter ? `编辑过滤器：${selectedFilter.name}` : "新建过滤器"}</CardTitle>
-                  <CardDescription>你可以自由增加或删除条件，系统会将所有条件按 AND 关系组合匹配。</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {error && <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+                <CardContent className="space-y-2.5">
+                  {error && <div className="rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">{error}</div>}
 
                   <div className="space-y-1.5">
                     <label className="text-xs text-muted-foreground">过滤器名称</label>
                     <Input placeholder="例如：BTC 讨论 / Solana 频道观察" value={name} onChange={(event) => setName(event.target.value)} />
                   </div>
 
-                  <label className="flex items-center gap-2 text-sm">
+                  <label className="flex items-center gap-2 text-xs sm:text-sm">
                     <input
                       type="checkbox"
                       className="size-4"
@@ -438,24 +395,24 @@ export function FiltersPage() {
                     自动定位到最近已读相邻的未读消息
                   </label>
 
-                  <div className="space-y-3">{conditions.map(renderConditionEditor)}</div>
+                  <div className="space-y-1.5">{conditions.map((condition) => renderConditionEditor(condition))}</div>
 
-                  <Button type="button" variant="outline" className="w-full" onClick={addCondition}>
+                  <Button type="button" variant="outline" size="sm" className="w-full" onClick={addCondition}>
                     <Plus data-icon="inline-start" />
                     增加一个条件
                   </Button>
 
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    <Button type="button" onClick={handleSave} disabled={saving}>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
                       {saving ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Save data-icon="inline-start" />}
                       {selectedFilter ? "保存修改" : "创建过滤器"}
                     </Button>
                     {selectedFilter && (
                       <>
-                        <Button type="button" variant="outline" onClick={() => void toggleFilter(selectedFilter.id)}>
+                        <Button type="button" variant="outline" size="sm" onClick={() => void toggleFilter(selectedFilter.id)}>
                           {selectedFilter.enabled ? "停用过滤器" : "启用过滤器"}
                         </Button>
-                        <Button type="button" variant="destructive" onClick={handleDelete} disabled={saving}>
+                        <Button type="button" variant="destructive" size="sm" onClick={handleDelete} disabled={saving}>
                           <Trash2 data-icon="inline-start" />
                           删除
                         </Button>
@@ -466,50 +423,26 @@ export function FiltersPage() {
               </Card>
             </div>
 
-            <div className="space-y-4">
-              <Card className="border border-border/70 bg-card/70">
-                <CardHeader>
-                  <CardTitle>历史消息预览与回拉</CardTitle>
-                  <CardDescription>先按当前条件预览部分历史消息，再决定是否把命中内容写入消息库。</CardDescription>
+            <div className="space-y-2.5">
+              <Card className="border border-border/70 bg-card/70" size="sm">
+                <CardHeader className="pt-2 pb-2">
+                  <CardTitle>历史预览与回拉</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-2.5">
                   <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">每个会话扫描深度（分段）</label>
-                    <Input value={previewLimit} onChange={(event) => setPreviewLimit(event.target.value.replace(/[^0-9]/g, ""))} />
-                    <p className="text-[11px] text-muted-foreground">如果需要更早消息，可适当调大，例如 1000 或 2000。</p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-muted-foreground">指定会话（可选）</label>
-                    <JoinedChatPicker
-                      label="已选"
-                      selected={historyChatIds}
-                      searchPlaceholder="搜索会话名称或 ID"
-                      emptyText="没有可选会话"
-                      onSelectionChange={setHistoryChatIds}
+                    <label className="text-xs text-muted-foreground">每个会话扫描深度（条数）</label>
+                    <Input
+                      value={previewLimit}
+                      onChange={(event) => setPreviewLimit(event.target.value.replace(/[^0-9]/g, ""))}
                     />
-                    <p className="text-[11px] text-muted-foreground">不选择时默认扫描所有可访问会话。</p>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <label className="text-xs text-muted-foreground">开始时间（可选）</label>
-                      <Input type="datetime-local" value={historySince} onChange={(event) => setHistorySince(event.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs text-muted-foreground">结束时间（可选）</label>
-                      <Input type="datetime-local" value={historyUntil} onChange={(event) => setHistoryUntil(event.target.value)} />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" onClick={handlePreview} disabled={previewLoading}>
-                      {previewLoading ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
-                      预览历史消息
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <Button type="button" size="sm" onClick={handlePreview} disabled={previewLoading}>
+                      {previewLoading ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : "预览历史消息"}
                     </Button>
-                    <Button type="button" onClick={handleBackfill} disabled={backfillLoading || !selectedFilter}>
-                      {backfillLoading ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Play data-icon="inline-start" />}
-                      主动拉取并过滤
+                    <Button type="button" variant="outline" size="sm" onClick={handleBackfill} disabled={backfillLoading || !selectedFilter}>
+                      {backfillLoading ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : "主动拉取并过滤"}
                     </Button>
                   </div>
 
@@ -525,15 +458,15 @@ export function FiltersPage() {
                     </div>
                   )}
 
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {previewMessages.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-8 text-center text-sm text-muted-foreground">
-                        暂无预览结果。可先点击“预览历史消息”。
+                      <div className="rounded-xl border border-dashed border-border bg-background/60 px-3 py-4 text-center text-sm text-muted-foreground">
+                        暂无预览结果
                       </div>
                     ) : (
                       previewMessages.map((message) => (
-                        <div key={`${message.chatId}-${message.id}`} className="rounded-xl border border-border/70 bg-background/65 p-3">
-                          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <div key={`${message.chatId}-${message.id}`} className="rounded-xl border border-border/70 bg-background/65 p-2.5">
+                          <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                             <span>{message.chatTitle}</span>
                             <span>·</span>
                             <span>{message.senderName || "Unknown"}</span>
@@ -542,7 +475,7 @@ export function FiltersPage() {
                               {message.inDatabase ? "已入库" : "未入库"}
                             </Badge>
                           </div>
-                          <p className="text-sm leading-6 text-foreground/95">{message.content}</p>
+                          <p className="text-sm leading-5 text-foreground/95">{message.content}</p>
                           {message.telegramLink && (
                             <a href={message.telegramLink} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs text-primary underline-offset-4 hover:underline">
                               打开原消息

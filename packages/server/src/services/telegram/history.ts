@@ -19,6 +19,7 @@ import {
   buildDialogEntityMap,
 } from "./utils.js";
 import type { JoinedChat, LiveChatMessage, HistoricalFilterPreviewMessage } from "./types.js";
+import pMap from "p-map";
 
 // --- 会话列表 ---
 
@@ -165,16 +166,15 @@ async function loadSegmentedHistory(options: {
 
 /**
  * 根据过滤器条件扫描历史消息并返回预览列表，不写入数据库。
- * 支持时间窗口（since/until）和会话范围（chatIds）限制。
+ * 支持时间窗口（since/until）限制。
  */
 export async function previewHistoricalFilterMessages(options: {
   conditions: FilterCondition[];
   perChatLimit?: number;
   totalLimit?: number;
-  chatIds?: string[];
-  since?: string;
-  until?: string;
-}): Promise<{ messages: HistoricalFilterPreviewMessage[]; scannedChats: number }> {
+  page?: number;
+  pageSize?: number;
+}): Promise<{ messages: HistoricalFilterPreviewMessage[]; scannedChats: number; nextPage?: number }> {
   const client = getClient();
   if (!client || !isClientConnected()) {
     throw new Error("Telegram client is not connected");
@@ -184,88 +184,79 @@ export async function previewHistoricalFilterMessages(options: {
     return { messages: [], scannedChats: 0 };
   }
 
-  // perChatLimit 表示每个会话最多向历史扫描多少条原始消息
-  const perChatLimit = Math.max(1, Math.min(options.perChatLimit ?? 200, 5000));
-  const totalLimit = Math.max(1, Math.min(options.totalLimit ?? 50, 200));
+  const perChatLimit = Math.max(1, Math.min(options.perChatLimit ?? 200, 10000));
+  const totalLimit = Math.max(1, Math.min(options.totalLimit ?? 50, 1000));
+  const pageSize = Math.max(1, Math.min(options.pageSize ?? 100, 500));
+  const page = Math.max(1, options.page ?? 1);
+
   const dialogs = await client.getDialogs({ limit: 300 });
   const scopedChatIds = getScopedChatIds(options.conditions);
-  const selectedChatIdSet = new Set(
-    (options.chatIds ?? []).map((id) => id.trim()).filter(Boolean),
-  );
-  const sinceMs = options.since ? Date.parse(options.since) : NaN;
-  const untilMs = options.until ? Date.parse(options.until) : NaN;
-  const hasSince = !Number.isNaN(sinceMs);
-  const hasUntil = !Number.isNaN(untilMs);
   const previews: HistoricalFilterPreviewMessage[] = [];
   let scannedChats = 0;
 
-  for (const dialog of dialogs) {
-    const entity = (dialog as any).entity;
-    if (!isValidChat(entity)) continue;
+  const paginatedDialogs = dialogs.slice((page - 1) * pageSize, page * pageSize);
 
-    const chatId = entity?.id?.toString?.() || "";
-    if (!chatId || !shouldInspectChat(chatId, scopedChatIds)) continue;
-    if (selectedChatIdSet.size > 0 && !selectedChatIdSet.has(chatId)) continue;
+  await pMap(
+    paginatedDialogs,
+    async (dialog: any) => {
+      const entity = (dialog as any).entity;
+      if (!isValidChat(entity)) return;
 
-    scannedChats += 1;
+      const chatId = entity?.id?.toString?.() || "";
+      if (!chatId || !shouldInspectChat(chatId, scopedChatIds)) return;
 
-    // 分段拉取时间窗口附近的历史，再在本地做文本与时间裁剪
-    const history = await loadSegmentedHistory({
-      entity,
-      scanLimit: perChatLimit,
-      batchSize: 100,
-      sinceMs: hasSince ? sinceMs : undefined,
-    });
+      scannedChats += 1;
 
-    const textMessages = history.filter(
-      (item: any) => typeof item?.message === "string" && item.message.trim().length > 0,
-    );
-
-    // 批量查询已存在于数据库中的消息 ID，用于 inDatabase 标注
-    const ids = textMessages.map((item: any) => item.id);
-    const existingRows = ids.length
-      ? await db.message.findMany({
-          where: { chatId, telegramMessageId: { in: ids } },
-          select: { telegramMessageId: true },
-        })
-      : [];
-    const existingIdSet = new Set(existingRows.map((r) => r.telegramMessageId));
-
-    for (const item of textMessages) {
-      const messageTs = getMessageTimestampMs(item);
-      const messageDate = new Date(messageTs).toISOString();
-      const messageMs = Date.parse(messageDate);
-
-      // 再次做时间窗口裁剪，兼容分段翻页最后一批跨越窗口边界的情况
-      if (hasSince && messageMs < sinceMs) continue;
-      if (hasUntil && messageMs > untilMs) continue;
-
-      const match = matchFilterConditions({ chatId, content: item.message }, options.conditions);
-      if (!match.matched) continue;
-
-      const sender = (item as any).sender;
-      const { senderName, senderId } = getSenderSummary(sender);
-
-      previews.push({
-        id: item.id,
-        chatId,
-        chatTitle: entity?.title || entity?.username || chatId,
-        senderName,
-        senderId,
-        content: item.message,
-        messageDate,
-        telegramLink: buildTelegramLink(chatId, entity, item.id),
-        inDatabase: existingIdSet.has(item.id),
-        matchedKeyword: match.matchedKeyword,
+      const history = await loadSegmentedHistory({
+        entity,
+        scanLimit: perChatLimit,
+        batchSize: 100,
       });
 
-      if (previews.length >= totalLimit) {
-        return { messages: previews, scannedChats };
-      }
-    }
-  }
+      const textMessages = history.filter(
+        (item: any) => typeof item?.message === "string" && item.message.trim().length > 0,
+      );
 
-  return { messages: previews, scannedChats };
+      const ids = textMessages.map((item: any) => item.id);
+      const existingRows = ids.length
+        ? await db.message.findMany({
+            where: { chatId, telegramMessageId: { in: ids } },
+            select: { telegramMessageId: true },
+          })
+        : [];
+      const existingIdSet = new Set(existingRows.map((r) => r.telegramMessageId));
+
+      for (const item of textMessages) {
+        const match = matchFilterConditions({ chatId, content: item.message }, options.conditions);
+        if (!match.matched) continue;
+
+        const sender = (item as any).sender;
+        const { senderName, senderId } = getSenderSummary(sender);
+
+        previews.push({
+          id: item.id,
+          chatId,
+          chatTitle: entity?.title || entity?.username || chatId,
+          senderName,
+          senderId,
+          content: item.message,
+          messageDate: new Date(getMessageTimestampMs(item)).toISOString(),
+          telegramLink: buildTelegramLink(chatId, entity, item.id),
+          inDatabase: existingIdSet.has(item.id),
+          matchedKeyword: match.matchedKeyword,
+        });
+
+        if (previews.length >= totalLimit) {
+          return;
+        }
+      }
+    },
+    { concurrency: 5 },
+  );
+
+  const nextPage = dialogs.length > page * pageSize ? page + 1 : undefined;
+
+  return { messages: previews, scannedChats, nextPage };
 }
 
 // --- 历史回填 ---
@@ -278,9 +269,7 @@ export async function backfillFilterHistory(options: {
   filterId: number;
   conditions: FilterCondition[];
   perChatLimit?: number;
-  chatIds?: string[];
-  since?: string;
-  until?: string;
+  batchSize?: number;
 }): Promise<{
   scannedChats: number;
   matchedCount: number;
@@ -290,39 +279,41 @@ export async function backfillFilterHistory(options: {
   const preview = await previewHistoricalFilterMessages({
     conditions: options.conditions,
     perChatLimit: options.perChatLimit,
-    totalLimit: 200,
-    chatIds: options.chatIds,
-    since: options.since,
-    until: options.until,
+    totalLimit: 1000,
   });
 
+  const batchSize = Math.max(1, Math.min(options.batchSize ?? 50, 500));
   let savedCount = 0;
   let skippedExistingCount = 0;
 
-  for (const message of preview.messages) {
-    if (message.inDatabase) {
-      skippedExistingCount += 1;
-      continue;
-    }
+  await pMap(
+    preview.messages,
+    async (message: HistoricalFilterPreviewMessage) => {
+      if (message.inDatabase) {
+        skippedExistingCount += 1;
+        return;
+      }
 
-    await db.message.create({
-      data: {
-        telegramMessageId: message.id,
-        chatId: message.chatId,
-        chatTitle: message.chatTitle,
-        senderName: message.senderName,
-        senderId: message.senderId,
-        content: message.content,
-        messageDate: message.messageDate,
-        telegramLink: message.telegramLink,
-        isRead: false,
-        matchedFilterId: options.filterId,
-        matchedKeyword: message.matchedKeyword,
-        createdAt: new Date().toISOString(),
-      },
-    });
-    savedCount += 1;
-  }
+      await db.message.create({
+        data: {
+          telegramMessageId: message.id,
+          chatId: message.chatId,
+          chatTitle: message.chatTitle,
+          senderName: message.senderName,
+          senderId: message.senderId,
+          content: message.content,
+          messageDate: message.messageDate,
+          telegramLink: message.telegramLink,
+          isRead: false,
+          matchedFilterId: options.filterId,
+          matchedKeyword: message.matchedKeyword,
+          createdAt: new Date().toISOString(),
+        },
+      });
+      savedCount += 1;
+    },
+    { concurrency: batchSize },
+  );
 
   return {
     scannedChats: preview.scannedChats,

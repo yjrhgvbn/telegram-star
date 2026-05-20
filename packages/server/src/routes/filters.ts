@@ -11,39 +11,16 @@ import {
 type HistoryScope = {
   perChatLimit?: number;
   totalLimit?: number;
-  chatIds?: string[];
-  since?: string;
-  until?: string;
 };
 
 function normalizeHistoryScope(scope?: HistoryScope): HistoryScope {
-  const chatIds = Array.isArray(scope?.chatIds)
-    ? scope?.chatIds.map((chatId) => chatId.trim()).filter(Boolean)
-    : undefined;
   return {
     perChatLimit: scope?.perChatLimit,
     totalLimit: scope?.totalLimit,
-    chatIds,
-    since: scope?.since,
-    until: scope?.until,
   };
 }
 
 function validateHistoryScope(scope: HistoryScope): { valid: boolean; error?: string } {
-  // 路由层只做范围参数的格式与先后关系校验，具体扫描策略留给 service 层处理。
-  const sinceTs = scope.since ? Date.parse(scope.since) : NaN;
-  const untilTs = scope.until ? Date.parse(scope.until) : NaN;
-
-  if (scope.since && Number.isNaN(sinceTs)) {
-    return { valid: false, error: "since must be a valid datetime string" };
-  }
-  if (scope.until && Number.isNaN(untilTs)) {
-    return { valid: false, error: "until must be a valid datetime string" };
-  }
-  if (!Number.isNaN(sinceTs) && !Number.isNaN(untilTs) && sinceTs > untilTs) {
-    return { valid: false, error: "since must be less than or equal to until" };
-  }
-
   return { valid: true };
 }
 
@@ -83,9 +60,6 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
         conditions: request.body.conditions,
         perChatLimit: scope.perChatLimit,
         totalLimit: scope.totalLimit,
-        chatIds: scope.chatIds,
-        since: scope.since,
-        until: scope.until,
       });
 
       return {
@@ -238,9 +212,6 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
         filterId: existing.id,
         conditions: parseConditions(existing.conditions),
         perChatLimit: scope.perChatLimit,
-        chatIds: scope.chatIds,
-        since: scope.since,
-        until: scope.until,
       });
     } catch (err: any) {
       return reply.status(400).send({ error: err.message || "Failed to backfill filter history" });
