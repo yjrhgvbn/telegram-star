@@ -1,115 +1,224 @@
-import { useCallback, useEffect, useRef } from "react";
-import useSWRInfinite from "swr/infinite";
-import type { SWRInfiniteKeyLoader } from "swr/infinite";
+import { useState, useCallback, useEffect, useRef } from "react";
 import useSWR from "swr";
 import { api } from "../api/client";
-import type { MessageResponse, Stats } from "../types";
+import type { Message, Stats } from "../types";
 
 interface UseMessagesOptions {
   limit?: number;
   isRead?: string;
   filterId?: string;
   search?: string;
+  /** 是否启用"自动定位到最近已读相邻的未读消息"功能 */
+  autoLocateEnabled?: boolean;
 }
 
-export function useMessages(options: UseMessagesOptions = {}) {
+export interface UseMessagesReturn {
+  messages: Message[];         // ASC 顺序（旧→新），与页面渲染顺序一致
+  hasOlder: boolean;           // 是否有更旧的消息可加载
+  hasNewer: boolean;           // 是否有更新的消息可加载
+  loading: boolean;            // 初始加载中
+  loadingOlder: boolean;       // 向上加载更旧消息中
+  loadingNewer: boolean;       // 向下加载更新消息中
+  anchorId: number | null;     // 初始定位锚点消息 ID（null 时默认滚底）
+  hasPendingNew: boolean;      // SSE 推送了新消息但用户不在底部，需显示 badge
+  loadOlder: () => void;       // 触发加载更旧消息（prepend）
+  loadNewer: () => void;       // 触发加载更新消息（append）
+  flushPending: () => void;    // 用户点击 badge 时：清除 pending 状态并触发 loadNewer
+  setAtBottom: (v: boolean) => void; // MessageList 通知当前是否在底部
+  toggleRead: (id: number) => Promise<void>;
+  refresh: () => void;
+}
+
+export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn {
   const limit = options.limit ?? 20;
 
-  // SWR Infinite key：依赖过滤条件变化时自动重置到第 1 页
-  const getKey: SWRInfiniteKeyLoader<MessageResponse> = useCallback(
-    (pageIndex, previousPageData) => {
-      // 已到最后一页时停止请求
-      if (previousPageData && pageIndex + 1 > previousPageData.pagination.totalPages) {
-        return null;
-      }
-      return [
-        "messages-inf",
-        pageIndex + 1,
-        limit,
-        options.isRead ?? "",
-        options.filterId ?? "",
-        options.search ?? "",
-      ] as const;
-    },
-    [limit, options.isRead, options.filterId, options.search],
-  );
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [hasOlder, setHasOlder] = useState(false);
+  const [hasNewer, setHasNewer] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [loadingNewer, setLoadingNewer] = useState(false);
+  const [anchorId, setAnchorId] = useState<number | null>(null);
+  const [hasPendingNew, setHasPendingNew] = useState(false);
 
-  const { data, error, isLoading, isValidating, mutate, size, setSize } = useSWRInfinite(
-    getKey,
-    ([, page, lim, isRead, filterId, search]: readonly [string, number, number, string, string, string]) =>
-      api.messages.list({ page, limit: lim, isRead, filterId, search }),
-    { revalidateFirstPage: false },
-  );
+  // 用 ref 追踪实时状态，供 SSE 回调使用（避免闭包捕获旧值）
+  const messagesRef = useRef<Message[]>([]);
+  const isAtBottomRef = useRef(true);
+  const loadingNewerRef = useRef(false);
 
-  // 过滤条件变化时重置到第 1 页
-  const prevFiltersRef = useRef({ isRead: options.isRead, filterId: options.filterId, search: options.search });
-  useEffect(() => {
-    const prev = prevFiltersRef.current;
-    if (
-      prev.isRead !== options.isRead ||
-      prev.filterId !== options.filterId ||
-      prev.search !== options.search
-    ) {
-      prevFiltersRef.current = { isRead: options.isRead, filterId: options.filterId, search: options.search };
-      void setSize(1);
+  messagesRef.current = messages;
+
+  // 当前过滤参数，用于请求和选项变更检测
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
+  /** 构建请求公共参数 */
+  const buildCommonParams = useCallback(() => ({
+    limit,
+    isRead: optionsRef.current.isRead,
+    filterId: optionsRef.current.filterId || undefined,
+    search: optionsRef.current.search || undefined,
+  }), [limit]);
+
+  /** 初始化：获取锚点（若 autoLocate）并加载第一屏数据 */
+  const initialize = useCallback(async () => {
+    setLoading(true);
+    setMessages([]);
+    setHasOlder(false);
+    setHasNewer(false);
+    setAnchorId(null);
+    setHasPendingNew(false);
+
+    const { isRead, search, autoLocateEnabled } = optionsRef.current;
+
+    // 仅在没有 isRead 过滤、没有搜索词时才尝试获取锚点
+    // （过滤视图中锚点逻辑无意义）
+    const useAutoLocate = Boolean(autoLocateEnabled && !isRead && !search);
+
+    try {
+      const result = await api.messages.list({
+        ...buildCommonParams(),
+        autoLocate: useAutoLocate || undefined,
+      });
+      setMessages(result.data);
+      setHasOlder(result.hasOlder);
+      setHasNewer(result.hasNewer);
+      // autoLocate 请求时服务端返回 anchorId，否则为 undefined（表示无锚点，默认滚底）
+      setAnchorId(result.anchorId ?? null);
+    } catch {
+      // 加载失败保持空列表
+    } finally {
+      setLoading(false);
     }
-  }, [options.isRead, options.filterId, options.search, setSize]);
+  }, [buildCommonParams]);
 
-  // 开发时直连后端，绕过 Vite dev proxy 的响应缓冲问题。
-  // 生产环境前端与后端同源，使用相对路径即可。
+  /** 加载更旧的消息（prepend）*/
+  const loadOlder = useCallback(async () => {
+    if (loadingOlder || !hasOlder) return;
+    const oldestMsg = messagesRef.current[0];
+    if (!oldestMsg) return;
+
+    setLoadingOlder(true);
+    try {
+      const result = await api.messages.list({
+        ...buildCommonParams(),
+        cursorId: oldestMsg.id,
+        direction: "before",
+      });
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const unique = result.data.filter((m) => !existingIds.has(m.id));
+        return [...unique, ...prev];
+      });
+      setHasOlder(result.hasOlder);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [loadingOlder, hasOlder, buildCommonParams]);
+
+  /** 加载更新的消息（append）*/
+  const loadNewer = useCallback(async () => {
+    if (loadingNewerRef.current) return;
+    loadingNewerRef.current = true;
+    setLoadingNewer(true);
+
+    try {
+      const newestMsg = messagesRef.current[messagesRef.current.length - 1];
+      const result = await api.messages.list({
+        ...buildCommonParams(),
+        cursorId: newestMsg?.id,
+        direction: newestMsg ? "after" : undefined,
+      });
+
+      if (result.data.length > 0) {
+        if (isAtBottomRef.current) {
+          // 用户在底部：静默追加
+          setMessages((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id));
+            const unique = result.data.filter((m) => !existingIds.has(m.id));
+            return unique.length > 0 ? [...prev, ...unique] : prev;
+          });
+          setHasPendingNew(false);
+        } else {
+          // 用户不在底部：设置 badge 提示
+          setHasPendingNew(true);
+        }
+      }
+      setHasNewer(result.hasNewer);
+    } catch {
+      // ignore
+    } finally {
+      loadingNewerRef.current = false;
+      setLoadingNewer(false);
+    }
+  }, [buildCommonParams]);
+
+  // 用 ref 保持 loadNewer 最新引用，供 SSE 回调调用
+  const loadNewerRef = useRef(loadNewer);
+  loadNewerRef.current = loadNewer;
+
+  /** 清除 pending 状态，触发 loadNewer（用户点击 badge 时调用）*/
+  const flushPending = useCallback(() => {
+    setHasPendingNew(false);
+    // 强制视为"在底部"，确保 loadNewer 能 append 而非再次设 pending
+    isAtBottomRef.current = true;
+    void loadNewerRef.current();
+  }, []);
+
+  /** 由 MessageList 调用，通知当前是否在底部 */
+  const setAtBottom = useCallback((v: boolean) => {
+    isAtBottomRef.current = v;
+  }, []);
+
+  // 选项变更时重置并重新初始化
+  useEffect(() => {
+    void initialize();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options.isRead, options.filterId, options.search, options.autoLocateEnabled]);
+
+  // SSE 实时推送：新消息到达时，根据是否在底部决定是否静默追加
   const sseUrl = import.meta.env.DEV
     ? "http://localhost:3000/api/messages/events"
     : "/api/messages/events";
 
   useEffect(() => {
     const es = new EventSource(sseUrl);
-    // 新消息到达时，仅重新验证已加载的所有分页
-    es.onmessage = () => { void mutate(); };
+    es.onmessage = () => {
+      void loadNewerRef.current();
+    };
     return () => es.close();
-  }, [mutate, sseUrl]);
+  }, [sseUrl]);
 
-  const toggleRead = useCallback(
-    async (id: number) => {
-      const updated = await api.messages.toggleRead(id);
+  /** 乐观更新已读状态 */
+  const toggleRead = useCallback(async (id: number) => {
+    const updated = await api.messages.toggleRead(id);
+    setMessages((prev) =>
+      prev.map((msg) => (msg.id === id ? { ...msg, isRead: updated.isRead } : msg)),
+    );
+  }, []);
 
-      // 乐观更新：在所有已加载的分页数据中找到该消息并更新
-      await mutate(
-        (pages) => {
-          if (!pages) return pages;
-          return pages.map((page) => ({
-            ...page,
-            data: page.data.map((msg) => (msg.id === id ? { ...msg, isRead: updated.isRead } : msg)),
-          }));
-        },
-        { revalidate: false },
-      );
-    },
-    [mutate],
-  );
-
+  /** 强制刷新（重新初始化） */
   const refresh = useCallback(() => {
-    void mutate();
-  }, [mutate]);
-
-  const loadMore = useCallback(() => {
-    void setSize((s) => s + 1);
-  }, [setSize]);
-
-  // 将所有分页数据展平
-  const messages = data ? data.flatMap((page) => page.data) : [];
-  const lastPage = data?.[data.length - 1];
-  const hasMore = lastPage ? lastPage.pagination.page < lastPage.pagination.totalPages : false;
-  const isLoadingMore = isValidating && !isLoading && size > 1;
+    void initialize();
+  }, [initialize]);
 
   return {
     messages,
-    hasMore,
-    isLoadingMore,
-    loading: isLoading,
-    error: error instanceof Error ? error.message : null,
+    hasOlder,
+    hasNewer,
+    loading,
+    loadingOlder,
+    loadingNewer,
+    anchorId,
+    hasPendingNew,
+    loadOlder,
+    loadNewer,
+    flushPending,
+    setAtBottom,
     toggleRead,
     refresh,
-    loadMore,
   };
 }
 
@@ -126,3 +235,4 @@ export function useStats() {
     refresh,
   };
 }
+

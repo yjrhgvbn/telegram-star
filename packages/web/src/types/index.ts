@@ -74,16 +74,13 @@ export interface FilterBackfillResponse {
   skippedExistingCount: number;
 }
 
-export interface MessagePagination {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-}
-
+/** 游标分页响应，data 按 messageDate ASC（旧→新）排列 */
 export interface MessageResponse {
   data: Message[];
-  pagination: MessagePagination;
+  hasOlder: boolean;
+  hasNewer: boolean;
+  /** autoLocate=true 时服务端返回计算好的锚点 ID */
+  anchorId?: number | null;
 }
 
 export interface Stats {

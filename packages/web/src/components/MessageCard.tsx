@@ -9,9 +9,11 @@ interface Props {
   message: Message;
   onToggleRead: (id: number) => void;
   searchQuery?: string;
+  /** 是否为自动定位锚点，高亮显示边框以提示用户当前位置 */
+  isAnchor?: boolean;
 }
 
-export function MessageCard({ message, onToggleRead, searchQuery }: Props) {
+export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Props) {
   const timeAgo = getTimeAgo(message.messageDate);
 
   // Highlight matched keyword in content
@@ -34,7 +36,8 @@ export function MessageCard({ message, onToggleRead, searchQuery }: Props) {
       className={cn(
         "border border-border/70 bg-card/75 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
         !message.isRead && "border-primary/35 bg-primary/5 ring-1 ring-primary/25",
-        message.isRead && "bg-muted/20 opacity-80"
+        message.isRead && "bg-muted/20 opacity-80",
+        isAnchor && "ring-2 ring-amber-400/60"
       )}
     >
       <CardHeader className="pb-2">

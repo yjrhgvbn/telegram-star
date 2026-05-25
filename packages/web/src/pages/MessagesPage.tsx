@@ -27,18 +27,33 @@ export function MessagesPage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const { filters, loading: filtersLoading } = useFilters();
-  const { messages, hasMore, isLoadingMore, loading: messagesLoading, toggleRead, refresh, loadMore } = useMessages({
-    limit: 20,
-    isRead: readFilter,
-    filterId: selectedFilterId,
-    search: searchQuery,
-  });
-  useStats();
 
   const selectedFilterAutoLocate = filters.find((item) => String(item.id) === selectedFilterId)?.autoLocateUnreadNearRead;
   const autoLocateUnreadNearRead = selectedFilterId === "" ? true : (selectedFilterAutoLocate ?? true);
 
-  const autoLocateContextKey = `${selectedFilterId}|${readFilter}|${searchQuery}|${autoLocateUnreadNearRead ? "1" : "0"}`;
+  const {
+    messages,
+    hasOlder,
+    hasNewer,
+    loading: messagesLoading,
+    loadingOlder,
+    loadingNewer,
+    anchorId,
+    hasPendingNew,
+    loadOlder,
+    loadNewer,
+    flushPending,
+    setAtBottom,
+    toggleRead,
+    refresh,
+  } = useMessages({
+    limit: 20,
+    isRead: readFilter,
+    filterId: selectedFilterId,
+    search: searchQuery,
+    autoLocateEnabled: autoLocateUnreadNearRead,
+  });
+  useStats();
 
   // 选择过滤器：更新路由，由路由驱动状态
   const handleSelectFilter = useCallback(
@@ -176,17 +191,22 @@ export function MessagesPage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6">
+          <div className="min-h-0 flex-1">
             <MessageList
               messages={messages}
-              hasMore={hasMore}
-              isLoadingMore={isLoadingMore}
+              hasOlder={hasOlder}
+              hasNewer={hasNewer}
               loading={messagesLoading}
+              loadingOlder={loadingOlder}
+              loadingNewer={loadingNewer}
+              anchorId={anchorId}
+              hasPendingNew={hasPendingNew}
+              onLoadOlder={loadOlder}
+              onLoadNewer={loadNewer}
+              onFlushPending={flushPending}
+              onSetAtBottom={setAtBottom}
               onToggleRead={toggleRead}
-              onLoadMore={loadMore}
               searchQuery={searchQuery}
-              autoLocateEnabled={autoLocateUnreadNearRead}
-              autoLocateContextKey={autoLocateContextKey}
             />
           </div>
         </main>

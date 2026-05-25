@@ -90,17 +90,29 @@ export const api = {
   },
 
   messages: {
+    /**
+     * 游标分页加载消息，data 返回 ASC（旧→新）顺序。
+     * - 无 cursorId：返回最新 limit 条
+     * - direction=before：加载比 cursorId 更旧的消息（prepend）
+     * - direction=after：加载比 cursorId 更新的消息（append）
+     * - direction=around：游标两侧各 limit/2（锚点加载）
+     * - autoLocate=true：服务端自动计算锚点并以 around 模式加载，响应附带 anchorId
+     */
     list: (params?: {
-      page?: number;
+      cursorId?: number;
+      direction?: "before" | "after" | "around";
+      autoLocate?: boolean;
       limit?: number;
       isRead?: string;
       filterId?: string;
       search?: string;
     }) => {
       const searchParams = new URLSearchParams();
-      if (params?.page) searchParams.set("page", params.page.toString());
+      if (params?.cursorId !== undefined) searchParams.set("cursorId", params.cursorId.toString());
+      if (params?.direction) searchParams.set("direction", params.direction);
+      if (params?.autoLocate) searchParams.set("autoLocate", "true");
       if (params?.limit) searchParams.set("limit", params.limit.toString());
-      if (params?.isRead !== undefined) searchParams.set("isRead", params.isRead);
+      if (params?.isRead !== undefined && params.isRead !== "") searchParams.set("isRead", params.isRead);
       if (params?.filterId) searchParams.set("filterId", params.filterId);
       if (params?.search) searchParams.set("search", params.search);
       const qs = searchParams.toString();
