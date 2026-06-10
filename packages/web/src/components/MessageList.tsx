@@ -1,5 +1,5 @@
-import { useEffect, useRef, useCallback, useState, useMemo } from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { useEffect, useRef, useCallback, useLayoutEffect } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, Inbox, Loader2 } from "lucide-react";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,55 +24,23 @@ interface Props {
   searchQuery?: string;
 }
 
-/** Virtuoso context 类型，用于传递动态状态给 Header/Footer */
-interface VirtuosoCtx {
-  loadingOlder: boolean;
-  hasOlder: boolean;
-  loadingNewer: boolean;
+/**
+ * 根据消息内容长度估算单条卡片的渲染高度。
+ *
+ * 与 react-virtuoso 只有一个全局 `defaultItemHeight` 不同，
+ * @tanstack/react-virtual 的 `estimateSize` 支持 per-item 估算，
+ * 能将高度误差从 ±450px 降至 ±30px，几乎消除 scroll 补偿时的视觉抖动。
+ */
+function estimateItemHeight(message: Message): number {
+  // 固定部分：Card py-4(32) + gap-4×2(32) + header(~50) + sender(28) + buttons(36) + footer(37) + 外层 pb-3(12)
+  const BASE = 227;
+  const contentLen = Math.min(message.content.length, 500);
+  const lines = Math.min(Math.max(1, Math.ceil(contentLen / 50)), 5); // line-clamp-5
+  return BASE + lines * 28; // leading-7 = 28px/line
 }
 
-/** 顶部 Header：已加载全部历史 / 加载中 */
-const VirtuosoHeader: React.FC<{ context?: VirtuosoCtx }> = ({ context }) => {
-  if (context?.loadingOlder) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
-        加载历史消息...
-      </div>
-    );
-  }
-  if (context && !context.hasOlder) {
-    return (
-      <p className="py-4 text-center text-sm text-muted-foreground">
-        已加载全部历史消息
-      </p>
-    );
-  }
-  return null;
-};
-
-/** 底部 Footer：加载新消息中 */
-const VirtuosoFooter: React.FC<{ context?: VirtuosoCtx }> = ({ context }) => {
-  if (!context?.loadingNewer) return null;
-  return (
-    <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
-      <Loader2 className="size-4 animate-spin" />
-      加载新消息...
-    </div>
-  );
-};
-
-/** 稳定的 components 对象引用，避免 Virtuoso 因 inline 对象导致不必要的重挂载 */
-const VIRTUOSO_COMPONENTS = {
-  Header: VirtuosoHeader,
-  Footer: VirtuosoFooter,
-} as const;
-
-/**
- * firstItemIndex 的初始值。设置较大值，
- * 向前加载时通过减少该值来 prepend 消息，Virtuoso 自动维护滚动位置。
- */
-const START_INDEX = 100_000;
+const EDGE_THRESHOLD = 50;      // 距离边缘多少 px 触发加载
+const AT_BOTTOM_THRESHOLD = 100; // 距底部多少 px 视为"在底部"
 
 export function MessageList({
   messages,
@@ -90,110 +58,149 @@ export function MessageList({
   onToggleRead,
   searchQuery,
 }: Props) {
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // ─── firstItemIndex：Virtuoso 双向滚动核心状态 ────────────────────────────
-  // 初始值 START_INDEX；每次 prepend N 条消息时减 N，Virtuoso 自动保持滚动位置
-  const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
-  /** 上次渲染时第一条消息的 id，用于检测 prepend */
+  // 使用 ref 引用 messages，让 estimateSize / getItemKey 保持引用稳定
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  // ═══ TanStack Virtual 初始化 ═══════════════════════════════════════════════
+  // estimateSize / getItemKey 使用 ref 而非闭包依赖 messages：
+  // 避免 messages 引用变化时 virtualizer 重建缓存
+  const estimateSize = useCallback(
+    (index: number) => {
+      const msg = messagesRef.current[index];
+      return msg ? estimateItemHeight(msg) : 300;
+    },
+    [],
+  );
+
+  const getItemKey = useCallback(
+    (index: number) => messagesRef.current[index]?.id ?? index,
+    [],
+  );
+
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize,
+    getItemKey,
+    overscan: 8,
+  });
+
+  // ═══ Prepend scroll 补偿 ═══════════════════════════════════════════════════
+  // 核心改进：通过 useLayoutEffect（同步、paint 前）修正 scrollTop，
+  // 而非 react-virtuoso 的 React state 异步修正（下一帧才生效 → 抖动根因）。
   const prevFirstIdRef = useRef<number | undefined>(undefined);
+  const compensateRef = useRef(0);
+  const prevLoadingRef = useRef(loading);
 
-  // 新的数据加载（loading=true）时重置
-  useEffect(() => {
-    if (loading) {
-      setFirstItemIndex(START_INDEX);
-      prevFirstIdRef.current = undefined;
-    }
-  }, [loading]);
+  // loading 切为 true 时重置追踪
+  if (loading && !prevLoadingRef.current) {
+    prevFirstIdRef.current = undefined;
+  }
+  prevLoadingRef.current = loading;
 
-  // 检测 prepend：messages[0] 变化 → 计算新增条数 → 更新 firstItemIndex
-  useEffect(() => {
-    if (messages.length === 0) return;
-    const currentFirstId = messages[0].id;
-
-    if (prevFirstIdRef.current !== undefined && prevFirstIdRef.current !== currentFirstId) {
-      const oldFirstIdx = messages.findIndex((m) => m.id === prevFirstIdRef.current);
-      if (oldFirstIdx > 0) {
-        setFirstItemIndex((idx) => idx - oldFirstIdx);
+  // 渲染阶段同步检测 prepend → 计算补偿高度
+  if (!loading && messages.length > 0) {
+    const curFirstId = messages[0].id;
+    if (prevFirstIdRef.current !== undefined && curFirstId !== prevFirstIdRef.current) {
+      const oldIdx = messages.findIndex((m) => m.id === prevFirstIdRef.current);
+      if (oldIdx > 0) {
+        let h = 0;
+        for (let i = 0; i < oldIdx; i++) h += estimateItemHeight(messages[i]);
+        compensateRef.current = h;
       }
     }
-    prevFirstIdRef.current = currentFirstId;
-  }, [messages]);
+    prevFirstIdRef.current = curFirstId;
+  }
 
-  // ─── 初始滚动（loading 结束后执行一次）──────────────────────────────────────
-  const hasScrolledInitially = useRef(false);
+  // 在浏览器 paint 之前同步修正 scrollTop —— 用户看不到中间态
+  useLayoutEffect(() => {
+    if (compensateRef.current > 0 && scrollRef.current) {
+      scrollRef.current.scrollTop += compensateRef.current;
+      compensateRef.current = 0;
+    }
+  });
+
+  // ═══ 初始滚动（loading 结束后执行一次）════════════════════════════════════
+  const hasScrolledRef = useRef(false);
   useEffect(() => {
     if (loading) {
-      hasScrolledInitially.current = false;
+      hasScrolledRef.current = false;
       return;
     }
-    if (hasScrolledInitially.current || messages.length === 0) return;
-    hasScrolledInitially.current = true;
+    if (hasScrolledRef.current || messages.length === 0) return;
+    hasScrolledRef.current = true;
 
-    // 等待 Virtuoso 完成首次布局后再滚动
     requestAnimationFrame(() => {
-      const anchorIndex =
+      const idx =
         anchorId !== null ? messages.findIndex((m) => m.id === anchorId) : -1;
-
-      if (anchorIndex >= 0) {
-        // 有锚点：滚到锚点消息居中（align: center）
-        virtuosoRef.current?.scrollToIndex({
-          index: anchorIndex,
-          align: "center",
-          behavior: "auto",
-        });
+      if (idx >= 0) {
+        virtualizer.scrollToIndex(idx, { align: "center" });
       } else {
-        // 无锚点：滚到底部（类聊天默认行为）
-        virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "auto" });
+        virtualizer.scrollToIndex(messages.length - 1, { align: "end" });
       }
     });
-  }, [loading, anchorId, messages.length]);
+  }, [loading, anchorId, messages.length, virtualizer]);
 
-  // ─── startReached：用户滚到顶部，加载更旧消息 ────────────────────────────
-  // 用 ref 防止 loadingOlder 状态更新前重复触发
-  const loadingOlderRef = useRef(loadingOlder);
-  loadingOlderRef.current = loadingOlder;
+  // ═══ Scroll 事件：边缘检测 + atBottom 追踪 ═════════════════════════════════
   const hasOlderRef = useRef(hasOlder);
   hasOlderRef.current = hasOlder;
-
-  const startReached = useCallback(() => {
-    if (!hasOlderRef.current || loadingOlderRef.current) return;
-    onLoadOlder();
-  }, [onLoadOlder]);
-
-  // ─── endReached：用户滚到底部，加载更新消息（非 SSE 情况）──────────────────
+  const loadingOlderRef = useRef(loadingOlder);
+  loadingOlderRef.current = loadingOlder;
   const hasNewerRef = useRef(hasNewer);
   hasNewerRef.current = hasNewer;
   const loadingNewerRef = useRef(loadingNewer);
   loadingNewerRef.current = loadingNewer;
+  const isAtBottomRef = useRef(true);
 
-  const endReached = useCallback(() => {
-    if (!hasNewerRef.current || loadingNewerRef.current) return;
-    onLoadNewer();
-  }, [onLoadNewer]);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
 
-  // ─── Virtuoso context（传递给 Header/Footer）────────────────────────────
-  const virtuosoContext = useMemo<VirtuosoCtx>(
-    () => ({ loadingOlder, hasOlder, loadingNewer }),
-    [loadingOlder, hasOlder, loadingNewer],
-  );
+    const onScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el;
 
-  // ─── itemContent：渲染单条消息 ───────────────────────────────────────────
-  const itemContent = useCallback(
-    (_index: number, msg: Message) => (
-      <div className="px-4 pb-3 sm:px-6">
-        <MessageCard
-          message={msg}
-          onToggleRead={onToggleRead}
-          searchQuery={searchQuery}
-          isAnchor={msg.id === anchorId}
-        />
-      </div>
-    ),
-    [onToggleRead, searchQuery, anchorId],
-  );
+      // 顶部 → 加载更旧
+      if (scrollTop <= EDGE_THRESHOLD && hasOlderRef.current && !loadingOlderRef.current) {
+        onLoadOlder();
+      }
 
-  // ─── 骨架屏 ────────────────────────────────────────────────────────────────
+      // 底部 → 加载更新
+      const gap = scrollHeight - scrollTop - clientHeight;
+      if (gap <= EDGE_THRESHOLD && hasNewerRef.current && !loadingNewerRef.current) {
+        onLoadNewer();
+      }
+
+      // atBottom 状态
+      const atBottom = gap < AT_BOTTOM_THRESHOLD;
+      isAtBottomRef.current = atBottom;
+      onSetAtBottom(atBottom);
+    };
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [onLoadOlder, onLoadNewer, onSetAtBottom]);
+
+  // ═══ Follow output：新消息追加时自动滚到底部 ════════════════════════════════
+  const prevLastIdRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const lastId = messages[messages.length - 1].id;
+    if (
+      prevLastIdRef.current !== undefined &&
+      lastId !== prevLastIdRef.current &&
+      isAtBottomRef.current
+    ) {
+      requestAnimationFrame(() => {
+        virtualizer.scrollToIndex(messages.length - 1, { align: "end" });
+      });
+    }
+    prevLastIdRef.current = lastId;
+  }, [messages, virtualizer]);
+
+  // ═══ 骨架屏 ═══════════════════════════════════════════════════════════════
   if (loading) {
     return (
       <div className="flex h-full flex-col p-4 sm:p-6">
@@ -207,7 +214,7 @@ export function MessageList({
     );
   }
 
-  // ─── 空状态 ────────────────────────────────────────────────────────────────
+  // ═══ 空状态 ═══════════════════════════════════════════════════════════════
   if (messages.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-4">
@@ -226,28 +233,72 @@ export function MessageList({
     );
   }
 
-  // ─── 主体：Virtuoso 虚拟化列表 ─────────────────────────────────────────────
+  // ═══ 主体：TanStack Virtual 虚拟列表 ═══════════════════════════════════════
+  const virtualItems = virtualizer.getVirtualItems();
+
   return (
     <div className="relative h-full w-full">
-      <Virtuoso
-        ref={virtuosoRef}
-        style={{ height: "100%" }}
-        data={messages}
-        firstItemIndex={firstItemIndex}
-        startReached={startReached}
-        endReached={endReached}
-        /**
-         * followOutput={true}：只要 data 末尾追加了新条目，Virtuoso 就自动滚到底部。
-         * Hook 只在用户在底部（或 flushPending）时才 append，因此此行为是安全的。
-         */
-        followOutput={true}
-        atBottomStateChange={onSetAtBottom}
-        context={virtuosoContext}
-        components={VIRTUOSO_COMPONENTS}
-        itemContent={itemContent}
-      />
+      <div ref={scrollRef} className="h-full overflow-y-auto">
+        {/* ── 顶部指示器 ── */}
+        {loadingOlder ? (
+          <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            加载历史消息...
+          </div>
+        ) : !hasOlder ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            已加载全部历史消息
+          </p>
+        ) : (
+          <div className="py-4" aria-hidden />
+        )}
 
-      {/* 新消息 badge：SSE 推送但用户不在底部时显示 */}
+        {/* ── 虚拟列表容器 ── */}
+        <div
+          style={{
+            height: virtualizer.getTotalSize(),
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualItems.map((vItem) => {
+            const msg = messages[vItem.index];
+            return (
+              <div
+                key={msg.id}
+                data-index={vItem.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${vItem.start}px)`,
+                }}
+              >
+                <div className="px-4 pb-3 sm:px-6">
+                  <MessageCard
+                    message={msg}
+                    onToggleRead={onToggleRead}
+                    searchQuery={searchQuery}
+                    isAnchor={msg.id === anchorId}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── 底部加载指示器 ── */}
+        {loadingNewer && (
+          <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            加载新消息...
+          </div>
+        )}
+      </div>
+
+      {/* ── 新消息 badge ── */}
       {hasPendingNew && (
         <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
           <Button

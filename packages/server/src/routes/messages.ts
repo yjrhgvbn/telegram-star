@@ -15,10 +15,7 @@ let lastInteractionSyncMs = 0;
 const MSG_INCLUDE = { matchedFilter: { select: { name: true } } } as const;
 
 /** 将 DB row 格式化为 API 响应格式 */
-function formatRow(
-  row: Prisma.MessageGetPayload<{ include: typeof MSG_INCLUDE }>,
-  interactedReadIds: Set<number>,
-) {
+function formatRow(row: Prisma.MessageGetPayload<{ include: typeof MSG_INCLUDE }>, interactedReadIds: Set<number>) {
   return {
     id: row.id,
     telegramMessageId: row.telegramMessageId,
@@ -38,11 +35,7 @@ function formatRow(
 }
 
 /** 构建基础过滤条件（不含游标） */
-function buildBaseWhere(query: {
-  isRead?: string;
-  filterId?: string;
-  search?: string;
-}): Prisma.MessageWhereInput {
+function buildBaseWhere(query: { isRead?: string; filterId?: string; search?: string }): Prisma.MessageWhereInput {
   const where: Prisma.MessageWhereInput = {};
   if (query.isRead !== undefined && query.isRead !== "") {
     where.isRead = query.isRead === "true";
@@ -68,10 +61,7 @@ async function runInteractionSync(
   }
   lastInteractionSyncMs = now;
   const markedIds = await syncReadByTelegramInteractions(data);
-  log.info(
-    { resultCount: data.length, markedCount: markedIds.size, markedIds: Array.from(markedIds) },
-    "[ReadSync][fallback] sync completed",
-  );
+  log.info({ resultCount: data.length, markedCount: markedIds.size, markedIds: Array.from(markedIds) }, "[ReadSync][fallback] sync completed");
   return markedIds;
 }
 
@@ -132,41 +122,28 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
         });
         resolvedAnchorId = firstUnread?.id ?? null;
       } else {
-        // 2. 找比最近已读更旧的第一条未读消息
-        const olderUnread = await db.message.findFirst({
+        // 2. 找比最近已读更新的最近一条未读消息
+        const newerUnread = await db.message.findFirst({
           where: {
             AND: [
               { ...anchorBaseWhere, isRead: false },
               {
-                OR: [
-                  { messageDate: { lt: mostRecentRead.messageDate } },
-                  { messageDate: mostRecentRead.messageDate, id: { lt: mostRecentRead.id } },
-                ],
+                OR: [{ messageDate: { gt: mostRecentRead.messageDate } }, { messageDate: mostRecentRead.messageDate, id: { gt: mostRecentRead.id } }],
               },
             ],
           },
           orderBy: [{ messageDate: "desc" }, { id: "desc" }],
         });
 
-        if (olderUnread) {
-          resolvedAnchorId = olderUnread.id;
+        if (newerUnread) {
+          resolvedAnchorId = newerUnread.id;
         } else {
-          // 3. 若已读之后有更新的未读，取最旧那条
-          const newerUnread = await db.message.findFirst({
-            where: {
-              AND: [
-                { ...anchorBaseWhere, isRead: false },
-                {
-                  OR: [
-                    { messageDate: { gt: mostRecentRead.messageDate } },
-                    { messageDate: mostRecentRead.messageDate, id: { gt: mostRecentRead.id } },
-                  ],
-                },
-              ],
-            },
-            orderBy: [{ messageDate: "asc" }, { id: "asc" }],
+          // 3. 若不存在更新的未读，则回退到最新的消息
+          const latestUnread = await db.message.findFirst({
+            where: { ...anchorBaseWhere },
+            orderBy: [{ messageDate: "desc" }, { id: "desc" }],
           });
-          resolvedAnchorId = newerUnread?.id ?? null;
+          resolvedAnchorId = latestUnread?.id ?? null;
         }
       }
 
@@ -207,10 +184,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
             AND: [
               baseWhere,
               {
-                OR: [
-                  { messageDate: { lt: cursorDate } },
-                  { messageDate: cursorDate, id: { lt: cursorId } },
-                ],
+                OR: [{ messageDate: { lt: cursorDate } }, { messageDate: cursorDate, id: { lt: cursorId } }],
               },
             ],
           },
@@ -228,10 +202,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
             AND: [
               baseWhere,
               {
-                OR: [
-                  { messageDate: { gt: cursorDate } },
-                  { messageDate: cursorDate, id: { gt: cursorId } },
-                ],
+                OR: [{ messageDate: { gt: cursorDate } }, { messageDate: cursorDate, id: { gt: cursorId } }],
               },
             ],
           },
@@ -252,10 +223,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
               AND: [
                 baseWhere,
                 {
-                  OR: [
-                    { messageDate: { lt: cursorDate } },
-                    { messageDate: cursorDate, id: { lt: cursorId } },
-                  ],
+                  OR: [{ messageDate: { lt: cursorDate } }, { messageDate: cursorDate, id: { lt: cursorId } }],
                 },
               ],
             },
@@ -268,10 +236,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
               AND: [
                 baseWhere,
                 {
-                  OR: [
-                    { messageDate: { gt: cursorDate } },
-                    { messageDate: cursorDate, id: { gt: cursorId } },
-                  ],
+                  OR: [{ messageDate: { gt: cursorDate } }, { messageDate: cursorDate, id: { gt: cursorId } }],
                 },
               ],
             },
@@ -319,12 +284,15 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       data: { isRead: !existing.isRead },
     });
 
-    request.log.info({
-      id,
-      previousIsRead: existing.isRead,
-      nextIsRead: updated.isRead,
-      source: "manual-toggle",
-    }, "[ReadSync][manual] toggled read state");
+    request.log.info(
+      {
+        id,
+        previousIsRead: existing.isRead,
+        nextIsRead: updated.isRead,
+        source: "manual-toggle",
+      },
+      "[ReadSync][manual] toggled read state",
+    );
     if (updated.isRead) {
       await writeReadSyncLog({
         level: "info",
@@ -354,11 +322,14 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       data: { isRead: true },
     });
 
-    request.log.info({
-      idsCount: ids.length,
-      ids,
-      source: "manual-batch",
-    }, "[ReadSync][manual] batch marked as read");
+    request.log.info(
+      {
+        idsCount: ids.length,
+        ids,
+        source: "manual-batch",
+      },
+      "[ReadSync][manual] batch marked as read",
+    );
     await writeReadSyncLog({
       level: "info",
       source: "手动操作",
