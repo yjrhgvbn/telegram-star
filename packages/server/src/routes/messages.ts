@@ -132,7 +132,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
               },
             ],
           },
-          orderBy: [{ messageDate: "desc" }, { id: "desc" }],
+          orderBy: [{ messageDate: "asc" }, { id: "desc" }],
         });
 
         if (newerUnread) {
@@ -415,6 +415,6 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
     });
 
     // 返回永不 resolve 的 Promise，让 Fastify 保持连接
-    return new Promise<void>(() => {});
+    return new Promise<void>(() => { });
   });
 }
