@@ -63,6 +63,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.4.0
         version: 1.4.0(@date-fns/tz@1.4.1)(@types/react@19.2.14)(date-fns@4.1.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@chenglou/pretext':
+        specifier: ^0.0.7
+        version: 0.0.7
       '@fontsource-variable/geist':
         specifier: ^5.2.8
         version: 5.2.8
@@ -294,6 +297,9 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
+
+  '@chenglou/pretext@0.0.7':
+    resolution: {integrity: sha512-FV5hj3fGqpBlzbANUbR+s+6XuNRrghVVyuNs33zdH2SzU7MvK+7GlW6xREjDCreixKbexEn7OEkDgAFeWuu5Hg==}
 
   '@cryptography/aes@0.1.1':
     resolution: {integrity: sha512-PcYz4FDGblO6tM2kSC+VzhhK62vml6k6/YAkiWtyPvrgJVfnDRoHGDtKn5UiaRRUrvUTTocBpvc2rRgTCqxjsg==}
@@ -3783,6 +3789,8 @@ snapshots:
       use-sync-external-store: 1.6.0(react@19.2.5)
     optionalDependencies:
       '@types/react': 19.2.14
+
+  '@chenglou/pretext@0.0.7': {}
 
   '@cryptography/aes@0.1.1': {}
 

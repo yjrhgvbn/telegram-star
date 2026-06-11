@@ -78,7 +78,7 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
 
         {/* 文本内容（无文字时隐藏） */}
         {message.content.trim().length > 0 && (
-          <p className="text-sm leading-7 text-foreground/95">
+          <p className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground/95">
             {highlightContent(message.content.slice(0, 500))}
             {message.content.length > 500 && <span className="text-muted-foreground">...</span>}
           </p>

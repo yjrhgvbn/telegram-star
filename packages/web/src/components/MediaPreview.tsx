@@ -75,8 +75,11 @@ function PhotoPreview({ message }: Props) {
     ? `data:image/jpeg;base64,${message.mediaThumbBase64}`
     : null;
 
+  const extra = parseExtra(message.mediaExtra);
+  const aspectStyle = extra.w && extra.h ? { aspectRatio: `${extra.w}/${extra.h}` } : undefined;
+
   return (
-    <div ref={containerRef} className="media-preview media-preview--photo">
+    <div ref={containerRef} className="media-preview media-preview--photo" style={aspectStyle}>
       {/* Stripped 占位图 */}
       {strippedSrc && !loaded && (
         <img
@@ -117,8 +120,11 @@ function VideoPreview({ message }: Props) {
     ? `data:image/jpeg;base64,${message.mediaThumbBase64}`
     : null;
 
+  const extra = parseExtra(message.mediaExtra);
+  const aspectStyle = extra.w && extra.h ? { aspectRatio: `${extra.w}/${extra.h}` } : undefined;
+
   return (
-    <div className="media-preview media-preview--video">
+    <div className="media-preview media-preview--video" style={aspectStyle}>
       {strippedSrc && !loaded && (
         <img src={strippedSrc} alt="" className="media-preview__stripped" aria-hidden="true" />
       )}

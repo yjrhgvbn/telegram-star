@@ -31,12 +31,92 @@ interface Props {
  * @tanstack/react-virtual 的 `estimateSize` 支持 per-item 估算，
  * 能将高度误差从 ±450px 降至 ±30px，几乎消除 scroll 补偿时的视觉抖动。
  */
-function estimateItemHeight(message: Message): number {
-  // 固定部分：Card py-4(32) + gap-4×2(32) + header(~50) + sender(28) + buttons(36) + footer(37) + 外层 pb-3(12)
-  const BASE = 227;
-  const contentLen = Math.min(message.content.length, 500);
-  const lines = Math.min(Math.max(1, Math.ceil(contentLen / 50)), 5); // line-clamp-5
-  return BASE + lines * 28; // leading-7 = 28px/line
+import { prepareWithSegments, measureLineStats } from "@chenglou/pretext";
+
+function estimateItemHeight(message: Message, containerWidth: number = 400): number {
+
+  // 外围和固定元素的基础高度：
+  const FIXED_BASE = 199;
+  let height = FIXED_BASE;
+
+  // 统一计算可用宽度（完美对齐浏览器亚像素）：
+  // 屏幕 < 640px 时: 外层 px-4(32) + MessageCard border(2) + CardContent px-4(32) = 66px
+  // 屏幕 >= 640px 时: 外层 sm:px-6(48) + MessageCard border(2) + CardContent px-4(32) = 82px
+  const screenW = typeof window !== "undefined" ? window.innerWidth : 1024;
+  const paddingH = screenW < 640 ? 66 : 82;
+  const availableWidth = Math.max(100, containerWidth - paddingH);
+
+  // CardContent 内部的组件数量，用于计算 space-y-3 (12px) 的数量
+  // Sender 和 Buttons 这 2 个是一直都在的
+  let itemsCount = 2;
+
+  // 1. 媒体部分高度估算
+  if (message.mediaType) {
+    itemsCount++;
+    let mediaH = 54; // 默认细长组件的高度
+    switch (message.mediaType) {
+      case "photo":
+      case "video":
+      case "videoNote":
+      case "gif": {
+        mediaH = 280; // 默认高度
+        if (message.mediaExtra) {
+          try {
+            const extra = JSON.parse(message.mediaExtra);
+            if (extra.w && extra.h) {
+              mediaH = Math.min(450, (availableWidth * extra.h) / extra.w);
+            }
+          } catch {
+            // ignore
+          }
+        }
+        break;
+      }
+      case "sticker":
+        mediaH = 160; // index.css 中写死的 max-height: 160px
+        break;
+      case "document":
+      case "audio":
+      case "voice":
+      case "contact":
+      case "geo":
+      case "poll":
+        mediaH = 54; // paddings 16px + icon/text ~38px
+        break;
+    }
+    height += mediaH;
+  }
+
+  // 2. 文字部分高度估算
+  const textStr = message.content.trim();
+  if (textStr.length > 0) {
+    itemsCount++;
+    const textToMeasure = textStr.slice(0, 500) + (textStr.length > 500 ? "..." : "");
+
+    // Telegram 消息通常包含换行符 (\n)，pretext 不会自动处理多段落的硬换行，
+    // 所以必须将文本按换行符拆分，对每一段单独测量并累加行数。
+    const paragraphs = textToMeasure.split('\n');
+    let totalLines = 0;
+
+    for (const p of paragraphs) {
+      if (p.length === 0) {
+        totalLines += 1; // 空换行也占一行高度
+        continue;
+      }
+      // 注意：必须和 index.css 的全局字体栈保持像素级一致
+      const prepared = prepareWithSegments(p, '14px "Geist Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"');
+      const stats = measureLineStats(prepared, availableWidth);
+      totalLines += Math.max(1, stats.lineCount);
+    }
+
+    // Tailwind leading-7 对应 line-height: 28px
+    height += totalLines * 28;
+  }
+
+  // 加上所有子元素之间的 gap
+  height += (itemsCount - 1) * 12;
+
+  return height;
 }
 
 const EDGE_THRESHOLD = 50;      // 距离边缘多少 px 触发加载
@@ -70,7 +150,10 @@ export function MessageList({
   const estimateSize = useCallback(
     (index: number) => {
       const msg = messagesRef.current[index];
-      return msg ? estimateItemHeight(msg) : 300;
+      const containerWidth = scrollRef.current
+        ? scrollRef.current.clientWidth
+        : (typeof window !== "undefined" ? Math.min(640, window.innerWidth) : 400);
+      return msg ? estimateItemHeight(msg, containerWidth) : 300;
     },
     [],
   );
@@ -263,6 +346,26 @@ export function MessageList({
         >
           {virtualItems.map((vItem) => {
             const msg = messages[vItem.index];
+            // 调试用：计算实时预估高度与真实渲染高度的差异 (仅在开发环境运行)
+            let diffElement = null;
+            if (import.meta.env.DEV) {
+              const containerWidth = scrollRef.current?.clientWidth || 400;
+              const estHeight = estimateItemHeight(msg, containerWidth);
+              const realHeight = vItem.size;
+              const diff = realHeight - estHeight; // 不要 round，保留真实小数看极细微偏差
+              
+              diffElement = (
+                <div className="pointer-events-none absolute right-8 top-1 z-50 rounded bg-black/80 px-2 py-1 font-mono text-[10px] text-white/90 opacity-60 backdrop-blur-sm transition-opacity hover:opacity-100 sm:right-10">
+                  <span className={Math.abs(diff) > 20 ? "font-bold text-red-400" : "text-green-400"}>
+                    Diff: {diff > 0 ? "+" : ""}{diff.toFixed(2)}px
+                  </span>
+                  <span className="ml-2 text-white/60">
+                    (Est: {estHeight.toFixed(2)} / Real: {realHeight.toFixed(2)})
+                  </span>
+                </div>
+              );
+            }
+
             return (
               <div
                 key={msg.id}
@@ -276,6 +379,9 @@ export function MessageList({
                   transform: `translateY(${vItem.start}px)`,
                 }}
               >
+                {/* ── 高度计算调试面板 (开发用，打包时由于 import.meta.env.DEV 为 false 会被剔除) ── */}
+                {diffElement}
+
                 <div className="px-4 pb-3 sm:px-6">
                   <MessageCard
                     message={msg}
