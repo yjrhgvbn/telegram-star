@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BellRing, Rows3, Waypoints } from "lucide-react";
+import { BellRing, Rows3 } from "lucide-react";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { TelegramLogin } from "@/components/TelegramLogin";
@@ -66,13 +66,6 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
                 >
                   <Rows3 data-icon="inline-start" />
                   过滤的消息
-                </TabsTrigger>
-                <TabsTrigger
-                  value="groups"
-                  className="flex-none rounded-none px-1 pb-3 text-sm font-medium text-foreground/58 data-active:text-foreground sm:px-3"
-                >
-                  <Waypoints data-icon="inline-start" />
-                  群组列表
                 </TabsTrigger>
                 <TabsTrigger
                   value="notifications"

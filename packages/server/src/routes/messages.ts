@@ -31,6 +31,14 @@ function formatRow(row: Prisma.MessageGetPayload<{ include: typeof MSG_INCLUDE }
     matchedKeyword: row.matchedKeyword,
     createdAt: row.createdAt,
     filterName: row.matchedFilter?.name ?? null,
+    // 媒体元信息
+    mediaType: row.mediaType ?? null,
+    mediaFileName: row.mediaFileName ?? null,
+    mediaFileSize: row.mediaFileSize ?? null,
+    mediaMimeType: row.mediaMimeType ?? null,
+    mediaDuration: row.mediaDuration ?? null,
+    mediaThumbBase64: row.mediaThumbBase64 ?? null,
+    mediaExtra: row.mediaExtra ?? null,
   };
 }
 

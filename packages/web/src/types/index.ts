@@ -35,6 +35,14 @@ export interface Message {
   matchedKeyword: string | null;
   filterName: string | null;
   createdAt: string;
+  // 媒体元信息
+  mediaType: string | null;
+  mediaFileName: string | null;
+  mediaFileSize: number | null;
+  mediaMimeType: string | null;
+  mediaDuration: number | null;
+  mediaThumbBase64: string | null;
+  mediaExtra: string | null;
 }
 
 export interface LiveChatMessage {
@@ -47,6 +55,14 @@ export interface LiveChatMessage {
   messageDate: string;
   telegramLink: string;
   inDatabase: boolean;
+  // 媒体元信息
+  mediaType: string | null;
+  mediaFileName: string | null;
+  mediaFileSize: number | null;
+  mediaMimeType: string | null;
+  mediaDuration: number | null;
+  mediaThumbBase64: string | null;
+  mediaExtra: string | null;
 }
 
 export interface HistoricalFilterPreviewMessage extends LiveChatMessage {

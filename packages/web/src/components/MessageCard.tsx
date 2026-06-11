@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { MediaPreview } from "./MediaPreview";
 import type { Message } from "../types";
 
 interface Props {
@@ -72,10 +73,16 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
           <span className="text-sm text-muted-foreground">{message.senderName}</span>
         </div>
 
-        <p className="text-sm leading-7 text-foreground/95">
-          {highlightContent(message.content.slice(0, 500))}
-          {message.content.length > 500 && <span className="text-muted-foreground">...</span>}
-        </p>
+        {/* 媒体预览 */}
+        <MediaPreview message={message} />
+
+        {/* 文本内容（无文字时隐藏） */}
+        {message.content.trim().length > 0 && (
+          <p className="text-sm leading-7 text-foreground/95">
+            {highlightContent(message.content.slice(0, 500))}
+            {message.content.length > 500 && <span className="text-muted-foreground">...</span>}
+          </p>
+        )}
 
         <div className="flex items-center gap-2">
           <Button

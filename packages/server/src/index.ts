@@ -9,6 +9,7 @@ import { chatRoutes } from "./routes/chats.js";
 import { filterRoutes } from "./routes/filters.js";
 import { messageRoutes } from "./routes/messages.js";
 import { notificationRoutes } from "./routes/notifications.js";
+import { mediaRoutes } from "./routes/media.js";
 import { initClient } from "./services/telegram.js";
 
 const app = Fastify({ logger: true });
@@ -26,6 +27,7 @@ async function start() {
   await app.register(filterRoutes);
   await app.register(messageRoutes);
   await app.register(notificationRoutes);
+  await app.register(mediaRoutes);
 
   // Serve static frontend in production
   const webDistPath = resolve(

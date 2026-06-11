@@ -36,6 +36,15 @@ model Message {
   createdAt         String   @map("created_at")
   matchedFilter     Filter?  @relation(fields: [matchedFilterId], references: [id], onDelete: SetNull)
 
+  // --- 媒体元信息 ---
+  mediaType         String?  @map("media_type")           // "photo"|"video"|"sticker"|"document"|"voice"|"audio"|"gif"|"videoNote"|"contact"|"geo"|"poll"
+  mediaFileName     String?  @map("media_file_name")      // 原始文件名
+  mediaFileSize     Int?     @map("media_file_size")      // 文件大小 (bytes)
+  mediaMimeType     String?  @map("media_mime_type")      // MIME 类型
+  mediaDuration     Int?     @map("media_duration")       // 音视频时长 (秒)
+  mediaThumbBase64  String?  @map("media_thumb_base64")   // Stripped thumbnail base64
+  mediaExtra        String?  @map("media_extra")          // JSON 扩展字段 (宽高/联系人等)
+
   @@map("messages")
 }
 

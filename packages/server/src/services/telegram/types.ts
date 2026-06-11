@@ -16,6 +16,14 @@ export interface LiveChatMessage {
   telegramLink: string;
   /** 该消息是否已在数据库中存在 */
   inDatabase: boolean;
+  // --- 媒体元信息 ---
+  mediaType: string | null;
+  mediaFileName: string | null;
+  mediaFileSize: number | null;
+  mediaMimeType: string | null;
+  mediaDuration: number | null;
+  mediaThumbBase64: string | null;
+  mediaExtra: string | null;
 }
 
 /** 历史扫描预览消息，附带匹配的关键词 */

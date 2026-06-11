@@ -18,6 +18,7 @@ import {
   getMessageTimestampMs,
   buildDialogEntityMap,
 } from "./utils.js";
+import { extractMediaInfo, getMessageTextContent, hasMessageContent } from "./media.js";
 import type { JoinedChat, LiveChatMessage, HistoricalFilterPreviewMessage } from "./types.js";
 import pMap from "p-map";
 
@@ -80,25 +81,24 @@ export async function listSingleChatMessages(options: {
   const chatTitle = entity?.title || entity?.username || chatId;
   const history = await client.getMessages(entity, { limit: messageLimit });
 
-  const textMessages = history.filter(
-    (item: any) => typeof item?.message === "string" && item.message.trim().length > 0,
-  );
+  const validMessages = history.filter((item: any) => hasMessageContent(item));
 
   const dbRows = await db.message.findMany({
     where: {
       chatId,
-      telegramMessageId: { in: textMessages.map((item: any) => item.id) },
+      telegramMessageId: { in: validMessages.map((item: any) => item.id) },
     },
     select: { telegramMessageId: true },
   });
   const storedIdSet = new Set<number>(dbRows.map((r) => r.telegramMessageId));
 
-  return textMessages.map((item: any) => {
+  return validMessages.map((item: any) => {
     const sender = (item as any).sender;
     const senderName = sender?.firstName
       ? `${sender.firstName}${sender.lastName ? ` ${sender.lastName}` : ""}`
       : sender?.title || sender?.username || "Unknown";
     const senderId = sender?.id?.toString?.() || "";
+    const mediaInfo = extractMediaInfo(item);
 
     return {
       id: item.id,
@@ -106,10 +106,17 @@ export async function listSingleChatMessages(options: {
       chatTitle,
       senderName,
       senderId,
-      content: item.message,
+      content: getMessageTextContent(item),
       messageDate: new Date((item.date || 0) * 1000).toISOString(),
       telegramLink: buildTelegramLink(chatId, entity, item.id),
       inDatabase: storedIdSet.has(item.id),
+      mediaType: mediaInfo?.mediaType ?? null,
+      mediaFileName: mediaInfo?.mediaFileName ?? null,
+      mediaFileSize: mediaInfo?.mediaFileSize ?? null,
+      mediaMimeType: mediaInfo?.mediaMimeType ?? null,
+      mediaDuration: mediaInfo?.mediaDuration ?? null,
+      mediaThumbBase64: mediaInfo?.mediaThumbBase64 ?? null,
+      mediaExtra: mediaInfo?.mediaExtra ?? null,
     };
   });
 }
@@ -213,11 +220,9 @@ export async function previewHistoricalFilterMessages(options: {
         batchSize: 100,
       });
 
-      const textMessages = history.filter(
-        (item: any) => typeof item?.message === "string" && item.message.trim().length > 0,
-      );
+      const validMessages = history.filter((item: any) => hasMessageContent(item));
 
-      const ids = textMessages.map((item: any) => item.id);
+      const ids = validMessages.map((item: any) => item.id);
       const existingRows = ids.length
         ? await db.message.findMany({
             where: { chatId, telegramMessageId: { in: ids } },
@@ -226,12 +231,14 @@ export async function previewHistoricalFilterMessages(options: {
         : [];
       const existingIdSet = new Set(existingRows.map((r) => r.telegramMessageId));
 
-      for (const item of textMessages) {
-        const match = matchFilterConditions({ chatId, content: item.message }, options.conditions);
+      for (const item of validMessages) {
+        const textContent = getMessageTextContent(item);
+        const match = matchFilterConditions({ chatId, content: textContent }, options.conditions);
         if (!match.matched) continue;
 
         const sender = (item as any).sender;
         const { senderName, senderId } = getSenderSummary(sender);
+        const mediaInfo = extractMediaInfo(item);
 
         previews.push({
           id: item.id,
@@ -239,11 +246,18 @@ export async function previewHistoricalFilterMessages(options: {
           chatTitle: entity?.title || entity?.username || chatId,
           senderName,
           senderId,
-          content: item.message,
+          content: textContent,
           messageDate: new Date(getMessageTimestampMs(item)).toISOString(),
           telegramLink: buildTelegramLink(chatId, entity, item.id),
           inDatabase: existingIdSet.has(item.id),
           matchedKeyword: match.matchedKeyword,
+          mediaType: mediaInfo?.mediaType ?? null,
+          mediaFileName: mediaInfo?.mediaFileName ?? null,
+          mediaFileSize: mediaInfo?.mediaFileSize ?? null,
+          mediaMimeType: mediaInfo?.mediaMimeType ?? null,
+          mediaDuration: mediaInfo?.mediaDuration ?? null,
+          mediaThumbBase64: mediaInfo?.mediaThumbBase64 ?? null,
+          mediaExtra: mediaInfo?.mediaExtra ?? null,
         });
 
         if (previews.length >= totalLimit) {
@@ -308,6 +322,13 @@ export async function backfillFilterHistory(options: {
           matchedFilterId: options.filterId,
           matchedKeyword: message.matchedKeyword,
           createdAt: new Date().toISOString(),
+          mediaType: message.mediaType ?? undefined,
+          mediaFileName: message.mediaFileName ?? undefined,
+          mediaFileSize: message.mediaFileSize ?? undefined,
+          mediaMimeType: message.mediaMimeType ?? undefined,
+          mediaDuration: message.mediaDuration ?? undefined,
+          mediaThumbBase64: message.mediaThumbBase64 ?? undefined,
+          mediaExtra: message.mediaExtra ?? undefined,
         },
       });
       savedCount += 1;

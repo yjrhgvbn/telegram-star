@@ -15,6 +15,7 @@ import { getClient, isClientConnected } from "./client.js";
 import { buildDialogEntityMap, buildTelegramLink, getSenderSummary } from "./utils.js";
 import { emitMessageEvent } from "../messageEvents.js";
 import { writeReadSyncLog } from "../readSyncLog.js";
+import { extractMediaInfo, getMessageTextContent, hasMessageContent } from "./media.js";
 
 // --- Reaction 信号检测 ---
 
@@ -182,7 +183,7 @@ export async function syncReadByTelegramInteractions(
 /** 处理入站新消息：逐一匹配启用的过滤器，首次命中后入库并触发通知推送 */
 async function handleNewMessage(event: NewMessageEvent): Promise<void> {
   const message = event.message;
-  if (!message || !message.text) return;
+  if (!message || !hasMessageContent(message)) return;
 
   const activeFilters = await db.filter.findMany({ where: { enabled: true } });
   if (activeFilters.length === 0) return;
@@ -192,12 +193,14 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
 
   const chatId = chat.id.toString();
   const chatTitle = (chat as any).title || (chat as any).firstName || chatId;
+  const textContent = getMessageTextContent(message);
+  const mediaInfo = extractMediaInfo(message);
 
   for (const filter of activeFilters) {
     const conditions = parseConditions(filter.conditions);
     if (conditions.length === 0) continue;
 
-    const match = matchFilterConditions({ chatId, content: message.text }, conditions);
+    const match = matchFilterConditions({ chatId, content: textContent }, conditions);
     if (!match.matched) continue;
 
     // 防重：同一条 Telegram 消息已入库则跳过
@@ -217,13 +220,23 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
         chatTitle,
         senderName,
         senderId,
-        content: message.text || "",
+        content: textContent,
         messageDate: new Date((message.date || 0) * 1000).toISOString(),
         telegramLink,
         isRead: false,
         matchedFilterId: filter.id,
         matchedKeyword: match.matchedKeyword,
         createdAt: new Date().toISOString(),
+        // 媒体元信息
+        ...(mediaInfo && {
+          mediaType: mediaInfo.mediaType,
+          mediaFileName: mediaInfo.mediaFileName,
+          mediaFileSize: mediaInfo.mediaFileSize,
+          mediaMimeType: mediaInfo.mediaMimeType,
+          mediaDuration: mediaInfo.mediaDuration,
+          mediaThumbBase64: mediaInfo.mediaThumbBase64,
+          mediaExtra: mediaInfo.mediaExtra,
+        }),
       },
     });
 
@@ -232,13 +245,13 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
       matchedKeyword: match.matchedKeyword,
       chatTitle,
       senderName,
-      content: message.text || "",
+      content: textContent || (mediaInfo ? `[${mediaInfo.mediaType}]` : ""),
       messageDate: new Date((message.date || 0) * 1000).toISOString(),
       telegramLink,
     });
 
     emitMessageEvent("new");
-    console.log(`[Telegram] Saved message from "${chatTitle}" matching filter "${filter.name}"`);
+    console.log(`[Telegram] Saved message from "${chatTitle}" matching filter "${filter.name}"${mediaInfo ? ` [${mediaInfo.mediaType}]` : ""}`);
 
     // 每条消息只入库一次（第一个命中的过滤器），避免重复写入
     break;
