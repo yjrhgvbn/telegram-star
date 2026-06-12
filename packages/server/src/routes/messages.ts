@@ -171,7 +171,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       const raw = await db.message.findMany({
         where: baseWhere,
         include: MSG_INCLUDE,
-        orderBy: [{ messageDate: "desc" }, { id: "desc" }],
+        orderBy: [{ messageDate: "desc" }, { telegramMessageId: "desc" }],
         take: limit + 1, // 多取一条判断是否有更旧
       });
       hasOlder = raw.length > limit;
@@ -197,7 +197,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
             ],
           },
           include: MSG_INCLUDE,
-          orderBy: [{ messageDate: "desc" }, { id: "desc" }],
+          orderBy: [{ messageDate: "desc" }, { telegramMessageId: "desc" }],
           take: limit + 1,
         });
         hasOlder = raw.length > limit;
@@ -215,7 +215,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
             ],
           },
           include: MSG_INCLUDE,
-          orderBy: [{ messageDate: "asc" }, { id: "asc" }],
+          orderBy: [{ messageDate: "asc" }, { telegramMessageId: "asc" }],
           take: limit + 1,
         });
         hasNewer = raw.length > limit;
@@ -236,7 +236,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
               ],
             },
             include: MSG_INCLUDE,
-            orderBy: [{ messageDate: "desc" }, { id: "desc" }],
+            orderBy: [{ messageDate: "desc" }, { telegramMessageId: "desc" }],
             take: halfLimit + 1,
           }),
           db.message.findMany({
@@ -249,7 +249,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
               ],
             },
             include: MSG_INCLUDE,
-            orderBy: [{ messageDate: "asc" }, { id: "asc" }],
+            orderBy: [{ messageDate: "asc" }, { telegramMessageId: "asc" }],
             take: halfLimit + 1,
           }),
           db.message.findUnique({ where: { id: cursorId }, include: MSG_INCLUDE }),
