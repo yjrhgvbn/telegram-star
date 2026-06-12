@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { MediaPreview } from "./MediaPreview";
-import type { Message } from "../types";
+import type { Message } from "@/types";
 
 interface Props {
   message: Message;

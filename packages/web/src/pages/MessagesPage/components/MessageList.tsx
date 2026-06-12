@@ -5,7 +5,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { MessageCard } from "./MessageCard";
-import type { Message } from "../types";
+import type { Message } from "@/types";
 
 interface Props {
   messages: Message[];         // ASC 顺序（旧→新）
@@ -119,8 +119,8 @@ function estimateItemHeight(message: Message, containerWidth: number = 400): num
   return height;
 }
 
-const EDGE_THRESHOLD = 50;      // 距离边缘多少 px 触发加载
-const AT_BOTTOM_THRESHOLD = 100; // 距底部多少 px 视为"在底部"
+const EDGE_THRESHOLD = 300;      // 距离边缘多少 px 触发加载
+const AT_BOTTOM_THRESHOLD = 300; // 距底部多少 px 视为"在底部"
 
 export function MessageList({
   messages,
@@ -300,8 +300,8 @@ export function MessageList({
   // ═══ 空状态 ═══════════════════════════════════════════════════════════════
   if (messages.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center p-4">
-        <Card className="mx-auto max-w-xl border border-dashed border-border/70 bg-card/60 text-center">
+      <div className="p-4">
+        <Card className="mx-auto border border-dashed border-border/70 bg-card/60 text-center">
           <CardHeader>
             <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-muted">
               <Inbox className="size-5 text-muted-foreground" />
@@ -353,7 +353,7 @@ export function MessageList({
               const estHeight = estimateItemHeight(msg, containerWidth);
               const realHeight = vItem.size;
               const diff = realHeight - estHeight; // 不要 round，保留真实小数看极细微偏差
-              
+
               diffElement = (
                 <div className="pointer-events-none absolute right-8 top-1 z-50 rounded bg-black/80 px-2 py-1 font-mono text-[10px] text-white/90 opacity-60 backdrop-blur-sm transition-opacity hover:opacity-100 sm:right-10">
                   <span className={Math.abs(diff) > 20 ? "font-bold text-red-400" : "text-green-400"}>

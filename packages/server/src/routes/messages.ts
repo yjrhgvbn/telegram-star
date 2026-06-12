@@ -119,14 +119,14 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       // 1. 找最近一条已读消息
       const mostRecentRead = await db.message.findFirst({
         where: { ...anchorBaseWhere, isRead: true },
-        orderBy: [{ messageDate: "desc" }, { id: "desc" }],
+        orderBy: [{ messageDate: "desc" }, { telegramMessageId: "desc" }],
       });
 
       if (!mostRecentRead) {
         // 无已读消息，锚点为最新未读
         const firstUnread = await db.message.findFirst({
           where: { ...anchorBaseWhere, isRead: false },
-          orderBy: [{ messageDate: "desc" }, { id: "desc" }],
+          orderBy: [{ messageDate: "desc" }, { telegramMessageId: "desc" }],
         });
         resolvedAnchorId = firstUnread?.id ?? null;
       } else {
@@ -136,11 +136,11 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
             AND: [
               { ...anchorBaseWhere, isRead: false },
               {
-                OR: [{ messageDate: { gt: mostRecentRead.messageDate } }, { messageDate: mostRecentRead.messageDate, id: { gt: mostRecentRead.id } }],
+                OR: [{ messageDate: { gt: mostRecentRead.messageDate } }, { messageDate: mostRecentRead.messageDate, telegramMessageId: { gt: mostRecentRead.telegramMessageId } }],
               },
             ],
           },
-          orderBy: [{ messageDate: "asc" }, { id: "desc" }],
+          orderBy: [{ messageDate: "asc" }, { telegramMessageId: "asc" }],
         });
 
         if (newerUnread) {
@@ -149,7 +149,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
           // 3. 若不存在更新的未读，则回退到最新的消息
           const latestUnread = await db.message.findFirst({
             where: { ...anchorBaseWhere },
-            orderBy: [{ messageDate: "desc" }, { id: "desc" }],
+            orderBy: [{ messageDate: "desc" }, { telegramMessageId: "desc" }],
           });
           resolvedAnchorId = latestUnread?.id ?? null;
         }
@@ -184,6 +184,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ error: "Cursor message not found" });
       }
       const cursorDate = cursorMsg.messageDate;
+      const cursorTelegramMsgId = cursorMsg.telegramMessageId;
 
       if (direction === "before") {
         // 加载比游标更旧的消息（DESC 排序，取前 limit 条，再翻转为 ASC）
@@ -192,7 +193,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
             AND: [
               baseWhere,
               {
-                OR: [{ messageDate: { lt: cursorDate } }, { messageDate: cursorDate, id: { lt: cursorId } }],
+                OR: [{ messageDate: { lt: cursorDate } }, { messageDate: cursorDate, telegramMessageId: { lt: cursorTelegramMsgId } }],
               },
             ],
           },
@@ -210,7 +211,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
             AND: [
               baseWhere,
               {
-                OR: [{ messageDate: { gt: cursorDate } }, { messageDate: cursorDate, id: { gt: cursorId } }],
+                OR: [{ messageDate: { gt: cursorDate } }, { messageDate: cursorDate, telegramMessageId: { gt: cursorTelegramMsgId } }],
               },
             ],
           },
@@ -231,7 +232,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
               AND: [
                 baseWhere,
                 {
-                  OR: [{ messageDate: { lt: cursorDate } }, { messageDate: cursorDate, id: { lt: cursorId } }],
+                  OR: [{ messageDate: { lt: cursorDate } }, { messageDate: cursorDate, telegramMessageId: { lt: cursorTelegramMsgId } }],
                 },
               ],
             },
@@ -244,7 +245,7 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
               AND: [
                 baseWhere,
                 {
-                  OR: [{ messageDate: { gt: cursorDate } }, { messageDate: cursorDate, id: { gt: cursorId } }],
+                  OR: [{ messageDate: { gt: cursorDate } }, { messageDate: cursorDate, telegramMessageId: { gt: cursorTelegramMsgId } }],
                 },
               ],
             },

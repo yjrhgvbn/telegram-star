@@ -11,7 +11,7 @@ import {
   Play,
   Sticker,
 } from "lucide-react";
-import type { Message } from "../types";
+import type { Message } from "@/types";
 
 interface Props {
   message: Message;

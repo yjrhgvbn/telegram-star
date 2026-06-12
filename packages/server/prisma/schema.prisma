@@ -45,6 +45,10 @@ model Message {
   mediaThumbBase64  String?  @map("media_thumb_base64")   // Stripped thumbnail base64
   mediaExtra        String?  @map("media_extra")          // JSON 扩展字段 (宽高/联系人等)
 
+  @@index([messageDate, telegramMessageId])
+  @@index([matchedFilterId, isRead, messageDate])
+  @@index([isRead, messageDate])
+
   @@map("messages")
 }
 
