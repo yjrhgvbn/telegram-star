@@ -281,6 +281,7 @@ export function MediaPreview({ message }: Props) {
         rel="noopener noreferrer"
         className="media-preview__link"
         title="在 Telegram 中查看"
+        onClick={() => sessionStorage.setItem("telegram_jump_msg_id", message.id.toString())}
       >
         {content}
       </a>

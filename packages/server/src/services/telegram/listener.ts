@@ -152,6 +152,8 @@ export async function syncReadByTelegramInteractions(
     data: { isRead: true },
   });
 
+  emitMessageEvent({ type: "read", messageIds: Array.from(shouldMarkReadIds) });
+
   console.info("[ReadSync][fallback] marked rows as read", {
     inputCount: messages.length,
     unreadCount: unread.length,

@@ -289,12 +289,13 @@ export function MessageList({
   // ═══ Telegram 跳转返回时主动同步已读状态 ═════════════════════════════════
   useEffect(() => {
     const handleVisibilityChange = async () => {
+      console.log("visibilityState", document.visibilityState);
       if (document.visibilityState === "visible") {
         const jumpIdStr = sessionStorage.getItem("telegram_jump_msg_id");
         if (jumpIdStr) {
           sessionStorage.removeItem("telegram_jump_msg_id");
           const jumpId = parseInt(jumpIdStr, 10);
-          
+
           const idx = messages.findIndex((m) => m.id === jumpId);
           if (idx !== -1) {
             // 选取跳转消息及其上下相邻各 5 条中仍为未读的消息

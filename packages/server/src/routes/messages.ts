@@ -361,22 +361,22 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: "ids array is required" });
     }
 
-    const unreadMessages = await db.message.findMany({
-      where: { id: { in: ids }, isRead: false },
+    const messages = await db.message.findMany({
+      where: { id: { in: ids } },
       select: { id: true, chatId: true, telegramMessageId: true, isRead: true },
     });
 
-    if (unreadMessages.length === 0) {
-      return { markedIds: [] };
+    const alreadyReadIds = messages.filter((m) => m.isRead).map((m) => m.id);
+    const unreadMessages = messages.filter((m) => !m.isRead);
+
+    let markedIds = new Set<number>();
+    if (unreadMessages.length > 0) {
+      markedIds = await syncReadByTelegramInteractions(unreadMessages);
     }
 
-    const markedIds = await syncReadByTelegramInteractions(unreadMessages);
+    const finalMarkedIds = [...alreadyReadIds, ...Array.from(markedIds)];
 
-    if (markedIds.size > 0) {
-      emitMessageEvent({ type: "read", messageIds: Array.from(markedIds) });
-    }
-
-    return { markedIds: Array.from(markedIds) };
+    return { markedIds: finalMarkedIds };
   });
 
   app.get<{ Querystring: { limit?: string } }>("/api/messages/read-sync-logs", async (request) => {
