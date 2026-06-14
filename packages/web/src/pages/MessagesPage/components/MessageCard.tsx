@@ -99,7 +99,7 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
               variant="ghost"
               size="sm"
               nativeButton={false}
-              render={<a href={message.telegramLink} target="_blank" rel="noopener noreferrer" />}
+              render={<a href={message.telegramLink} target="_blank" rel="noopener noreferrer" onClick={() => sessionStorage.setItem("telegram_jump_msg_id", message.id.toString())} />}
             >
               查看原文
               <ExternalLink data-icon="inline-end" />

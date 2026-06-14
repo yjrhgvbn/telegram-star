@@ -3,7 +3,7 @@ import { db } from "../db/index.js";
 import type { Prisma } from "../generated/prisma/client.js";
 import { appConfig } from "../config.js";
 import { syncReadByTelegramInteractions } from "../services/telegram.js";
-import { subscribeToMessageEvents, emitMessageEvent } from "../services/messageEvents.js";
+import { subscribeToMessageEvents, emitMessageEvent, type MessageEventPayload } from "../services/messageEvents.js";
 import { listReadSyncLogs, writeReadSyncLog } from "../services/readSyncLog.js";
 
 // 低频兜底：每 30s 最多对 Telegram 发起一次拉取式互动同步，
@@ -350,8 +350,33 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       },
     });
 
-    emitMessageEvent("read");
+    emitMessageEvent({ type: "read", messageIds: ids });
     return { success: true, count: ids.length };
+  });
+
+  // Force sync read status from Telegram for specific messages (bypasses the 30s interval)
+  app.post<{ Body: { ids: number[] } }>("/api/messages/force-sync-read", async (request, reply) => {
+    const { ids } = request.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return reply.status(400).send({ error: "ids array is required" });
+    }
+
+    const unreadMessages = await db.message.findMany({
+      where: { id: { in: ids }, isRead: false },
+      select: { id: true, chatId: true, telegramMessageId: true, isRead: true },
+    });
+
+    if (unreadMessages.length === 0) {
+      return { markedIds: [] };
+    }
+
+    const markedIds = await syncReadByTelegramInteractions(unreadMessages);
+
+    if (markedIds.size > 0) {
+      emitMessageEvent({ type: "read", messageIds: Array.from(markedIds) });
+    }
+
+    return { markedIds: Array.from(markedIds) };
   });
 
   app.get<{ Querystring: { limit?: string } }>("/api/messages/read-sync-logs", async (request) => {
@@ -401,9 +426,9 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
     });
     reply.raw.flushHeaders();
 
-    const send = (type: string) => {
+    const send = (payload: MessageEventPayload) => {
       if (!reply.raw.writableEnded) {
-        reply.raw.write(`data: ${type}\n\n`);
+        reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
       }
     };
 

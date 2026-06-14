@@ -127,6 +127,11 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ ids }),
       }),
+    forceSyncRead: (ids: number[]) =>
+      request<{ markedIds: number[] }>("/messages/force-sync-read", {
+        method: "POST",
+        body: JSON.stringify({ ids }),
+      }),
     stats: () => request<Stats>("/messages/stats"),
     readSyncLogs: (limit = 100) => {
       const searchParams = new URLSearchParams();

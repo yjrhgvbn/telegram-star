@@ -72,7 +72,7 @@ async function handleInteractionUpdate(update: any): Promise<void> {
   if (!row) return;
 
   await db.message.update({ where: { id: row.id }, data: { isRead: true } });
-  emitMessageEvent("read");
+  emitMessageEvent({ type: "read", messageIds: [row.id] });
 
   console.info("[ReadSync][realtime] marked as read", {
     rowId: row.id,
@@ -250,7 +250,7 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
       telegramLink,
     });
 
-    emitMessageEvent("new");
+    emitMessageEvent({ type: "new" });
     console.log(`[Telegram] Saved message from "${chatTitle}" matching filter "${filter.name}"${mediaInfo ? ` [${mediaInfo.mediaType}]` : ""}`);
 
     // 每条消息只入库一次（第一个命中的过滤器），避免重复写入

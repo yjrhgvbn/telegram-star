@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { MessageCard } from "./MessageCard";
 import type { Message } from "@/types";
+import { api } from "@/api/client";
 
 interface Props {
   messages: Message[];         // ASC 顺序（旧→新）
@@ -21,6 +22,7 @@ interface Props {
   onFlushPending: () => void;
   onSetAtBottom: (v: boolean) => void;
   onToggleRead: (id: number) => void;
+  markAsReadLocal: (ids: number[]) => void;
   searchQuery?: string;
 }
 
@@ -136,6 +138,7 @@ export function MessageList({
   onFlushPending,
   onSetAtBottom,
   onToggleRead,
+  markAsReadLocal,
   searchQuery,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -282,6 +285,46 @@ export function MessageList({
     }
     prevLastIdRef.current = lastId;
   }, [messages, virtualizer]);
+
+  // ═══ Telegram 跳转返回时主动同步已读状态 ═════════════════════════════════
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === "visible") {
+        const jumpIdStr = sessionStorage.getItem("telegram_jump_msg_id");
+        if (jumpIdStr) {
+          sessionStorage.removeItem("telegram_jump_msg_id");
+          const jumpId = parseInt(jumpIdStr, 10);
+          
+          const idx = messages.findIndex((m) => m.id === jumpId);
+          if (idx !== -1) {
+            // 选取跳转消息及其上下相邻各 5 条中仍为未读的消息
+            const startIdx = Math.max(0, idx - 5);
+            const endIdx = Math.min(messages.length - 1, idx + 5);
+            const idsToCheck: number[] = [];
+            for (let i = startIdx; i <= endIdx; i++) {
+              if (!messages[i].isRead) {
+                idsToCheck.push(messages[i].id);
+              }
+            }
+
+            if (idsToCheck.length > 0) {
+              try {
+                const res = await api.messages.forceSyncRead(idsToCheck);
+                if (res.markedIds && res.markedIds.length > 0) {
+                  markAsReadLocal(res.markedIds);
+                }
+              } catch (err) {
+                console.error("[ReadSync] proactive sync failed", err);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [messages, markAsReadLocal]);
 
   // ═══ 骨架屏 ═══════════════════════════════════════════════════════════════
   if (loading) {

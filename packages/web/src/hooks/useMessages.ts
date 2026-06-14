@@ -26,6 +26,7 @@ export interface UseMessagesReturn {
   flushPending: () => void;    // 用户点击 badge 时：清除 pending 状态并触发 loadNewer
   setAtBottom: (v: boolean) => void; // MessageList 通知当前是否在底部
   toggleRead: (id: number) => Promise<void>;
+  markAsReadLocal: (ids: number[]) => void;
   refresh: () => void;
 }
 
@@ -183,13 +184,32 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
     ? "http://localhost:3000/api/messages/events"
     : "/api/messages/events";
 
+  /** 局部批量更新已读状态（例如通过主动拉取状态后更新） */
+  const markAsReadLocal = useCallback((ids: number[]) => {
+    setMessages((prev) =>
+      prev.map((msg) => (ids.includes(msg.id) ? { ...msg, isRead: true } : msg))
+    );
+  }, []);
+
   useEffect(() => {
     const es = new EventSource(sseUrl);
-    es.onmessage = () => {
-      void loadNewerRef.current();
+    es.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        if (payload.type === "new") {
+          void loadNewerRef.current();
+        } else if (payload.type === "read" && Array.isArray(payload.messageIds)) {
+          markAsReadLocal(payload.messageIds);
+        }
+      } catch (err) {
+        // Fallback for old string payload formats during development
+        if (e.data === "new" || e.data === "read") {
+          void loadNewerRef.current();
+        }
+      }
     };
     return () => es.close();
-  }, [sseUrl]);
+  }, [sseUrl, markAsReadLocal]);
 
   /** 乐观更新已读状态 */
   const toggleRead = useCallback(async (id: number) => {
@@ -198,6 +218,7 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
       prev.map((msg) => (msg.id === id ? { ...msg, isRead: updated.isRead } : msg)),
     );
   }, []);
+
 
   /** 强制刷新（重新初始化） */
   const refresh = useCallback(() => {
@@ -218,6 +239,7 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
     flushPending,
     setAtBottom,
     toggleRead,
+    markAsReadLocal,
     refresh,
   };
 }

@@ -45,6 +45,7 @@ export function MessagesPage() {
     flushPending,
     setAtBottom,
     toggleRead,
+    markAsReadLocal,
     refresh,
   } = useMessages({
     limit: 20,
@@ -206,6 +207,7 @@ export function MessagesPage() {
               onFlushPending={flushPending}
               onSetAtBottom={setAtBottom}
               onToggleRead={toggleRead}
+              markAsReadLocal={markAsReadLocal}
               searchQuery={searchQuery}
             />
           </div>

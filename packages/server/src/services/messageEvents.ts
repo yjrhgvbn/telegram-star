@@ -6,22 +6,24 @@
  * 客户端收到后触发 SWR 重新拉取，从而替代定时轮询。
  */
 
-export type MessageEventType = "new" | "read";
+export type MessageEventPayload =
+  | { type: "new" }
+  | { type: "read"; messageIds: number[] };
 
 /** 已注册的 SSE 推送函数集合 */
-const subscribers = new Set<(type: MessageEventType) => void>();
+const subscribers = new Set<(payload: MessageEventPayload) => void>();
 
 /** 注册一个 SSE 推送函数，返回取消订阅的函数 */
 export function subscribeToMessageEvents(
-  send: (type: MessageEventType) => void,
+  send: (payload: MessageEventPayload) => void,
 ): () => void {
   subscribers.add(send);
   return () => subscribers.delete(send);
 }
 
 /** 向所有已连接客户端广播消息事件 */
-export function emitMessageEvent(type: MessageEventType): void {
+export function emitMessageEvent(payload: MessageEventPayload): void {
   for (const send of subscribers) {
-    send(type);
+    send(payload);
   }
 }
