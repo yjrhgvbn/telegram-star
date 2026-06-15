@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Native modules in the dependency tree require node-gyp during install.
 RUN apk add --no-cache python3 make g++
@@ -30,7 +30,7 @@ RUN pnpm --filter @telegram-star/web build
 RUN pnpm --filter @telegram-star/server build
 
 # Production stage
-FROM node:20-alpine
+FROM node:22-alpine
 
 RUN apk add --no-cache python3 make g++
 
