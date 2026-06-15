@@ -16,6 +16,9 @@ COPY packages/server/prisma.config.ts ./packages/server/
 COPY packages/server/tsconfig.json ./packages/server/
 COPY packages/web/package.json ./packages/web/
 
+# Allow postinstall scripts (required by Prisma)
+RUN pnpm config set ignore-scripts false
+
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
@@ -44,6 +47,9 @@ COPY packages/server/package.json ./packages/server/
 COPY packages/server/prisma.config.ts ./packages/server/
 COPY packages/server/tsconfig.json ./packages/server/
 COPY packages/web/package.json ./packages/web/
+
+# Allow postinstall scripts (required by Prisma)
+RUN pnpm config set ignore-scripts false
 
 # Install production dependencies only
 RUN pnpm install --prod --frozen-lockfile
