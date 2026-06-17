@@ -243,6 +243,7 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
     });
 
     await forwardMatchedMessage({
+      filterId: filter.id,
       filterName: filter.name,
       matchedKeyword: match.matchedKeyword,
       chatTitle,

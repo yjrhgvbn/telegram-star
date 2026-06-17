@@ -16,6 +16,7 @@ model Filter {
   createdAt String      @map("created_at")
   updatedAt String      @map("updated_at")
   messages  Message[]
+  forwardTargets ForwardTarget[] @relation("FilterToForwardTarget")
 
   @@map("filters")
 }
@@ -69,12 +70,15 @@ model ReadSyncLog {
   @@map("read_sync_logs")
 }
 
-model NotificationSetting {
-  id        Int    @id @default(autoincrement())
-  configKey String @unique @map("config_key")
-  configJson String @map("config_json")
-  createdAt String @map("created_at")
-  updatedAt String @map("updated_at")
+model ForwardTarget {
+  id          Int      @id @default(autoincrement())
+  name        String
+  appriseUrl  String   @map("apprise_url")
+  enabled     Boolean  @default(true)
+  createdAt   String   @map("created_at")
+  updatedAt   String   @map("updated_at")
 
-  @@map("notification_settings")
+  filters     Filter[] @relation("FilterToForwardTarget")
+
+  @@map("forward_targets")
 }

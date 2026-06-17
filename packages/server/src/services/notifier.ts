@@ -1,7 +1,11 @@
-import { request } from "node:https";
-import { getNotificationSettings } from "./notification-settings.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { db } from "../db/index.js";
+
+const execFileAsync = promisify(execFile);
 
 interface ForwardPayload {
+  filterId?: number;
   filterName: string;
   matchedKeyword: string | null;
   chatTitle: string;
@@ -11,81 +15,65 @@ interface ForwardPayload {
   telegramLink: string;
 }
 
-function postJson(urlString: string, payload: unknown): Promise<void> {
-  return new Promise((resolve, reject) => {
-    try {
-      const url = new URL(urlString);
-      const req = request(
-        {
-          protocol: url.protocol,
-          hostname: url.hostname,
-          port: url.port || 443,
-          path: `${url.pathname}${url.search}`,
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-        (res) => {
-          const chunks: Buffer[] = [];
-          res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-          res.on("end", () => {
-            const status = res.statusCode || 0;
-            if (status >= 200 && status < 300) {
-              resolve();
-              return;
-            }
+/**
+ * Execute the Apprise CLI to send a notification.
+ */
+export async function sendAppriseNotification(appriseUrls: string[], title: string, body: string): Promise<void> {
+  if (appriseUrls.length === 0) return;
 
-            const body = Buffer.concat(chunks).toString("utf-8");
-            reject(new Error(`HTTP ${status}: ${body}`));
-          });
-        }
-      );
-
-      req.on("error", reject);
-      req.write(JSON.stringify(payload));
-      req.end();
-    } catch (error) {
-      reject(error);
+  try {
+    // apprise -t "title" -b "body" url1 url2 ...
+    const args = ["-t", title, "-b", body, ...appriseUrls];
+    
+    const { stdout, stderr } = await execFileAsync("apprise", args, { timeout: 15000 });
+    console.log("[Notify] Apprise success:", stdout.trim() || "Notification sent.");
+    if (stderr) {
+      console.warn("[Notify] Apprise stderr:", stderr.trim());
     }
-  });
-}
-
-async function sendFeishuNotification(payload: ForwardPayload): Promise<void> {
-  const settings = await getNotificationSettings();
-  const webhookUrl = settings.feishuWebhookUrl;
-  if (!webhookUrl) {
-    return;
+  } catch (error: any) {
+    console.error("[Notify] Apprise failed:", error.message || error);
+    throw error; // Rethrow to let the caller handle it for the test endpoint
   }
-  await postJson(webhookUrl, {
-    msg_type: "text",
-    content: {
-      text: payload.content,
-    },
-  });
 }
 
 export async function forwardMatchedMessage(payload: ForwardPayload): Promise<void> {
-  const settings = await getNotificationSettings();
-  const sources = settings.sources;
-  if (sources.length === 0) {
+  if (!payload.filterId) {
     return;
   }
 
-  const tasks: Promise<void>[] = [];
+  // Find enabled ForwardTargets that are linked to this filter
+  const targets = await db.forwardTarget.findMany({
+    where: {
+      enabled: true,
+      filters: {
+        some: {
+          id: payload.filterId,
+        },
+      },
+    },
+    select: {
+      appriseUrl: true,
+    },
+  });
 
-  if (sources.includes("feishu")) {
-    tasks.push(sendFeishuNotification(payload));
-  }
-
-  if (tasks.length === 0) {
+  if (targets.length === 0) {
     return;
   }
 
-  const results = await Promise.allSettled(tasks);
-  for (const result of results) {
-    if (result.status === "rejected") {
-      console.error("[Notify] Failed to forward matched message:", result.reason);
-    }
-  }
+  const appriseUrls = targets.map((t) => t.appriseUrl);
+
+  const title = `[Telegram] 命中规则: ${payload.filterName}`;
+  const body = `【群组】: ${payload.chatTitle}
+【发送者】: ${payload.senderName}
+【时间】: ${new Date(payload.messageDate).toLocaleString()}
+
+${payload.content}
+
+链接: ${payload.telegramLink}`;
+
+  // Fire and forget, or wait for it (we wait for it here so we can log errors, but it won't block the caller too much if it's async)
+  // Actually, the caller awaits this, so it delays the process. We might want to let it run in background.
+  sendAppriseNotification(appriseUrls, title, body).catch(err => {
+    console.error("[Notify] Unhandled error in sendAppriseNotification:", err);
+  });
 }

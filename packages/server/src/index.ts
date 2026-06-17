@@ -8,7 +8,7 @@ import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chats.js";
 import { filterRoutes } from "./routes/filters.js";
 import { messageRoutes } from "./routes/messages.js";
-import { notificationRoutes } from "./routes/notifications.js";
+import { forwardTargetsRoutes } from "./routes/forwardTargets.js";
 import { mediaRoutes } from "./routes/media.js";
 import { initClient } from "./services/telegram.js";
 
@@ -26,7 +26,7 @@ async function start() {
   await app.register(chatRoutes);
   await app.register(filterRoutes);
   await app.register(messageRoutes);
-  await app.register(notificationRoutes);
+  await app.register(forwardTargetsRoutes, { prefix: "/api/forward-targets" });
   await app.register(mediaRoutes);
 
   // Serve static frontend in production

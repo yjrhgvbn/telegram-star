@@ -98,7 +98,7 @@ cp .env.example .env
 - `TELEGRAM_API_ID`
 - `TELEGRAM_API_HASH`
 
-通知转发配置通过 Web UI 的「通知设置」页面管理，默认保存到 `./data/notification-settings.json`。
+通知转发配置通过 Web UI 的「通知设置」页面管理，底层采用 Apprise，配置保存在 SQLite 数据库中。
 
 其他变量通常保持默认。
 

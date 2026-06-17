@@ -6,6 +6,7 @@
 
 - Node.js 20+
 - pnpm 10+
+- Python 3 & pip (用于安装 Apprise)
 - Docker（可选，用于容器化验证）
 - Telegram 开发者凭证：`TELEGRAM_API_ID`、`TELEGRAM_API_HASH`
 
@@ -27,7 +28,10 @@ cp .env.example .env
 - `DB_PATH=./data/telegram-star.db`
 - `SESSION_PATH=./data/session.txt`
 
-通知转发配置通过 Web UI 的「通知设置」页面管理，默认保存到 `./data/notification-settings.json`。
+通知转发配置通过 Web UI 的「通知设置」页面管理，底层调用 Apprise 命令行，配置存储于 SQLite 数据库中。
+
+> **注意**：本地开发环境如果在非 Docker 下运行 `pnpm dev:server` 且需要测试通知推送功能，请确保本机的系统或环境中已安装 apprise 命令行工具，例如：
+> `pip3 install apprise --break-system-packages` 或 `brew install apprise`。
 
 ## 3. 启动本地开发
 

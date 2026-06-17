@@ -140,15 +140,24 @@ export const api = {
     },
   },
 
-  notifications: {
-    getSettings: () => request<NotificationSettings>("/notifications/settings"),
-    updateSettings: (data: {
-      sources?: NotificationSource[];
-      feishuWebhookUrl?: string;
-    }) =>
-      request<NotificationSettings>("/notifications/settings", {
+  forwardTargets: {
+    list: () => request<any[]>("/forward-targets"),
+    create: (data: { name: string; appriseUrl: string; enabled: boolean; filterIds: number[] }) =>
+      request<any>("/forward-targets", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: number, data: { name: string; appriseUrl: string; enabled: boolean; filterIds: number[] }) =>
+      request<any>(`/forward-targets/${id}`, {
         method: "PUT",
         body: JSON.stringify(data),
+      }),
+    delete: (id: number) =>
+      request<{ success: boolean }>(`/forward-targets/${id}`, { method: "DELETE" }),
+    test: (appriseUrl: string) =>
+      request<{ success: boolean }>("/forward-targets/test", {
+        method: "POST",
+        body: JSON.stringify({ appriseUrl }),
       }),
   },
 };
