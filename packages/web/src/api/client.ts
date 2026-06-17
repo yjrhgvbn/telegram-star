@@ -5,8 +5,6 @@ import type {
   MessageResponse,
   Stats,
   AuthStatus,
-  NotificationSettings,
-  NotificationSource,
   FilterPreviewResponse,
   FilterBackfillResponse,
   FilterHistoryScope,

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { BellRing, CheckCircle2, RefreshCw, Save, Trash2, Plus, Send } from "lucide-react";
+import { BellRing, RefreshCw, Save, Trash2, Plus, Send } from "lucide-react";
 import { api } from "@/api/client";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useFilters } from "@/hooks/useFilters";
