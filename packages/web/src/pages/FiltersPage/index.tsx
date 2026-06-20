@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { api } from "@/api/client";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
@@ -12,6 +12,7 @@ import { createDraftCondition, normalizeConditions, toDraftConditions } from "./
 
 export function FiltersPage() {
   const { filterId: routeFilterId } = useParams<{ filterId?: string }>();
+  const navigate = useNavigate();
   const { authStatus, authLoading, handleLoginSuccess } = useAuthStatus();
   const { filters, createFilter, updateFilter, deleteFilter, toggleFilter } = useFilters();
 
@@ -132,6 +133,9 @@ export function FiltersPage() {
         ? await updateFilter(selectedFilter.id, payload)
         : await createFilter(payload);
       setSelectedFilterId(String(saved.id));
+      if (!selectedFilter) {
+        navigate(`/filters/${saved.id}`, { replace: true });
+      }
       setBackfillSummary("");
     } catch (err: any) {
       setError(err.message || "保存失败");
@@ -194,6 +198,7 @@ export function FiltersPage() {
       setError("");
       await deleteFilter(selectedFilter.id);
       setSelectedFilterId("new");
+      navigate("/filters", { replace: true });
     } catch (err: any) {
       setError(err.message || "删除失败");
     } finally {

@@ -166,6 +166,7 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ error: "Filter not found" });
     }
 
+    await db.message.deleteMany({ where: { matchedFilterId: id } });
     await db.filter.delete({ where: { id } });
     return { success: true };
   });

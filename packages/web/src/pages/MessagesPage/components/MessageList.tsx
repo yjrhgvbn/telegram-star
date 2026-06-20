@@ -122,7 +122,7 @@ function estimateItemHeight(message: Message, containerWidth: number = 400): num
 }
 
 const EDGE_THRESHOLD = 300;      // 距离边缘多少 px 触发加载
-const AT_BOTTOM_THRESHOLD = 300; // 距底部多少 px 视为"在底部"
+const AT_BOTTOM_THRESHOLD = 50;  // 距底部多少 px 视为"在底部"
 
 export function MessageList({
   messages,
@@ -224,8 +224,15 @@ export function MessageList({
         anchorId !== null ? messages.findIndex((m) => m.id === anchorId) : -1;
       if (idx >= 0) {
         virtualizer.scrollToIndex(idx, { align: "center" });
+        // 延迟二次定位，解决移动端动态高度计算不准导致的定位偏差
+        setTimeout(() => {
+          virtualizer.scrollToIndex(idx, { align: "center" });
+        }, 150);
       } else {
         virtualizer.scrollToIndex(messages.length - 1, { align: "end" });
+        setTimeout(() => {
+          virtualizer.scrollToIndex(messages.length - 1, { align: "end" });
+        }, 150);
       }
     });
   }, [loading, anchorId, messages.length, virtualizer]);
