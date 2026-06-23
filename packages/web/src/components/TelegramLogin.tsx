@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,12 +12,50 @@ interface Props {
 }
 
 export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
-  const [step, setStep] = useState<"phone" | "code" | "password">("phone");
+  const [telegramConfigured, setTelegramConfigured] = useState(authStatus.telegramConfigured);
+  const [step, setStep] = useState<"config" | "phone" | "code" | "password">(
+    authStatus.telegramConfigured ? "phone" : "config",
+  );
+  const [apiId, setApiId] = useState("");
+  const [apiHash, setApiHash] = useState("");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setTelegramConfigured(authStatus.telegramConfigured);
+  }, [authStatus.telegramConfigured]);
+
+  useEffect(() => {
+    if (!telegramConfigured) {
+      setStep("config");
+    } else if (step === "config") {
+      setStep("phone");
+    }
+  }, [telegramConfigured, step]);
+
+  const handleSaveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!apiId.trim() || !apiHash.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      await api.config.update({
+        telegram: {
+          apiId: apiId.trim(),
+          apiHash: apiHash.trim(),
+        },
+      });
+      setTelegramConfigured(true);
+      setStep("phone");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,12 +123,41 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
           <CardDescription>连接你的 Telegram 账号开始追踪消息</CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="flex flex-col gap-4">
           {error && <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
 
+          {step === "config" && (
+            <form onSubmit={handleSaveConfig} className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm text-muted-foreground">Telegram API ID</label>
+                <Input
+                  inputMode="numeric"
+                  placeholder="123456"
+                  value={apiId}
+                  onChange={(e) => setApiId(e.target.value)}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground">可在 my.telegram.org/apps 获取</p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm text-muted-foreground">Telegram API Hash</label>
+                <Input
+                  type="password"
+                  placeholder="请输入 API Hash"
+                  value={apiHash}
+                  onChange={(e) => setApiHash(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">保存到本地 SQLite 数据库，不会在状态接口返回明文</p>
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "保存中..." : "保存配置"}
+              </Button>
+            </form>
+          )}
+
           {step === "phone" && (
-            <form onSubmit={handleSendCode} className="space-y-3">
-              <div className="space-y-1.5">
+            <form onSubmit={handleSendCode} className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
                 <label className="text-sm text-muted-foreground">手机号码</label>
                 <Input
                   type="tel"
@@ -108,8 +175,8 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
           )}
 
           {step === "code" && (
-            <form onSubmit={handleLogin} className="space-y-3">
-              <div className="space-y-1.5">
+            <form onSubmit={handleLogin} className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
                 <label className="text-sm text-muted-foreground">验证码</label>
                 <Input
                   type="text"
@@ -130,8 +197,8 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
           )}
 
           {step === "password" && (
-            <form onSubmit={handlePasswordSubmit} className="space-y-3">
-              <div className="space-y-1.5">
+            <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
                 <label className="text-sm text-muted-foreground">两步验证密码</label>
                 <Input
                   type="password"
@@ -149,6 +216,7 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
           )}
 
           <div className="flex items-center justify-center gap-2 pt-1">
+            <Badge variant={step === "config" ? "default" : "secondary"} className="rounded-full px-2.5">配置</Badge>
             <Badge variant={step === "phone" ? "default" : "secondary"} className="rounded-full px-2.5">手机号</Badge>
             <Badge variant={step === "code" ? "default" : "secondary"} className="rounded-full px-2.5">验证码</Badge>
             <Badge variant={step === "password" ? "default" : "secondary"} className="rounded-full px-2.5">2FA</Badge>

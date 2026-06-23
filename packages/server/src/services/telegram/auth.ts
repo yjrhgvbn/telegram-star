@@ -8,15 +8,15 @@ import { existsSync, writeFileSync } from "fs";
 import { appConfig } from "../../config.js";
 import {
   getClient,
-  setClient,
   setConnected,
+  setClient,
   getClientConfig,
   loadSession,
   saveSession,
 } from "./client.js";
 import { startMessageListener } from "./listener.js";
 
-export { getConnectionStatus } from "./client.js";
+export { getConnectionStatusWithConfig as getConnectionStatus } from "./client.js";
 
 // --- 客户端初始化 ---
 
@@ -60,6 +60,10 @@ export async function initClient(): Promise<void> {
  * 15s 内未完成连接则抛出超时错误，并给出可能原因提示。
  */
 export async function sendCode(phone: string): Promise<{ status: string }> {
+  if (!appConfig.telegram.apiId || !appConfig.telegram.apiHash) {
+    throw new Error("Telegram API credentials are not configured");
+  }
+
   let client = getClient();
   if (!client) {
     const session = new StringSession("");

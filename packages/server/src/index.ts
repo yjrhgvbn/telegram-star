@@ -6,10 +6,12 @@ import { resolve } from "path";
 import { appConfig } from "./config.js";
 import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chats.js";
+import { configRoutes } from "./routes/config.js";
 import { filterRoutes } from "./routes/filters.js";
 import { messageRoutes } from "./routes/messages.js";
 import { forwardTargetsRoutes } from "./routes/forwardTargets.js";
 import { mediaRoutes } from "./routes/media.js";
+import { loadMediaConfigFromDatabase, loadTelegramConfigFromDatabase } from "./services/appConfig.js";
 import { initClient } from "./services/telegram.js";
 
 const app = Fastify({ logger: true });
@@ -22,6 +24,7 @@ async function start() {
   });
 
   // Register API routes
+  await app.register(configRoutes);
   await app.register(authRoutes);
   await app.register(chatRoutes);
   await app.register(filterRoutes);
@@ -57,6 +60,9 @@ async function start() {
     app.log.error(err);
     process.exit(1);
   }
+
+  await loadTelegramConfigFromDatabase();
+  await loadMediaConfigFromDatabase();
 
   // Initialize Telegram client (try to reconnect with saved session)
   if (appConfig.telegram.apiId && appConfig.telegram.apiHash) {

@@ -110,6 +110,11 @@ export interface AuthStatus {
   authorized: boolean;
   waitingForCode: boolean;
   waitingForPassword: boolean;
+  telegramConfigured: boolean;
+  telegramConfigSource: "env" | "database" | "missing";
+  databaseConfigured: boolean;
+  apiId: number | null;
+  apiHashMasked: string | null;
 }
 
 export type NotificationSource = "feishu";

@@ -17,21 +17,6 @@ interface Props {
 export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Props) {
   const timeAgo = getTimeAgo(message.messageDate);
 
-  // Highlight matched keyword in content
-  const highlightContent = (text: string) => {
-    const keyword = message.matchedKeyword || searchQuery;
-    if (!keyword) return text;
-
-    const parts = text.split(new RegExp(`(${escapeRegex(keyword)})`, "gi"));
-    return parts.map((part, i) =>
-      part.toLowerCase() === keyword.toLowerCase() ? (
-        <mark key={i} className="highlight">{part}</mark>
-      ) : (
-        part
-      )
-    );
-  };
-
   return (
     <Card
       className={cn(
@@ -79,7 +64,7 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
         {/* 文本内容（无文字时隐藏） */}
         {message.content.trim().length > 0 && (
           <p className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground/95">
-            {highlightContent(message.content.slice(0, 500))}
+            {message.content.slice(0, 500)}
             {message.content.length > 500 && <span className="text-muted-foreground">...</span>}
           </p>
         )}

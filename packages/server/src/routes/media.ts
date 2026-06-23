@@ -29,7 +29,7 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
 
     return reply
       .header("Content-Type", result.mimeType)
-      .header("Cache-Control", "private, max-age=3600")
+      .header("Cache-Control", "private, no-cache")
       .header("Content-Length", result.buffer.byteLength)
       .send(result.buffer);
   });

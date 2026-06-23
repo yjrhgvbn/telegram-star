@@ -8,7 +8,7 @@
 - pnpm 10+
 - Python 3 & pip (用于安装 Apprise)
 - Docker（可选，用于容器化验证）
-- Telegram 开发者凭证：`TELEGRAM_API_ID`、`TELEGRAM_API_HASH`
+- Telegram 开发者凭证：`TELEGRAM_API_ID`、`TELEGRAM_API_HASH`（可启动后在 Web UI 中填写）
 
 ## 2. 初始化
 
@@ -17,16 +17,13 @@ pnpm install
 cp .env.example .env
 ```
 
-编辑 `.env`，至少填写：
-
-- `TELEGRAM_API_ID`
-- `TELEGRAM_API_HASH`
-
 推荐保留默认值：
 
 - `DATABASE_URL=file:./data/telegram-star.db`
 - `DB_PATH=./data/telegram-star.db`
 - `SESSION_PATH=./data/session.txt`
+
+Telegram API ID/Hash 推荐在首次打开 Web UI 时填写，配置会保存到 SQLite 数据库。也可以在 `.env` 中预先填写 `TELEGRAM_API_ID` / `TELEGRAM_API_HASH`，数据库配置会优先于 `.env`，`.env` 仅在数据库未保存配置时兜底。
 
 通知转发配置通过 Web UI 的「通知设置」页面管理，底层调用 Apprise 命令行，配置存储于 SQLite 数据库中。
 
@@ -112,6 +109,6 @@ pnpm --filter @telegram-star/server db:deploy
 
 检查：
 
-- `TELEGRAM_API_ID` 是否为数字
-- `TELEGRAM_API_HASH` 是否完整
+- Web UI 中保存的 Telegram API ID 是否为数字，或 `.env` 中的 `TELEGRAM_API_ID` 是否为数字
+- Web UI 中保存的 Telegram API Hash 是否完整，或 `.env` 中的 `TELEGRAM_API_HASH` 是否完整
 - 本机网络是否能访问 Telegram

@@ -5,6 +5,7 @@
  */
 import { getClient, isClientConnected } from "./telegram/client.js";
 import { buildDialogEntityMap } from "./telegram/utils.js";
+import { appConfig } from "../config.js";
 
 // --- LRU Cache ---
 
@@ -17,12 +18,13 @@ interface CacheEntry {
 const MAX_CACHE_SIZE = 80 * 1024 * 1024; // 80MB
 const MAX_TTL_MS = 30 * 60 * 1000; // 30 分钟
 const MAX_ENTRIES = 2000;
+const DOWNLOAD_THUMB_TIMEOUT_MS = 5000;
 
 const cache = new Map<string, CacheEntry>();
 let currentCacheSize = 0;
 
-function cacheKey(chatId: string, messageId: number): string {
-  return `${chatId}:${messageId}`;
+function cacheKey(chatId: string, messageId: number, thumbIndex: number): string {
+  return `${chatId}:${messageId}:thumb:${thumbIndex}`;
 }
 
 /** 从缓存中获取条目，更新访问时间 */
@@ -127,14 +129,15 @@ async function getDialogEntityMap(): Promise<Map<string, any>> {
 
 /**
  * 获取指定消息的缩略图 Buffer。
- * 优先从 LRU 缓存返回，缓存未命中时通过 GramJS 实时下载最小缩略图（thumb: 0）。
+ * 优先从 LRU 缓存返回，缓存未命中时通过 GramJS 实时下载已配置质量的缩略图。
  * 所有数据纯内存操作，不写入磁盘。
  */
 export async function getThumbBuffer(
   chatId: string,
   messageId: number,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  const key = cacheKey(chatId, messageId);
+  const thumbIndex = appConfig.media.thumbIndex;
+  const key = cacheKey(chatId, messageId, thumbIndex);
 
   // 1. 缓存命中
   const cached = cacheGet(key);
@@ -145,16 +148,17 @@ export async function getThumbBuffer(
   if (pending) return pending;
 
   // 3. 发起下载
-  const promise = downloadThumb(chatId, messageId, key);
+  const promise = downloadThumb(chatId, messageId, thumbIndex, key).finally(() => {
+    pendingRequests.delete(key);
+  });
   pendingRequests.set(key, promise);
-  const result = await promise;
-  pendingRequests.delete(key);
-  return result;
+  return promise;
 }
 
 async function downloadThumb(
   chatId: string,
   messageId: number,
+  thumbIndex: number,
   key: string,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
   const client = getClient();
@@ -170,8 +174,7 @@ async function downloadThumb(
     const msg = msgs?.[0];
     if (!msg || !msg.media) return null;
 
-    // 下载中等尺寸缩略图（thumb: 1），返回 Buffer，不写磁盘
-    const buffer = await client.downloadMedia(msg, { thumb: 1 });
+    const buffer = await downloadWithFallbackThumb(client, msg, thumbIndex);
     if (!buffer || typeof buffer === "string") return null;
 
     const mimeType = guessMimeType(msg.media);
@@ -184,6 +187,44 @@ async function downloadThumb(
   } finally {
     releaseSlot();
   }
+}
+
+async function downloadWithFallbackThumb(client: any, msg: any, thumbIndex: number): Promise<Buffer | string | undefined> {
+  for (let index = thumbIndex; index >= 0; index--) {
+    try {
+      const buffer = await withTimeout(
+        client.downloadMedia(msg, { thumb: index }),
+        DOWNLOAD_THUMB_TIMEOUT_MS,
+      );
+      if (buffer) return buffer;
+    } catch (err: any) {
+      console.warn(
+        `[MediaCache] thumb ${index} unavailable, trying lower quality:`,
+        err?.message || err,
+      );
+    }
+  }
+  return undefined;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("download_thumb_timeout")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+export function clearMediaCache(): void {
+  cache.clear();
+  pendingRequests.clear();
+  currentCacheSize = 0;
 }
 
 function guessMimeType(media: any): string {

@@ -38,9 +38,8 @@ Telegram 消息追踪工具 - 监控群组/频道消息，关键词过滤，已�
 git clone <repo-url> telegram-star
 cd telegram-star
 
-# 2. 配置环境变量
+# 2. 可选：准备环境变量（Telegram API 可启动后在页面配置）
 cp .env.example .env
-# 编辑 .env，填入 TELEGRAM_API_ID 和 TELEGRAM_API_HASH
 
 # 3. 安装依赖
 pnpm install
@@ -56,9 +55,8 @@ pnpm dev
 ### Docker 部署
 
 ```bash
-# 配置环境变量
+# 可选：准备环境变量（Telegram API 可启动后在页面配置）
 cp .env.example .env
-# 编辑 .env
 
 # 启动
 docker compose up -d
@@ -70,11 +68,12 @@ open http://localhost:3000
 ## 使用流程
 
 1. 打开 Web UI（http://localhost:5173 或 http://localhost:3000）
-2. 输入手机号，接收验证码完成 Telegram 登录
-3. 在左侧面板创建过滤器（关键词/群组/频道）
-4. 匹配的消息会自动出现在消息列表中
-5. 点赞消息标记为已读，点击「查看原文」跳转 Telegram
-6. 在「通知设置」页可无限制创建多路转发通道，填入 Apprise URL 并绑定过滤器即可实现精准的外部推送。
+2. 首次使用时填写 Telegram API ID/Hash（也可通过 `.env` 预先配置）
+3. 输入手机号，接收验证码完成 Telegram 登录
+4. 在左侧面板创建过滤器（关键词/群组/频道）
+5. 匹配的消息会自动出现在消息列表中
+6. 点赞消息标记为已读，点击「查看原文」跳转 Telegram
+7. 在「通知设置」页可无限制创建多路转发通道，填入 Apprise URL 并绑定过滤器即可实现精准的外部推送。
 
 ## 项目结构
 

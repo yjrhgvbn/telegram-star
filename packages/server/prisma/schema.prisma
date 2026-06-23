@@ -82,3 +82,12 @@ model ForwardTarget {
 
   @@map("forward_targets")
 }
+
+model AppConfig {
+  key       String @id
+  valueJson String @map("value_json")
+  createdAt String @map("created_at")
+  updatedAt String @map("updated_at")
+
+  @@map("app_configs")
+}

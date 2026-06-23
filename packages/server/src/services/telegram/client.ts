@@ -7,6 +7,7 @@ import { TelegramClient } from "telegram";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import { appConfig } from "../../config.js";
+import { getTelegramConfigStatus } from "../appConfig.js";
 
 // --- 单例状态（模块内私有）---
 
@@ -74,11 +75,31 @@ export function getConnectionStatus(): {
   authorized: boolean;
   waitingForCode: boolean;
   waitingForPassword: boolean;
+  telegramConfigured: boolean;
+  telegramConfigSource: "env" | "database" | "missing";
 } {
+  const configured = appConfig.telegram.apiId > 0 && appConfig.telegram.apiHash.trim().length > 0;
   return {
     connected: _isConnected,
     authorized: _client?.connected ? true : false,
     waitingForCode: _phoneCodeResolver !== null,
     waitingForPassword: _passwordResolver !== null,
+    telegramConfigured: configured,
+    telegramConfigSource: configured ? "database" : "missing",
+  };
+}
+
+export async function getConnectionStatusWithConfig(): Promise<{
+  connected: boolean;
+  authorized: boolean;
+  waitingForCode: boolean;
+  waitingForPassword: boolean;
+  telegramConfigured: boolean;
+  telegramConfigSource: "env" | "database" | "missing";
+}> {
+  const configStatus = await getTelegramConfigStatus();
+  return {
+    ...getConnectionStatus(),
+    ...configStatus,
   };
 }

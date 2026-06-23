@@ -7,6 +7,11 @@ const initialAuthStatus: AuthStatus = {
   authorized: false,
   waitingForCode: false,
   waitingForPassword: false,
+  telegramConfigured: false,
+  telegramConfigSource: "missing",
+  databaseConfigured: false,
+  apiId: null,
+  apiHashMasked: null,
 };
 
 let initializeRequest: Promise<void> | null = null;

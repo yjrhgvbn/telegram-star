@@ -296,7 +296,6 @@ export function MessageList({
   // ═══ Telegram 跳转返回时主动同步已读状态 ═════════════════════════════════
   useEffect(() => {
     const handleVisibilityChange = async () => {
-      console.log("visibilityState", document.visibilityState);
       if (document.visibilityState === "visible") {
         const jumpIdStr = sessionStorage.getItem("telegram_jump_msg_id");
         if (jumpIdStr) {

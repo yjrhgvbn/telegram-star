@@ -3,6 +3,7 @@ import { FiltersPage } from "./pages/FiltersPage";
 import { MessagesPage } from "./pages/MessagesPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
       <Route path="/filters" element={<FiltersPage />} />
       <Route path="/filters/:filterId" element={<FiltersPage />} />
       <Route path="/notifications" element={<NotificationsPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BellRing, Rows3 } from "lucide-react";
+import { BellRing, Rows3, Settings } from "lucide-react";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { TelegramLogin } from "@/components/TelegramLogin";
@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { AuthStatus } from "@/types";
 
 interface AppShellProps {
-  activeTab: "filtered" | "groups" | "notifications";
+  activeTab: "filtered" | "groups" | "notifications" | "settings";
   authStatus: AuthStatus;
   authLoading: boolean;
   onLoginSuccess: () => void;
@@ -29,6 +29,10 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
 
       if (value === "notifications") {
         navigate("/notifications");
+      }
+
+      if (value === "settings") {
+        navigate("/settings");
       }
     },
     [navigate],
@@ -73,6 +77,13 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
                 >
                   <BellRing data-icon="inline-start" />
                   通知设置
+                </TabsTrigger>
+                <TabsTrigger
+                  value="settings"
+                  className="flex-none rounded-none px-1 pb-3 text-sm font-medium text-foreground/58 data-active:text-foreground sm:px-3"
+                >
+                  <Settings data-icon="inline-start" />
+                  系统设置
                 </TabsTrigger>
               </TabsList>
             </div>

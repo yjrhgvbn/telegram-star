@@ -11,6 +11,31 @@ import type {
   ReadSyncLog,
 } from "../types";
 
+type TelegramConfigStatus = Pick<
+  AuthStatus,
+  "telegramConfigured" | "telegramConfigSource" | "databaseConfigured" | "apiId" | "apiHashMasked"
+>;
+
+export interface MediaConfigStatus {
+  thumbIndex: number;
+  thumbQuality: "low" | "medium" | "high";
+}
+
+export interface AppConfigStatus {
+  telegram: TelegramConfigStatus;
+  media: MediaConfigStatus;
+}
+
+export interface AppConfigUpdate {
+  telegram?: {
+    apiId?: number | string;
+    apiHash?: string;
+  };
+  media?: {
+    thumbIndex?: number | string;
+  };
+}
+
 const BASE = "/api";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -33,6 +58,15 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
 // Auth
 export const api = {
+  config: {
+    get: () => request<AppConfigStatus>("/config"),
+    update: (data: AppConfigUpdate) =>
+      request<AppConfigStatus>("/config", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+  },
+
   auth: {
     status: () => request<AuthStatus>("/auth/status"),
     sendCode: (phone: string) =>
