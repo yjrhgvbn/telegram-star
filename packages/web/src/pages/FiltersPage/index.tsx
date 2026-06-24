@@ -208,7 +208,7 @@ export function FiltersPage() {
 
   return (
     <AppShell
-      activeTab="filtered"
+      activeTab="filters"
       authStatus={authStatus}
       authLoading={authLoading}
       onLoginSuccess={handleLoginSuccess}

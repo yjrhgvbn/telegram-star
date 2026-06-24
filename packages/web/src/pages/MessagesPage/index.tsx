@@ -27,6 +27,8 @@ export function MessagesPage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const { filters, loading: filtersLoading } = useFilters();
+  const selectedFilter = filters.find((item) => String(item.id) === selectedFilterId) ?? null;
+  const currentTitle = selectedFilterId === "" ? "全部消息" : (selectedFilter?.name ?? "过滤消息");
 
   const selectedFilterAutoLocate = filters.find((item) => String(item.id) === selectedFilterId)?.autoLocateUnreadNearRead;
   const autoLocateUnreadNearRead = selectedFilterId === "" ? true : (selectedFilterAutoLocate ?? true);
@@ -80,12 +82,12 @@ export function MessagesPage() {
 
   return (
     <AppShell
-      activeTab="filtered"
+      activeTab="messages"
       authStatus={authStatus}
       authLoading={authLoading}
       onLoginSuccess={handleLoginSuccess}
     >
-      <div className="mt-0 flex h-full min-h-0 flex-1">
+      <div className="relative mt-0 flex h-full min-h-0 flex-1 overflow-hidden bg-[linear-gradient(135deg,color-mix(in_oklab,var(--background)_96%,white),color-mix(in_oklab,var(--accent)_16%,var(--background)))]">
         {/*
           侧边栏（过滤器列表）：
           - 大屏：始终显示
@@ -93,10 +95,10 @@ export function MessagesPage() {
         */}
         <aside
           className={cn(
-            "border-r border-border/60 bg-card/85 backdrop-blur-xl",
+            "bg-background/58 backdrop-blur-xl md:bg-background/46 md:shadow-[10px_0_28px_-28px_color-mix(in_oklab,var(--foreground)_48%,transparent)]",
             isGroupSelected
-              ? "hidden md:flex md:flex-col md:w-[320px]"
-              : "flex w-full flex-col sm:w-[320px]"
+              ? "hidden md:flex md:w-[300px] md:flex-col xl:w-[320px]"
+              : "flex w-full flex-col sm:w-[300px]"
           )}
         >
           <FilterPanel
@@ -122,7 +124,7 @@ export function MessagesPage() {
         >
           {/* 小屏返回按钮 */}
           {isGroupSelected && (
-            <div className="flex items-center border-b border-border/60 bg-background/55 px-3 py-2 md:hidden">
+            <div className="flex items-center bg-background/86 px-3 py-2 shadow-sm md:hidden">
               <Button variant="ghost" size="sm" onClick={handleBack}>
                 <ArrowLeft className="mr-1 size-4" />
                 返回分组
@@ -130,14 +132,22 @@ export function MessagesPage() {
             </div>
           )}
 
-          <div className="border-b border-border/60 bg-background/55 px-4 py-2 sm:px-6">
-            <div className="flex flex-wrap items-center gap-3">
-              <form className="min-w-55 flex-1" onSubmit={handleSearch}>
+          <div className="pt-3 pb-2 sm:pb-3">
+            <div className="mx-auto w-full max-w-[980px] px-4 sm:px-6">
+              <div className="flex min-h-12 flex-wrap items-center gap-3 rounded-none bg-transparent px-0 py-1 shadow-none ring-0 backdrop-blur-md sm:rounded-lg sm:bg-background/68 sm:px-3 sm:py-2 sm:shadow-[0_10px_30px_-28px_color-mix(in_oklab,var(--foreground)_48%,transparent)] sm:ring-1 sm:ring-border/22">
+              <div className="mr-auto min-w-36">
+                <h2 className="truncate text-base font-semibold leading-tight">{currentTitle}</h2>
+                <p className="text-xs text-muted-foreground">
+                  {messagesLoading ? "同步中" : `${messages.length} 条当前结果`}
+                </p>
+              </div>
+
+              <form className="min-w-52 flex-1 sm:max-w-md" onSubmit={handleSearch}>
                 <div className="relative">
                   <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type="text"
-                    className="h-9 rounded-full bg-card/70 pr-10 pl-9"
+                    className="h-9 rounded-lg border-transparent bg-card/82 pr-10 pl-9 shadow-inner shadow-background/50 focus-visible:border-transparent"
                     placeholder="搜索消息内容..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -156,12 +166,12 @@ export function MessagesPage() {
                 </div>
               </form>
 
-              <div className="flex items-center gap-2 rounded-full bg-card/70 p-1">
+              <div className="flex items-center gap-1 rounded-lg bg-card/68 p-1 shadow-inner shadow-background/50 ring-1 ring-border/20">
                 <Button
                   type="button"
                   size="sm"
                   variant={readFilter === "" ? "default" : "ghost"}
-                  className="rounded-full"
+                  className="rounded-md"
                   onClick={() => setReadFilter("")}
                 >
                   全部
@@ -170,7 +180,7 @@ export function MessagesPage() {
                   type="button"
                   size="sm"
                   variant={readFilter === "false" ? "default" : "ghost"}
-                  className="rounded-full"
+                  className="rounded-md"
                   onClick={() => setReadFilter("false")}
                 >
                   未读
@@ -179,20 +189,22 @@ export function MessagesPage() {
                   type="button"
                   size="sm"
                   variant={readFilter === "true" ? "default" : "ghost"}
-                  className="rounded-full"
+                  className="rounded-md"
                   onClick={() => setReadFilter("true")}
                 >
                   已读
                 </Button>
               </div>
 
-              <Button type="button" variant="outline" size="icon" onClick={refresh} title="刷新">
+              <Button type="button" variant="ghost" size="icon" className="bg-card/68 shadow-sm ring-1 ring-border/20" onClick={refresh} title="刷新">
                 <RefreshCw className={cn(messagesLoading && "animate-spin")} />
               </Button>
+              </div>
             </div>
           </div>
 
-          <div className="min-h-0 flex-1">
+          <div className="relative min-h-0 flex-1">
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-5 bg-linear-to-b from-background/40 to-transparent" />
             <MessageList
               messages={messages}
               hasOlder={hasOlder}

@@ -337,10 +337,10 @@ export function MessageList({
   if (loading) {
     return (
       <div className="flex h-full flex-col p-4 sm:p-6">
-        <div className="space-y-3">
-          <Skeleton className="h-36 w-full rounded-xl" />
-          <Skeleton className="h-36 w-full rounded-xl" />
-          <Skeleton className="h-36 w-full rounded-xl" />
+        <div className="mx-auto w-full max-w-[980px] space-y-3">
+          <Skeleton className="h-32 w-full rounded-lg" />
+          <Skeleton className="h-32 w-full rounded-lg" />
+          <Skeleton className="h-32 w-full rounded-lg" />
         </div>
         <p className="py-3 text-center text-sm text-muted-foreground">加载消息中...</p>
       </div>
@@ -350,10 +350,10 @@ export function MessageList({
   // ═══ 空状态 ═══════════════════════════════════════════════════════════════
   if (messages.length === 0) {
     return (
-      <div className="p-4">
-        <Card className="mx-auto border border-dashed border-border/70 bg-card/60 text-center">
+      <div className="p-4 sm:p-6">
+        <Card className="mx-auto max-w-md border border-dashed border-border/70 bg-card/70 text-center">
           <CardHeader>
-            <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-muted">
+            <div className="mx-auto mb-2 flex size-11 items-center justify-center rounded-lg bg-muted">
               <Inbox className="size-5 text-muted-foreground" />
             </div>
             <CardTitle>暂无消息</CardTitle>
@@ -371,15 +371,19 @@ export function MessageList({
 
   return (
     <div className="relative h-full w-full">
-      <div ref={scrollRef} className="h-full overflow-y-auto">
+      <div
+        ref={scrollRef}
+        className="h-full overflow-y-auto px-0 pt-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        data-message-scroll
+      >
         {/* ── 顶部指示器 ── */}
         {loadingOlder ? (
-          <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+          <div className="mx-auto flex max-w-[980px] items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
             加载历史消息...
           </div>
         ) : !hasOlder ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">
+          <p className="mx-auto max-w-[980px] py-4 text-center text-sm text-muted-foreground">
             已加载全部历史消息
           </p>
         ) : (
@@ -396,21 +400,20 @@ export function MessageList({
         >
           {virtualItems.map((vItem) => {
             const msg = messages[vItem.index];
-            // 调试用：计算实时预估高度与真实渲染高度的差异 (仅在开发环境运行)
             let diffElement = null;
             if (import.meta.env.DEV) {
               const containerWidth = scrollRef.current?.clientWidth || 400;
               const estHeight = estimateItemHeight(msg, containerWidth);
               const realHeight = vItem.size;
-              const diff = realHeight - estHeight; // 不要 round，保留真实小数看极细微偏差
+              const diff = realHeight - estHeight;
 
               diffElement = (
-                <div className="pointer-events-none absolute right-8 top-1 z-50 rounded bg-black/80 px-2 py-1 font-mono text-[10px] text-white/90 opacity-60 backdrop-blur-sm transition-opacity hover:opacity-100 sm:right-10">
-                  <span className={Math.abs(diff) > 20 ? "font-bold text-red-400" : "text-green-400"}>
+                <div className="pointer-events-none absolute top-1 right-[max(1.5rem,calc((100%-980px)/2+1.5rem))] z-20 rounded-md bg-foreground/65 px-2 py-1 font-mono text-[10px] text-background/90 shadow-sm backdrop-blur-sm">
+                  <span className={Math.abs(diff) > 20 ? "font-bold text-destructive" : "text-success"}>
                     Diff: {diff > 0 ? "+" : ""}{diff.toFixed(2)}px
                   </span>
-                  <span className="ml-2 text-white/60">
-                    (Est: {estHeight.toFixed(2)} / Real: {realHeight.toFixed(2)})
+                  <span className="ml-2 opacity-70">
+                    Est {estHeight.toFixed(0)} / Real {realHeight.toFixed(0)}
                   </span>
                 </div>
               );
@@ -429,10 +432,9 @@ export function MessageList({
                   transform: `translateY(${vItem.start}px)`,
                 }}
               >
-                {/* ── 高度计算调试面板 (开发用，打包时由于 import.meta.env.DEV 为 false 会被剔除) ── */}
                 {diffElement}
 
-                <div className="px-4 pb-3 sm:px-6">
+                <div className="mx-auto w-full max-w-[980px] px-4 pb-4 sm:px-6">
                   <MessageCard
                     message={msg}
                     onToggleRead={onToggleRead}
@@ -447,7 +449,7 @@ export function MessageList({
 
         {/* ── 底部加载指示器 ── */}
         {loadingNewer && (
-          <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+          <div className="mx-auto flex max-w-[980px] items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
             加载新消息...
           </div>

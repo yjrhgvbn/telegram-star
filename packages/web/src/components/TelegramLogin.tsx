@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -115,10 +116,12 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
   if (authStatus.authorized) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 backdrop-blur-md">
-      <Card className="w-full max-w-md animate-in fade-in-0 zoom-in-95 border-border/70 bg-card/95 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/35 px-4 backdrop-blur-md">
+      <Card className="w-full max-w-md animate-in fade-in-0 zoom-in-95 border-border/80 bg-card/98 shadow-xl">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex size-14 items-center justify-center rounded-2xl bg-primary/15 text-3xl">⭐</div>
+          <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+            <Sparkles className="size-5" />
+          </div>
           <CardTitle className="text-xl">Telegram Star</CardTitle>
           <CardDescription>连接你的 Telegram 账号开始追踪消息</CardDescription>
         </CardHeader>

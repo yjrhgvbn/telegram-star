@@ -1,7 +1,7 @@
-import { ExternalLink, MessagesSquare } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { CheckCircle2, ExternalLink, MessageSquareText } from "lucide-react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { MediaPreview } from "./MediaPreview";
 import type { Message } from "@/types";
@@ -20,21 +20,28 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
   return (
     <Card
       className={cn(
-        "border border-border/70 bg-card/75 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
-        !message.isRead && "border-primary/35 bg-primary/5 ring-1 ring-primary/25",
-        message.isRead && "bg-muted/20 opacity-80",
-        isAnchor && "ring-2 ring-amber-400/60"
+        "relative overflow-visible border-transparent bg-card/88 shadow-sm ring-1 ring-border/18 transition-all duration-200 hover:bg-card/96 hover:shadow-md hover:ring-primary/18",
+        !message.isRead && "bg-card/96 ring-primary/18",
+        message.isRead && "bg-card/72",
+        isAnchor && "shadow-md ring-2 ring-primary/20"
       )}
     >
+      {!message.isRead && <span className="absolute top-4 left-0 h-8 w-1 rounded-r-full bg-primary shadow-[0_0_16px_color-mix(in_oklab,var(--primary)_36%,transparent)]" aria-hidden />}
+
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
-              <MessagesSquare className="size-4" />
+            <div className={cn(
+              "flex size-8 shrink-0 items-center justify-center rounded-md shadow-sm ring-1 ring-border/25",
+              message.isRead ? "bg-muted/50 text-muted-foreground" : "bg-primary/10 text-primary",
+            )}>
+              <MessageSquareText className="size-4" />
             </div>
             <div className="min-w-0">
-              <CardTitle className="truncate text-sm">{message.chatTitle}</CardTitle>
-              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <CardTitle className="truncate text-[0.95rem]">{message.chatTitle}</CardTitle>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground/70">{message.senderName}</span>
+                <span>·</span>
                 <span>{timeAgo}</span>
                 <span>·</span>
                 <span>{new Date(message.messageDate).toLocaleString("zh-CN")}</span>
@@ -42,34 +49,30 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Badge variant={message.isRead ? "secondary" : "default"}>
-              {message.isRead ? "已读" : "未读"}
-            </Badge>
+          <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+            {message.isRead ? (
+              <span className="inline-flex items-center gap-1 text-muted-foreground/82">
+                <CheckCircle2 className="size-3.5" />
+                已读
+              </span>
+            ) : (
+              <span className="rounded-full bg-primary px-2 py-0.5 text-primary-foreground">未读</span>
+            )}
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="flex size-7 items-center justify-center rounded-full bg-linear-to-br from-sky-500/80 to-emerald-500/80 text-xs font-semibold text-white">
-            {message.senderName.charAt(0).toUpperCase()}
-          </span>
-          <span className="text-sm text-muted-foreground">{message.senderName}</span>
-        </div>
-
-        {/* 媒体预览 */}
         <MediaPreview message={message} />
 
-        {/* 文本内容（无文字时隐藏） */}
         {message.content.trim().length > 0 && (
-          <p className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground/95">
-            {message.content.slice(0, 500)}
+          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90">
+            {renderHighlightedContent(message.content.slice(0, 500), searchQuery)}
             {message.content.length > 500 && <span className="text-muted-foreground">...</span>}
           </p>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           <Button
             variant={message.isRead ? "outline" : "default"}
             size="sm"
@@ -92,17 +95,22 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
           )}
         </div>
       </CardContent>
-
-      <CardFooter className="flex items-center justify-between border-t border-border/70 bg-muted/30 py-2 text-xs text-muted-foreground">
-        <span>状态：{message.isRead ? "已读" : "未读"}</span>
-        <span>消息 ID #{message.id}</span>
-      </CardFooter>
     </Card>
   );
 }
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function renderHighlightedContent(content: string, searchQuery?: string): ReactNode {
+  const query = searchQuery?.trim();
+  if (!query) return content;
+
+  const regex = new RegExp(`(${escapeRegex(query)})`, "gi");
+  return content.split(regex).map((part, index) =>
+    part.toLowerCase() === query.toLowerCase() ? <mark key={`${part}-${index}`}>{part}</mark> : part,
+  );
 }
 
 function getTimeAgo(dateStr: string): string {
