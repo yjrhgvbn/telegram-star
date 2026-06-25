@@ -1,4 +1,4 @@
-import { CheckCircle2, ExternalLink, MessageSquareText } from "lucide-react";
+import { CheckCircle2, Clock3, ExternalLink, KeyRound, MessageSquareText } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,42 +16,62 @@ interface Props {
 
 export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Props) {
   const timeAgo = getTimeAgo(message.messageDate);
+  const exactTime = new Date(message.messageDate).toLocaleString("zh-CN");
+  const content = message.content.trim();
+  const contentPreview = content.slice(0, 360);
+  const hasTruncatedContent = content.length > 360;
+  const mediaLabel = getMediaLabel(message.mediaType);
 
   return (
     <Card
+      size="sm"
       className={cn(
-        "relative overflow-visible border-transparent bg-card/88 shadow-sm ring-1 ring-border/18 transition-all duration-200 hover:bg-card/96 hover:shadow-md hover:ring-primary/18",
-        !message.isRead && "bg-card/96 ring-primary/18",
-        message.isRead && "bg-card/72",
-        isAnchor && "shadow-md ring-2 ring-primary/20"
+        "relative overflow-visible border-transparent bg-card/88 shadow-sm ring-1 ring-border/16 transition-all duration-200 hover:bg-card/96 hover:shadow-md hover:ring-primary/18",
+        !message.isRead && "bg-card/98 ring-primary/20",
+        message.isRead && "bg-card/74",
+        isAnchor && "shadow-md ring-2 ring-primary/24"
       )}
     >
-      {!message.isRead && <span className="absolute top-4 left-0 h-8 w-1 rounded-r-full bg-primary shadow-[0_0_16px_color-mix(in_oklab,var(--primary)_36%,transparent)]" aria-hidden />}
+      {!message.isRead && <span className="absolute top-3 left-0 h-10 w-1 rounded-r-full bg-primary shadow-[0_0_16px_color-mix(in_oklab,var(--primary)_36%,transparent)]" aria-hidden />}
 
-      <CardHeader className="pb-2">
+      <CardHeader className="px-4 pb-0">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-start gap-3">
             <div className={cn(
-              "flex size-8 shrink-0 items-center justify-center rounded-md shadow-sm ring-1 ring-border/25",
-              message.isRead ? "bg-muted/50 text-muted-foreground" : "bg-primary/10 text-primary",
+              "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md shadow-sm ring-1 ring-border/25",
+              message.isRead ? "bg-muted/50 text-muted-foreground" : "bg-primary/12 text-primary",
             )}>
               <MessageSquareText className="size-4" />
             </div>
-            <div className="min-w-0">
-              <CardTitle className="truncate text-[0.95rem]">{message.chatTitle}</CardTitle>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground/70">{message.senderName}</span>
-                <span>·</span>
-                <span>{timeAgo}</span>
-                <span>·</span>
-                <span>{new Date(message.messageDate).toLocaleString("zh-CN")}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <CardTitle className="min-w-0 truncate text-[0.95rem] leading-tight">{message.chatTitle}</CardTitle>
+                {mediaLabel && (
+                  <span className="rounded-md bg-muted/70 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {mediaLabel}
+                  </span>
+                )}
+                {message.matchedKeyword && (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-warning/24 px-1.5 py-0.5 text-[11px] font-medium text-warning-foreground">
+                    <KeyRound className="size-3" />
+                    {message.matchedKeyword}
+                  </span>
+                )}
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <span className="max-w-40 truncate font-medium text-foreground/72">{message.senderName}</span>
+                <span className="inline-flex items-center gap-1">
+                  <Clock3 className="size-3" />
+                  {timeAgo}
+                </span>
+                <span className="text-muted-foreground/72">{exactTime}</span>
               </div>
             </div>
           </div>
 
           <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
             {message.isRead ? (
-              <span className="inline-flex items-center gap-1 text-muted-foreground/82">
+              <span className="inline-flex items-center gap-1 text-muted-foreground/75">
                 <CheckCircle2 className="size-3.5" />
                 已读
               </span>
@@ -62,17 +82,17 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3">
-        <MediaPreview message={message} />
-
-        {message.content.trim().length > 0 && (
+      <CardContent className="space-y-2.5 px-4 pb-4">
+        {content.length > 0 && (
           <p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90">
-            {renderHighlightedContent(message.content.slice(0, 500), searchQuery)}
-            {message.content.length > 500 && <span className="text-muted-foreground">...</span>}
+            {renderHighlightedContent(contentPreview, searchQuery)}
+            {hasTruncatedContent && <span className="text-muted-foreground">...</span>}
           </p>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 pt-1">
+        <MediaPreview message={message} />
+
+        <div className="flex flex-wrap items-center gap-2 pt-0.5">
           <Button
             variant={message.isRead ? "outline" : "default"}
             size="sm"
@@ -111,6 +131,34 @@ function renderHighlightedContent(content: string, searchQuery?: string): ReactN
   return content.split(regex).map((part, index) =>
     part.toLowerCase() === query.toLowerCase() ? <mark key={`${part}-${index}`}>{part}</mark> : part,
   );
+}
+
+function getMediaLabel(mediaType: string | null): string | null {
+  switch (mediaType) {
+    case "photo":
+      return "图片";
+    case "video":
+    case "videoNote":
+      return "视频";
+    case "gif":
+      return "GIF";
+    case "sticker":
+      return "贴纸";
+    case "document":
+      return "文件";
+    case "voice":
+      return "语音";
+    case "audio":
+      return "音频";
+    case "contact":
+      return "联系人";
+    case "geo":
+      return "位置";
+    case "poll":
+      return "投票";
+    default:
+      return mediaType;
+  }
 }
 
 function getTimeAgo(dateStr: string): string {

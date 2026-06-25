@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
+import { CheckCircle2, ListFilter, Plus, SlidersHorizontal } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { api } from "@/api/client";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useFilters } from "@/hooks/useFilters";
+import { cn } from "@/lib/utils";
 import type { HistoricalFilterPreviewMessage } from "@/types";
 import { FilterForm } from "./FilterForm";
 import { PreviewPanel } from "./PreviewPanel";
@@ -30,6 +34,7 @@ export function FiltersPage() {
   const [backfillSummary, setBackfillSummary] = useState<string>("");
 
   const selectedFilter = filters.find((filter) => String(filter.id) === selectedFilterId) ?? null;
+  const enabledFilters = filters.filter((filter) => filter.enabled).length;
 
   // 路由参数变化时同步选中的过滤器
   useEffect(() => {
@@ -214,41 +219,145 @@ export function FiltersPage() {
       onLoginSuccess={handleLoginSuccess}
     >
       <div className="flex min-h-0 flex-1 flex-col">
-        <main className="min-w-0 flex-1 overflow-auto p-2 sm:p-3">
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(330px,0.9fr)]">
-            <div className="space-y-2.5">
-              <FilterForm
-                selectedFilter={selectedFilter}
-                name={name}
-                onNameChange={setName}
-                autoLocateUnreadNearRead={autoLocateUnreadNearRead}
-                onAutoLocateChange={setAutoLocateUnreadNearRead}
-                conditions={conditions}
-                error={error}
-                saving={saving}
-                onUpdateCondition={updateCondition}
-                onRemoveCondition={removeCondition}
-                onAppendKeywords={appendKeywordValues}
-                onAddCondition={addCondition}
-                onSave={handleSave}
-                onDelete={handleDelete}
-                onToggle={() => void toggleFilter(selectedFilter!.id)}
-              />
-            </div>
+        <main className="min-w-0 flex-1 overflow-auto px-3 py-3 sm:px-4 lg:px-5">
+          <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4">
+            <header className="rounded-lg bg-card/80 p-4 shadow-sm ring-1 ring-foreground/10">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                    <SlidersHorizontal className="size-4" />
+                    过滤器规则
+                  </div>
+                  <h1 className="mt-1 text-xl font-semibold tracking-normal text-foreground sm:text-2xl">
+                    {selectedFilter ? selectedFilter.name : "新建过滤器"}
+                  </h1>
+                </div>
 
-            <div className="space-y-2.5">
-              <PreviewPanel
-                selectedFilter={selectedFilter}
-                previewLoading={previewLoading}
-                backfillLoading={backfillLoading}
-                previewMessages={previewMessages}
-                previewSummary={previewSummary}
-                backfillSummary={backfillSummary}
-                previewLimit={previewLimit}
-                onPreviewLimitChange={setPreviewLimit}
-                onPreview={handlePreview}
-                onBackfill={handleBackfill}
-              />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="h-7 gap-1.5 rounded-lg px-2.5">
+                    <ListFilter className="size-3.5" />
+                    {filters.length} 个规则
+                  </Badge>
+                  <Badge variant="secondary" className="h-7 gap-1.5 rounded-lg px-2.5">
+                    <CheckCircle2 className="size-3.5 text-success" />
+                    {enabledFilters} 个启用
+                  </Badge>
+                  <Button type="button" size="sm" onClick={() => navigate("/filters/new")}>
+                    <Plus data-icon="inline-start" />
+                    新建
+                  </Button>
+                </div>
+              </div>
+            </header>
+
+            <div className="grid min-h-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[280px_minmax(0,1fr)_430px]">
+              <aside className="min-w-0 lg:row-span-2 2xl:row-span-1">
+                <section className="rounded-lg bg-card/80 p-2 shadow-sm ring-1 ring-foreground/10">
+                  <div className="flex items-center justify-between px-2 py-2">
+                    <div className="text-sm font-semibold">已保存规则</div>
+                    <Badge variant="outline" className="rounded-md">
+                      {filters.length}
+                    </Badge>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition",
+                        selectedFilterId === "new"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-foreground hover:bg-muted/65",
+                      )}
+                      onClick={() => navigate("/filters/new")}
+                    >
+                      <span className="min-w-0 truncate text-sm font-medium">新建过滤器</span>
+                      <Plus className="size-4 shrink-0" />
+                    </button>
+
+                    {filters.length === 0 ? (
+                      <div className="rounded-lg bg-muted/45 px-3 py-5 text-center text-sm text-muted-foreground">
+                        暂无已保存规则
+                      </div>
+                    ) : (
+                      filters.map((filter) => {
+                        const active = String(filter.id) === selectedFilterId;
+                        const keywordCount = filter.conditions
+                          .filter((condition) => condition.type === "keyword")
+                          .reduce((count, condition) => count + condition.values.length, 0);
+                        const chatCount = filter.conditions
+                          .filter((condition) => condition.type === "chat")
+                          .reduce((count, condition) => count + condition.values.length, 0);
+
+                        return (
+                          <button
+                            key={filter.id}
+                            type="button"
+                            className={cn(
+                              "flex w-full flex-col gap-2 rounded-lg px-3 py-2.5 text-left transition",
+                              active
+                                ? "bg-accent/75 text-accent-foreground shadow-sm"
+                                : "hover:bg-muted/65",
+                            )}
+                            onClick={() => navigate(`/filters/${filter.id}`)}
+                          >
+                            <div className="flex w-full items-center justify-between gap-3">
+                              <span className="min-w-0 truncate text-sm font-medium">{filter.name}</span>
+                              <span
+                                className={cn(
+                                  "size-2 shrink-0 rounded-full",
+                                  filter.enabled ? "bg-success" : "bg-muted-foreground/35",
+                                )}
+                              />
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+                              <span>{keywordCount} 关键词</span>
+                              <span>{chatCount} 会话</span>
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </section>
+              </aside>
+
+              <div className="min-w-0">
+                <FilterForm
+                  selectedFilter={selectedFilter}
+                  name={name}
+                  onNameChange={setName}
+                  autoLocateUnreadNearRead={autoLocateUnreadNearRead}
+                  onAutoLocateChange={setAutoLocateUnreadNearRead}
+                  conditions={conditions}
+                  error={error}
+                  saving={saving}
+                  onUpdateCondition={updateCondition}
+                  onRemoveCondition={removeCondition}
+                  onAppendKeywords={appendKeywordValues}
+                  onAddCondition={addCondition}
+                  onSave={handleSave}
+                  onDelete={handleDelete}
+                  onToggle={() => {
+                    if (selectedFilter) void toggleFilter(selectedFilter.id);
+                  }}
+                />
+              </div>
+
+              <div className="min-w-0 lg:col-start-2 2xl:col-start-auto">
+                <PreviewPanel
+                  selectedFilter={selectedFilter}
+                  previewLoading={previewLoading}
+                  backfillLoading={backfillLoading}
+                  previewMessages={previewMessages}
+                  previewSummary={previewSummary}
+                  backfillSummary={backfillSummary}
+                  previewLimit={previewLimit}
+                  onPreviewLimitChange={setPreviewLimit}
+                  onPreview={handlePreview}
+                  onBackfill={handleBackfill}
+                />
+              </div>
             </div>
           </div>
         </main>

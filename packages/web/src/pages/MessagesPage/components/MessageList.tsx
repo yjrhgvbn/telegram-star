@@ -37,36 +37,35 @@ import { prepareWithSegments, measureLineStats } from "@chenglou/pretext";
 
 function estimateItemHeight(message: Message, containerWidth: number = 400): number {
 
-  // 外围和固定元素的基础高度：
-  const FIXED_BASE = 199;
+  // 统一计算可用宽度（完美对齐浏览器亚像素）：
+  // 屏幕 < 640px 时: 外层 px-4(32) + CardContent px-4(32) = 64px
+  // 屏幕 >= 640px 时: 外层 sm:px-6(48) + CardContent px-4(32) = 80px
+  const screenW = typeof window !== "undefined" ? window.innerWidth : 1024;
+  // 基础高度包含卡片 chrome、头部、操作区和子像素级间距。
+  // 这里保留小数是为了贴合浏览器真实 layout，降低虚拟列表滚动补偿误差。
+  const FIXED_BASE = screenW < 640 ? 188.35 : 142.66;
   let height = FIXED_BASE;
 
-  // 统一计算可用宽度（完美对齐浏览器亚像素）：
-  // 屏幕 < 640px 时: 外层 px-4(32) + MessageCard border(2) + CardContent px-4(32) = 66px
-  // 屏幕 >= 640px 时: 外层 sm:px-6(48) + MessageCard border(2) + CardContent px-4(32) = 82px
-  const screenW = typeof window !== "undefined" ? window.innerWidth : 1024;
-  const paddingH = screenW < 640 ? 66 : 82;
+  const paddingH = screenW < 640 ? 64 : 80;
   const availableWidth = Math.max(100, containerWidth - paddingH);
 
-  // CardContent 内部的组件数量，用于计算 space-y-3 (12px) 的数量
-  // Sender 和 Buttons 这 2 个是一直都在的
-  let itemsCount = 2;
+  // CardContent 内部可变块数量，用于计算摘要/媒体与操作区之间的 gap。
+  let variableBlocks = 0;
 
   // 1. 媒体部分高度估算
   if (message.mediaType) {
-    itemsCount++;
     let mediaH = 54; // 默认细长组件的高度
     switch (message.mediaType) {
       case "photo":
       case "video":
       case "videoNote":
       case "gif": {
-        mediaH = 280; // 默认高度
+        mediaH = 240; // 默认高度
         if (message.mediaExtra) {
           try {
             const extra = JSON.parse(message.mediaExtra);
             if (extra.w && extra.h) {
-              mediaH = Math.min(450, (availableWidth * extra.h) / extra.w);
+              mediaH = Math.min(360, (availableWidth * extra.h) / extra.w);
             }
           } catch {
             // ignore
@@ -86,14 +85,15 @@ function estimateItemHeight(message: Message, containerWidth: number = 400): num
         mediaH = 54; // paddings 16px + icon/text ~38px
         break;
     }
+    variableBlocks++;
     height += mediaH;
   }
 
   // 2. 文字部分高度估算
   const textStr = message.content.trim();
   if (textStr.length > 0) {
-    itemsCount++;
-    const textToMeasure = textStr.slice(0, 500) + (textStr.length > 500 ? "..." : "");
+    variableBlocks++;
+    const textToMeasure = textStr.slice(0, 360) + (textStr.length > 360 ? "..." : "");
 
     // Telegram 消息通常包含换行符 (\n)，pretext 不会自动处理多段落的硬换行，
     // 所以必须将文本按换行符拆分，对每一段单独测量并累加行数。
@@ -111,12 +111,12 @@ function estimateItemHeight(message: Message, containerWidth: number = 400): num
       totalLines += Math.max(1, stats.lineCount);
     }
 
-    // Tailwind leading-7 对应 line-height: 28px
-    height += totalLines * 28;
+    // Tailwind leading-6 对应 line-height: 24px
+    height += totalLines * 24;
   }
 
-  // 加上所有子元素之间的 gap
-  height += (itemsCount - 1) * 12;
+  // 操作区固定存在；每个可变块都会和后续内容形成一个 gap。
+  height += variableBlocks * 10;
 
   return height;
 }

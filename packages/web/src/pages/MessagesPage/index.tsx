@@ -56,6 +56,7 @@ export function MessagesPage() {
     search: searchQuery,
     autoLocateEnabled: autoLocateUnreadNearRead,
   });
+  const resultLabel = messagesLoading ? "同步中" : `${messages.length} 条当前结果`;
   useStats();
 
   // 选择过滤器：更新路由，由路由驱动状态
@@ -95,10 +96,10 @@ export function MessagesPage() {
         */}
         <aside
           className={cn(
-            "bg-background/58 backdrop-blur-xl md:bg-background/46 md:shadow-[10px_0_28px_-28px_color-mix(in_oklab,var(--foreground)_48%,transparent)]",
+            "bg-background/58 backdrop-blur-xl lg:bg-background/46 lg:shadow-[10px_0_28px_-28px_color-mix(in_oklab,var(--foreground)_48%,transparent)]",
             isGroupSelected
-              ? "hidden md:flex md:w-[300px] md:flex-col xl:w-[320px]"
-              : "flex w-full flex-col sm:w-[300px]"
+              ? "hidden lg:flex lg:w-[300px] lg:flex-col xl:w-[320px]"
+              : "flex w-full flex-col lg:w-[300px] xl:w-[320px]"
           )}
         >
           <FilterPanel
@@ -119,35 +120,28 @@ export function MessagesPage() {
             "flex-col min-h-0",
             isGroupSelected
               ? "flex min-w-0 flex-1"
-              : "hidden sm:flex sm:min-w-0 sm:flex-1"
+              : "hidden lg:flex lg:min-w-0 lg:flex-1"
           )}
         >
           {/* 小屏返回按钮 */}
           {isGroupSelected && (
-            <div className="flex items-center bg-background/86 px-3 py-2 shadow-sm md:hidden">
+            <div className="flex items-center justify-between gap-3 bg-background/86 px-3 py-2 shadow-sm lg:hidden">
               <Button variant="ghost" size="sm" onClick={handleBack}>
                 <ArrowLeft className="mr-1 size-4" />
-                返回分组
+                {currentTitle}
               </Button>
+              <span className="shrink-0 text-xs text-muted-foreground">{resultLabel}</span>
             </div>
           )}
 
-          <div className="pt-3 pb-2 sm:pb-3">
-            <div className="mx-auto w-full max-w-[980px] px-4 sm:px-6">
-              <div className="flex min-h-12 flex-wrap items-center gap-3 rounded-none bg-transparent px-0 py-1 shadow-none ring-0 backdrop-blur-md sm:rounded-lg sm:bg-background/68 sm:px-3 sm:py-2 sm:shadow-[0_10px_30px_-28px_color-mix(in_oklab,var(--foreground)_48%,transparent)] sm:ring-1 sm:ring-border/22">
-              <div className="mr-auto min-w-36">
-                <h2 className="truncate text-base font-semibold leading-tight">{currentTitle}</h2>
-                <p className="text-xs text-muted-foreground">
-                  {messagesLoading ? "同步中" : `${messages.length} 条当前结果`}
-                </p>
-              </div>
-
-              <form className="min-w-52 flex-1 sm:max-w-md" onSubmit={handleSearch}>
+          {isGroupSelected && (
+            <div className="space-y-2 px-4 pt-3 pb-2 lg:hidden">
+              <form onSubmit={handleSearch}>
                 <div className="relative">
                   <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type="text"
-                    className="h-9 rounded-lg border-transparent bg-card/82 pr-10 pl-9 shadow-inner shadow-background/50 focus-visible:border-transparent"
+                    className="h-10 rounded-lg border-transparent bg-card/82 pr-10 pl-9 shadow-inner shadow-background/50 focus-visible:border-transparent"
                     placeholder="搜索消息内容..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -166,39 +160,115 @@ export function MessagesPage() {
                 </div>
               </form>
 
-              <div className="flex items-center gap-1 rounded-lg bg-card/68 p-1 shadow-inner shadow-background/50 ring-1 ring-border/20">
+              <div className="flex items-center gap-2">
+                <div className="grid flex-1 grid-cols-3 gap-1 rounded-lg bg-card/68 p-1 shadow-inner shadow-background/50 ring-1 ring-border/20">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={readFilter === "" ? "default" : "ghost"}
+                    className="rounded-md"
+                    onClick={() => setReadFilter("")}
+                  >
+                    全部
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={readFilter === "false" ? "default" : "ghost"}
+                    className="rounded-md"
+                    onClick={() => setReadFilter("false")}
+                  >
+                    未读
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={readFilter === "true" ? "default" : "ghost"}
+                    className="rounded-md"
+                    onClick={() => setReadFilter("true")}
+                  >
+                    已读
+                  </Button>
+                </div>
                 <Button
                   type="button"
-                  size="sm"
-                  variant={readFilter === "" ? "default" : "ghost"}
-                  className="rounded-md"
-                  onClick={() => setReadFilter("")}
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 bg-card/68 shadow-sm ring-1 ring-border/20"
+                  onClick={refresh}
+                  title="刷新"
                 >
-                  全部
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={readFilter === "false" ? "default" : "ghost"}
-                  className="rounded-md"
-                  onClick={() => setReadFilter("false")}
-                >
-                  未读
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={readFilter === "true" ? "default" : "ghost"}
-                  className="rounded-md"
-                  onClick={() => setReadFilter("true")}
-                >
-                  已读
+                  <RefreshCw className={cn(messagesLoading && "animate-spin")} />
                 </Button>
               </div>
+            </div>
+          )}
 
-              <Button type="button" variant="ghost" size="icon" className="bg-card/68 shadow-sm ring-1 ring-border/20" onClick={refresh} title="刷新">
-                <RefreshCw className={cn(messagesLoading && "animate-spin")} />
-              </Button>
+          <div className="hidden pt-3 pb-2 sm:pb-3 lg:block">
+            <div className="mx-auto w-full max-w-[980px] px-4 sm:px-6">
+              <div className="flex min-h-12 flex-wrap items-center gap-3 rounded-none bg-transparent px-0 py-1 shadow-none ring-0 backdrop-blur-md sm:rounded-lg sm:bg-background/68 sm:px-3 sm:py-2 sm:shadow-[0_10px_30px_-28px_color-mix(in_oklab,var(--foreground)_48%,transparent)] sm:ring-1 sm:ring-border/22">
+                <div className="mr-auto min-w-36">
+                  <h2 className="truncate text-base font-semibold leading-tight">{currentTitle}</h2>
+                  <p className="text-xs text-muted-foreground">{resultLabel}</p>
+                </div>
+
+                <form className="min-w-52 flex-1 sm:max-w-md" onSubmit={handleSearch}>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      className="h-9 rounded-lg border-transparent bg-card/82 pr-10 pl-9 shadow-inner shadow-background/50 focus-visible:border-transparent"
+                      placeholder="搜索消息内容..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    {searchQuery && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="absolute top-1/2 right-1 -translate-y-1/2"
+                        onClick={() => setSearchQuery("")}
+                      >
+                        ×
+                      </Button>
+                    )}
+                  </div>
+                </form>
+
+                <div className="flex items-center gap-1 rounded-lg bg-card/68 p-1 shadow-inner shadow-background/50 ring-1 ring-border/20">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={readFilter === "" ? "default" : "ghost"}
+                    className="rounded-md"
+                    onClick={() => setReadFilter("")}
+                  >
+                    全部
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={readFilter === "false" ? "default" : "ghost"}
+                    className="rounded-md"
+                    onClick={() => setReadFilter("false")}
+                  >
+                    未读
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={readFilter === "true" ? "default" : "ghost"}
+                    className="rounded-md"
+                    onClick={() => setReadFilter("true")}
+                  >
+                    已读
+                  </Button>
+                </div>
+
+                <Button type="button" variant="ghost" size="icon" className="bg-card/68 shadow-sm ring-1 ring-border/20" onClick={refresh} title="刷新">
+                  <RefreshCw className={cn(messagesLoading && "animate-spin")} />
+                </Button>
               </div>
             </div>
           </div>
