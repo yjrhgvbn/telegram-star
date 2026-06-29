@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, LoaderCircle, LocateFixed, Plus, Save, Trash2 } from "lucide-react";
+import { AlertCircle, BellRing, CheckCircle2, LoaderCircle, LocateFixed, Plus, Save, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import type { Filter } from "@/types";
+import type { Filter, ForwardTarget } from "@/types";
 import { ConditionEditor } from "./ConditionEditor";
 import type { DraftCondition } from "../types";
 
@@ -15,6 +15,11 @@ interface FilterFormProps {
   onNameChange: (name: string) => void;
   autoLocateUnreadNearRead: boolean;
   onAutoLocateChange: (value: boolean) => void;
+  forwardTargets: ForwardTarget[];
+  selectedForwardTargetIds: number[];
+  forwardTargetsLoading: boolean;
+  onToggleForwardTarget: (id: number) => void;
+  onCreateForwardTarget: () => void;
   conditions: DraftCondition[];
   error: string;
   saving: boolean;
@@ -33,6 +38,11 @@ export function FilterForm({
   onNameChange,
   autoLocateUnreadNearRead,
   onAutoLocateChange,
+  forwardTargets,
+  selectedForwardTargetIds,
+  forwardTargetsLoading,
+  onToggleForwardTarget,
+  onCreateForwardTarget,
   conditions,
   error,
   saving,
@@ -100,7 +110,7 @@ export function FilterForm({
         <div className="space-y-2">
           <label className="text-sm font-medium">过滤器名称</label>
           <Input
-            placeholder="例如：BTC 讨论 / Solana 频道观察"
+            placeholder="例如：项目公告 / 值班提醒观察"
             value={name}
             onChange={(event) => onNameChange(event.target.value)}
             className="h-10 bg-background/70 text-base md:text-sm"
@@ -145,6 +155,64 @@ export function FilterForm({
             />
           </span>
         </button>
+
+        <div className="flex flex-col gap-3 rounded-lg bg-background/70 p-3 ring-1 ring-foreground/10">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <BellRing className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-sm font-medium">命中后转发到</div>
+                <div className="text-xs text-muted-foreground">
+                  {selectedForwardTargetIds.length} 个转发通道
+                </div>
+              </div>
+            </div>
+            {forwardTargets.length === 0 && !forwardTargetsLoading && (
+              <Button type="button" variant="outline" size="sm" onClick={onCreateForwardTarget}>
+                <Plus data-icon="inline-start" />
+                新建通道
+              </Button>
+            )}
+          </div>
+
+          {forwardTargetsLoading ? (
+            <div className="flex min-h-12 items-center gap-2 rounded-md bg-muted/45 px-3 text-sm text-muted-foreground">
+              <LoaderCircle className="animate-spin" data-icon="inline-start" />
+              读取转发通道中
+            </div>
+          ) : forwardTargets.length === 0 ? (
+            <div className="rounded-md bg-muted/45 px-3 py-3 text-sm text-muted-foreground">
+              暂无可用转发通道
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {forwardTargets.map((target) => {
+                const checked = selectedForwardTargetIds.includes(target.id);
+                return (
+                  <button
+                    key={target.id}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={checked}
+                    className={cn(
+                      "rounded-md px-2.5 py-1.5 text-xs font-medium transition",
+                      checked
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "bg-muted/55 text-muted-foreground hover:bg-muted hover:text-foreground",
+                      !target.enabled && !checked && "opacity-65",
+                    )}
+                    onClick={() => onToggleForwardTarget(target.id)}
+                  >
+                    {target.name}
+                    {!target.enabled ? " · 停用" : null}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">

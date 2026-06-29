@@ -26,6 +26,8 @@ export async function createForwardTargetRow(input: ForwardTargetCreateInput): P
       name: input.name,
       appriseUrl: input.appriseUrl,
       enabled: input.enabled,
+      titleTemplate: input.titleTemplate,
+      bodyTemplate: input.bodyTemplate,
       createdAt: now,
       updatedAt: now,
       filters: {
@@ -48,6 +50,8 @@ export async function updateForwardTargetRow(
       name: input.name,
       appriseUrl: input.appriseUrl,
       enabled: input.enabled,
+      titleTemplate: input.titleTemplate,
+      bodyTemplate: input.bodyTemplate,
       updatedAt: new Date().toISOString(),
       filters: {
         set: input.filterIds.map((filterId) => ({ id: filterId })),

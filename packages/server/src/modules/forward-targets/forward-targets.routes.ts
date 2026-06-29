@@ -65,8 +65,8 @@ export const forwardTargetsRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post("/test", async (request, reply) => {
     try {
-      const { appriseUrl } = forwardTargetTestInputSchema.parse(request.body ?? {});
-      return await testForwardTarget(appriseUrl);
+      const input = forwardTargetTestInputSchema.parse(request.body ?? {});
+      return await testForwardTarget(input);
     } catch (error: unknown) {
       return sendRouteError(reply, error, "Failed to test forward target");
     }

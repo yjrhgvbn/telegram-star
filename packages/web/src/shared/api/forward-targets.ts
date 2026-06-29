@@ -34,8 +34,7 @@ export const forwardTargetsApi = {
       { method: "DELETE" },
       forwardTargetActionResponseSchema,
     ),
-  test: (appriseUrl: string) => {
-    const data: ForwardTargetTestInput = { appriseUrl };
+  test: (data: ForwardTargetTestInput) => {
     return request(
       "/forward-targets/test",
       {

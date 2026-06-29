@@ -98,7 +98,7 @@ cp .env.example .env
 - `TELEGRAM_API_ID` / `TELEGRAM_API_HASH`：可选；仅在数据库未保存 Telegram 配置时作为兜底
 - `DATABASE_URL` / `DB_PATH`：保留默认即可，Docker 中指向 `/app/data/telegram-star.db`
 
-通知转发配置通过 Web UI 的「通知设置」页面管理，底层采用 Apprise，配置保存在 SQLite 数据库中。
+通知转发配置通过 Web UI 的「通知设置」页面管理，底层采用 Apprise，配置保存在 SQLite 数据库中。每个转发通道可独立设置标题/正文模板，并可使用简洁、详情、Markdown 三种内置格式预设。
 
 其他变量通常保持默认。
 

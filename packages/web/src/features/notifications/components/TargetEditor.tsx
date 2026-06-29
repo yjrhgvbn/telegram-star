@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -11,9 +11,23 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { Filter, ForwardTarget, ForwardTargetCreateInput } from "@/types";
+import type { Filter, ForwardTarget, ForwardTargetCreateInput, ForwardTargetTestInput } from "@/types";
+import {
+  DEFAULT_FORWARD_BODY_TEMPLATE,
+  DEFAULT_FORWARD_TITLE_TEMPLATE,
+  FORWARD_FORMAT_PRESETS,
+  FORWARD_TEMPLATE_SAMPLE_PAYLOAD,
+  FORWARD_TEMPLATE_VARIABLES,
+  renderForwardTemplate,
+} from "@telegram-star/shared/contracts/forward-targets";
 import { isDraftTarget, type EditableForwardTarget } from "../types";
+
+function resolveTemplateValue(value: string, fallback: string): string {
+  const normalized = value.trim();
+  return normalized ? normalized : fallback;
+}
 
 export function TargetEditor({
   target,
@@ -28,13 +42,19 @@ export function TargetEditor({
   onDraftChange: (target: EditableForwardTarget | null) => void;
   onSave: (target: EditableForwardTarget, data: ForwardTargetCreateInput) => Promise<ForwardTarget>;
   onDelete: (target: EditableForwardTarget) => Promise<void>;
-  onTest: (appriseUrl: string) => Promise<unknown>;
+  onTest: (data: ForwardTargetTestInput) => Promise<unknown>;
 }) {
   const isNew = isDraftTarget(target);
   const [name, setName] = useState(target.name);
   const [appriseUrl, setAppriseUrl] = useState(target.appriseUrl);
   const [enabled, setEnabled] = useState(target.enabled);
   const [filterIds, setFilterIds] = useState<number[]>(target.filterIds);
+  const [titleTemplate, setTitleTemplate] = useState(
+    target.titleTemplate || DEFAULT_FORWARD_TITLE_TEMPLATE,
+  );
+  const [bodyTemplate, setBodyTemplate] = useState(
+    target.bodyTemplate || DEFAULT_FORWARD_BODY_TEMPLATE,
+  );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +62,24 @@ export function TargetEditor({
   const [deleteConfirming, setDeleteConfirming] = useState(false);
 
   const invalid = !name.trim() || !appriseUrl.trim();
+  const effectiveTitleTemplate = resolveTemplateValue(titleTemplate, DEFAULT_FORWARD_TITLE_TEMPLATE);
+  const effectiveBodyTemplate = resolveTemplateValue(bodyTemplate, DEFAULT_FORWARD_BODY_TEMPLATE);
+  const activePreset = useMemo(
+    () =>
+      FORWARD_FORMAT_PRESETS.find(
+        (preset) =>
+          preset.titleTemplate === effectiveTitleTemplate &&
+          preset.bodyTemplate === effectiveBodyTemplate,
+      ) ?? null,
+    [effectiveBodyTemplate, effectiveTitleTemplate],
+  );
+  const preview = useMemo(
+    () => ({
+      title: renderForwardTemplate(effectiveTitleTemplate, FORWARD_TEMPLATE_SAMPLE_PAYLOAD),
+      body: renderForwardTemplate(effectiveBodyTemplate, FORWARD_TEMPLATE_SAMPLE_PAYLOAD),
+    }),
+    [effectiveBodyTemplate, effectiveTitleTemplate],
+  );
 
   const syncDraft = (patch: Partial<ForwardTargetCreateInput>) => {
     if (!isNew) return;
@@ -51,6 +89,8 @@ export function TargetEditor({
       appriseUrl,
       enabled,
       filterIds,
+      titleTemplate,
+      bodyTemplate,
       ...patch,
     });
   };
@@ -81,6 +121,32 @@ export function TargetEditor({
     });
   };
 
+  const handleTitleTemplateChange = (value: string) => {
+    setTitleTemplate(value);
+    syncDraft({ titleTemplate: value });
+  };
+
+  const handleBodyTemplateChange = (value: string) => {
+    setBodyTemplate(value);
+    syncDraft({ bodyTemplate: value });
+  };
+
+  const handleApplyPreset = (preset: (typeof FORWARD_FORMAT_PRESETS)[number]) => {
+    setTitleTemplate(preset.titleTemplate);
+    setBodyTemplate(preset.bodyTemplate);
+    syncDraft({
+      titleTemplate: preset.titleTemplate,
+      bodyTemplate: preset.bodyTemplate,
+    });
+  };
+
+  const handleAppendVariable = (variable: string) => {
+    const token = `{{${variable}}}`;
+    const next = bodyTemplate.trim() ? `${bodyTemplate}\n${token}` : token;
+    setBodyTemplate(next);
+    syncDraft({ bodyTemplate: next });
+  };
+
   const handleSave = async () => {
     try {
       if (invalid) throw new Error("名称和推送 URL 不能为空");
@@ -95,6 +161,8 @@ export function TargetEditor({
         appriseUrl: appriseUrl.trim(),
         enabled,
         filterIds,
+        titleTemplate: titleTemplate.trim(),
+        bodyTemplate: bodyTemplate.trim(),
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "保存失败");
@@ -111,7 +179,11 @@ export function TargetEditor({
       setError(null);
       setNotice(null);
       setDeleteConfirming(false);
-      await onTest(appriseUrl.trim());
+      await onTest({
+        appriseUrl: appriseUrl.trim(),
+        titleTemplate: titleTemplate.trim(),
+        bodyTemplate: bodyTemplate.trim(),
+      });
       setNotice("测试消息已发送");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "测试发送失败");
@@ -210,6 +282,94 @@ export function TargetEditor({
             placeholder="dingtalk://Token / discord://ID/Token"
             className="h-10 bg-background/70"
           />
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-lg bg-background/55 p-3 ring-1 ring-foreground/10">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-medium">消息格式</span>
+            <Badge variant="outline" className="rounded-md">
+              {activePreset?.name ?? "自定义"}
+            </Badge>
+          </div>
+
+          <div className="grid gap-1.5 sm:grid-cols-3" role="radiogroup" aria-label="格式预设">
+            {FORWARD_FORMAT_PRESETS.map((preset) => {
+              const active = activePreset?.id === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  className={cn(
+                    "rounded-md px-2.5 py-2 text-sm font-medium transition",
+                    active
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-muted/55 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                  onClick={() => handleApplyPreset(preset)}
+                >
+                  {preset.name}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(260px,0.8fr)]">
+            <div className="flex min-w-0 flex-col gap-3">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium" htmlFor="forward-title-template">
+                  标题模板
+                </label>
+                <Input
+                  id="forward-title-template"
+                  value={titleTemplate}
+                  onChange={(event) => handleTitleTemplateChange(event.target.value)}
+                  placeholder={DEFAULT_FORWARD_TITLE_TEMPLATE}
+                  className="h-10 bg-background/70"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium" htmlFor="forward-body-template">
+                  正文模板
+                </label>
+                <Textarea
+                  id="forward-body-template"
+                  value={bodyTemplate}
+                  onChange={(event) => handleBodyTemplateChange(event.target.value)}
+                  placeholder={DEFAULT_FORWARD_BODY_TEMPLATE}
+                  className="min-h-36 bg-background/70"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium">变量</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {FORWARD_TEMPLATE_VARIABLES.map((variable) => (
+                    <button
+                      key={variable}
+                      type="button"
+                      className="rounded-md bg-muted/55 px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                      onClick={() => handleAppendVariable(variable)}
+                    >
+                      {`{{${variable}}}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-2">
+              <span className="text-sm font-medium">消息预览</span>
+              <div className="min-h-44 rounded-lg bg-muted/45 p-3 ring-1 ring-foreground/10">
+                <div className="break-words text-sm font-medium text-foreground">{preview.title}</div>
+                <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-muted-foreground">
+                  {preview.body}
+                </pre>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-col gap-2">

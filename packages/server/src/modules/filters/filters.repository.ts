@@ -7,8 +7,13 @@ import { serializeConditions } from "../../services/filter-matching.js";
 
 export type FilterRow = Awaited<ReturnType<typeof findFilterRows>>[number];
 
+const filterForwardTargetsInclude = {
+  forwardTargets: { select: { id: true } },
+} as const;
+
 export async function findFilterRows() {
   return db.filter.findMany({
+    include: filterForwardTargetsInclude,
     orderBy: { createdAt: "desc" },
   });
 }
@@ -24,9 +29,13 @@ export async function createFilterRow(input: FilterCreateInput): Promise<FilterR
       name: input.name,
       conditions: serializeConditions(input.conditions),
       autoLocateUnreadNearRead: input.autoLocateUnreadNearRead ?? true,
+      ...(input.forwardTargetIds !== undefined
+        ? { forwardTargets: { connect: input.forwardTargetIds.map((id) => ({ id })) } }
+        : {}),
       createdAt: now,
       updatedAt: now,
     },
+    include: filterForwardTargetsInclude,
   });
 }
 
@@ -41,6 +50,13 @@ export function buildFilterUpdateData(input: FilterUpdateInput) {
     ...(input.autoLocateUnreadNearRead !== undefined
       ? { autoLocateUnreadNearRead: input.autoLocateUnreadNearRead }
       : {}),
+    ...(input.forwardTargetIds !== undefined
+      ? {
+          forwardTargets: {
+            set: input.forwardTargetIds.map((id) => ({ id })),
+          },
+        }
+      : {}),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -49,6 +65,7 @@ export async function updateFilterRow(id: number, input: FilterUpdateInput): Pro
   return db.filter.update({
     where: { id },
     data: buildFilterUpdateData(input),
+    include: filterForwardTargetsInclude,
   });
 }
 
@@ -59,6 +76,7 @@ export async function toggleFilterRow(id: number, enabled: boolean): Promise<Fil
       enabled,
       updatedAt: new Date().toISOString(),
     },
+    include: filterForwardTargetsInclude,
   });
 }
 

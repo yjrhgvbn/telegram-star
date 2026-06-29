@@ -1,5 +1,11 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import {
+  DEFAULT_FORWARD_BODY_TEMPLATE,
+  DEFAULT_FORWARD_TITLE_TEMPLATE,
+  renderForwardTemplate,
+  type ForwardTemplatePayload,
+} from "@telegram-star/shared/contracts/forward-targets";
 import { db } from "../db/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -10,9 +16,20 @@ interface ForwardPayload {
   matchedKeyword: string | null;
   chatTitle: string;
   senderName: string;
+  senderId: string;
   content: string;
   messageDate: string;
   telegramLink: string;
+}
+
+interface ForwardTargetTemplate {
+  titleTemplate: string | null;
+  bodyTemplate: string | null;
+}
+
+interface ForwardNotification {
+  title: string;
+  body: string;
 }
 
 /**
@@ -36,6 +53,43 @@ export async function sendAppriseNotification(appriseUrls: string[], title: stri
   }
 }
 
+function resolveTemplate(template: string | null | undefined, fallback: string): string {
+  const normalized = template?.trim();
+  return normalized ? normalized : fallback;
+}
+
+function buildTemplatePayload(payload: ForwardPayload): ForwardTemplatePayload {
+  return {
+    filterName: payload.filterName,
+    matchedKeyword: payload.matchedKeyword,
+    chatTitle: payload.chatTitle,
+    senderName: payload.senderName,
+    senderId: payload.senderId,
+    content: payload.content,
+    messageDate: new Date(payload.messageDate).toLocaleString(),
+    telegramLink: payload.telegramLink,
+  };
+}
+
+function renderWithFallback(template: string, fallback: string, payload: ForwardTemplatePayload): string {
+  const rendered = renderForwardTemplate(template, payload);
+  return rendered.trim() ? rendered : renderForwardTemplate(fallback, payload);
+}
+
+export function buildForwardNotification(
+  payload: ForwardPayload,
+  target: ForwardTargetTemplate,
+): ForwardNotification {
+  const templatePayload = buildTemplatePayload(payload);
+  const titleTemplate = resolveTemplate(target.titleTemplate, DEFAULT_FORWARD_TITLE_TEMPLATE);
+  const bodyTemplate = resolveTemplate(target.bodyTemplate, DEFAULT_FORWARD_BODY_TEMPLATE);
+
+  return {
+    title: renderWithFallback(titleTemplate, DEFAULT_FORWARD_TITLE_TEMPLATE, templatePayload),
+    body: renderWithFallback(bodyTemplate, DEFAULT_FORWARD_BODY_TEMPLATE, templatePayload),
+  };
+}
+
 export async function forwardMatchedMessage(payload: ForwardPayload): Promise<void> {
   if (!payload.filterId) {
     return;
@@ -53,6 +107,8 @@ export async function forwardMatchedMessage(payload: ForwardPayload): Promise<vo
     },
     select: {
       appriseUrl: true,
+      titleTemplate: true,
+      bodyTemplate: true,
     },
   });
 
@@ -60,20 +116,13 @@ export async function forwardMatchedMessage(payload: ForwardPayload): Promise<vo
     return;
   }
 
-  const appriseUrls = targets.map((t) => t.appriseUrl);
-
-  const title = `[Telegram] 命中规则: ${payload.filterName}`;
-  const body = `【群组】: ${payload.chatTitle}
-【发送者】: ${payload.senderName}
-【时间】: ${new Date(payload.messageDate).toLocaleString()}
-
-${payload.content}
-
-链接: ${payload.telegramLink}`;
-
-  // Fire and forget, or wait for it (we wait for it here so we can log errors, but it won't block the caller too much if it's async)
-  // Actually, the caller awaits this, so it delays the process. We might want to let it run in background.
-  sendAppriseNotification(appriseUrls, title, body).catch(err => {
+  // 每个转发通道独立渲染模板，避免一个通道的格式影响其它目标。
+  Promise.all(
+    targets.map((target) => {
+      const notification = buildForwardNotification(payload, target);
+      return sendAppriseNotification([target.appriseUrl], notification.title, notification.body);
+    }),
+  ).catch(err => {
     console.error("[Notify] Unhandled error in sendAppriseNotification:", err);
   });
 }

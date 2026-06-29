@@ -8,13 +8,13 @@ describe("filter form utils", () => {
       {
         id: "keyword-1",
         type: "keyword",
-        values: [" BTC ", ""],
-        input: "ETH， SOL\n  DOGE ",
+        values: [" 发布 ", ""],
+        input: "公告， 需求\n  修复 ",
       },
     ];
 
     expect(normalizeConditions(conditions)).toEqual([
-      { type: "keyword", values: ["BTC", "ETH", "SOL", "DOGE"] },
+      { type: "keyword", values: ["发布", "公告", "需求", "修复"] },
     ]);
   });
 
@@ -43,12 +43,12 @@ describe("filter form utils", () => {
   });
 
   it("converts persisted conditions into editable drafts without sharing value arrays", () => {
-    const source = [{ type: "keyword" as const, values: ["BTC"] }];
+    const source = [{ type: "keyword" as const, values: ["发布"] }];
     const drafts = toDraftConditions(source);
 
-    drafts[0]?.values.push("ETH");
+    drafts[0]?.values.push("公告");
 
-    expect(drafts).toMatchObject([{ type: "keyword", values: ["BTC", "ETH"], input: "" }]);
-    expect(source).toEqual([{ type: "keyword", values: ["BTC"] }]);
+    expect(drafts).toMatchObject([{ type: "keyword", values: ["发布", "公告"], input: "" }]);
+    expect(source).toEqual([{ type: "keyword", values: ["发布"] }]);
   });
 });

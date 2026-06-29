@@ -1,10 +1,15 @@
 import {
+  DEFAULT_FORWARD_BODY_TEMPLATE,
+  DEFAULT_FORWARD_TITLE_TEMPLATE,
+  FORWARD_TEMPLATE_SAMPLE_PAYLOAD,
   forwardTargetActionResponseSchema,
   forwardTargetListSchema,
   forwardTargetSchema,
+  renderForwardTemplate,
   type ForwardTarget,
   type ForwardTargetActionResponse,
   type ForwardTargetCreateInput,
+  type ForwardTargetTestInput,
   type ForwardTargetUpdateInput,
 } from "@telegram-star/shared/contracts/forward-targets";
 import { sendAppriseNotification } from "../../services/notifier.js";
@@ -32,14 +37,16 @@ export function toApiForwardTarget(target: ForwardTargetRow): ForwardTarget {
   return forwardTargetSchema.parse({
     ...target,
     filterIds: target.filters.map((filter) => filter.id),
+    titleTemplate: target.titleTemplate ?? DEFAULT_FORWARD_TITLE_TEMPLATE,
+    bodyTemplate: target.bodyTemplate ?? DEFAULT_FORWARD_BODY_TEMPLATE,
   });
 }
 
-export function buildForwardTargetTestNotification(): ForwardTargetTestNotification {
-  // 测试发送不绑定过滤器，也不写库；只验证用户输入的 Apprise URL 是否可投递。
+export function buildForwardTargetTestNotification(input: ForwardTargetTestInput): ForwardTargetTestNotification {
+  // 测试发送不绑定过滤器，也不写库；使用同一组样例变量验证当前模板的真实推送效果。
   return {
-    title: "[Telegram] 测试消息",
-    body: "这是一条来自 Telegram Star 的测试消息，如果您能看到此消息，说明转发通道配置成功！",
+    title: renderForwardTemplate(input.titleTemplate, FORWARD_TEMPLATE_SAMPLE_PAYLOAD),
+    body: renderForwardTemplate(input.bodyTemplate, FORWARD_TEMPLATE_SAMPLE_PAYLOAD),
   };
 }
 
@@ -70,8 +77,8 @@ export async function deleteForwardTarget(id: number): Promise<ForwardTargetActi
   return forwardTargetActionResponseSchema.parse({ success: true });
 }
 
-export async function testForwardTarget(appriseUrl: string): Promise<ForwardTargetActionResponse> {
-  const notification = buildForwardTargetTestNotification();
-  await sendAppriseNotification([appriseUrl], notification.title, notification.body);
+export async function testForwardTarget(input: ForwardTargetTestInput): Promise<ForwardTargetActionResponse> {
+  const notification = buildForwardTargetTestNotification(input);
+  await sendAppriseNotification([input.appriseUrl], notification.title, notification.body);
   return forwardTargetActionResponseSchema.parse({ success: true });
 }

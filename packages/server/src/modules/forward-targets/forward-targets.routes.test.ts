@@ -1,4 +1,8 @@
-import type { ForwardTarget } from "@telegram-star/shared/contracts/forward-targets";
+import {
+  DEFAULT_FORWARD_BODY_TEMPLATE,
+  DEFAULT_FORWARD_TITLE_TEMPLATE,
+  type ForwardTarget,
+} from "@telegram-star/shared/contracts/forward-targets";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRouteTestApp, parseJson } from "../../test/routeTestUtils.js";
 import { forwardTargetsRoutes } from "./forward-targets.routes.js";
@@ -28,6 +32,8 @@ function createTarget(id: number, patch: Partial<ForwardTarget> = {}): ForwardTa
     appriseUrl: `test://${id}`,
     enabled: true,
     filterIds: [id],
+    titleTemplate: DEFAULT_FORWARD_TITLE_TEMPLATE,
+    bodyTemplate: DEFAULT_FORWARD_BODY_TEMPLATE,
     createdAt: `2026-06-29T00:00:0${id}.000Z`,
     updatedAt: `2026-06-29T00:00:0${id}.000Z`,
     ...patch,
@@ -95,12 +101,16 @@ describe("forward target routes", () => {
       appriseUrl: "mailto://user:pass@example.com",
       enabled: true,
       filterIds: [1, 2],
+      titleTemplate: DEFAULT_FORWARD_TITLE_TEMPLATE,
+      bodyTemplate: DEFAULT_FORWARD_BODY_TEMPLATE,
     });
     expect(forwardTargetsService.updateForwardTarget).toHaveBeenCalledWith(2, {
       name: "updated",
       appriseUrl: "mailto://user:pass@example.com",
       enabled: false,
       filterIds: [2],
+      titleTemplate: DEFAULT_FORWARD_TITLE_TEMPLATE,
+      bodyTemplate: DEFAULT_FORWARD_BODY_TEMPLATE,
     });
   });
 
@@ -152,7 +162,11 @@ describe("forward target routes", () => {
     const testResponse = await app.inject({
       method: "POST",
       url: "/api/forward-targets/test",
-      payload: { appriseUrl: "mailto://user:pass@example.com" },
+      payload: {
+        appriseUrl: "mailto://user:pass@example.com",
+        titleTemplate: "{{content}}",
+        bodyTemplate: "{{chatTitle}}",
+      },
     });
     await app.close();
 
@@ -161,6 +175,10 @@ describe("forward target routes", () => {
     expect(deleteResponse.statusCode).toBe(200);
     expect(testResponse.statusCode).toBe(200);
     expect(forwardTargetsService.deleteForwardTarget).toHaveBeenCalledWith(2);
-    expect(forwardTargetsService.testForwardTarget).toHaveBeenCalledWith("mailto://user:pass@example.com");
+    expect(forwardTargetsService.testForwardTarget).toHaveBeenCalledWith({
+      appriseUrl: "mailto://user:pass@example.com",
+      titleTemplate: "{{content}}",
+      bodyTemplate: "{{chatTitle}}",
+    });
   });
 });

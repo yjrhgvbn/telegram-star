@@ -12,12 +12,12 @@ const message = {
   chatTitle: "Signals",
   senderName: "Alice",
   senderId: "42",
-  content: "BTC update",
+  content: "Project update",
   messageDate: "2026-06-25T00:00:00.000Z",
   telegramLink: "https://t.me/c/1/1001",
   isRead: false,
   matchedFilterId: 1,
-  matchedKeyword: "BTC",
+  matchedKeyword: "update",
   filterName: "Markets",
   createdAt: "2026-06-25T00:00:01.000Z",
   mediaType: null,
@@ -39,7 +39,7 @@ describe("messages contract", () => {
         limit: "40",
         isRead: "false",
         filterId: "3",
-        search: " BTC ",
+        search: " update ",
       }),
     ).toEqual({
       cursorId: 12,
@@ -48,7 +48,7 @@ describe("messages contract", () => {
       limit: 40,
       isRead: false,
       filterId: 3,
-      search: "BTC",
+      search: "update",
     });
   });
 

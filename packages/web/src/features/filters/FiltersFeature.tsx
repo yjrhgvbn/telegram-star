@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ListFilter, Plus, SlidersHorizontal } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
@@ -8,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useFilters } from "@/hooks/useFilters";
 import { cn } from "@/lib/utils";
+import { queryKeys } from "@/shared/query/queryKeys";
 import type { HistoricalFilterPreviewMessage } from "@/types";
 import { FilterForm } from "./components/FilterForm";
 import { PreviewPanel } from "./components/PreviewPanel";
@@ -19,10 +21,15 @@ export function FiltersFeature() {
   const navigate = useNavigate();
   const { authStatus, authLoading, handleLoginSuccess } = useAuthStatus();
   const { filters, createFilter, updateFilter, deleteFilter, toggleFilter } = useFilters();
+  const forwardTargetsQuery = useQuery({
+    queryKey: queryKeys.forwardTargets.all,
+    queryFn: api.forwardTargets.list,
+  });
 
   const [selectedFilterId, setSelectedFilterId] = useState<string>("new");
   const [name, setName] = useState("");
   const [autoLocateUnreadNearRead, setAutoLocateUnreadNearRead] = useState(true);
+  const [forwardTargetIds, setForwardTargetIds] = useState<number[]>([]);
   const [conditions, setConditions] = useState<DraftCondition[]>([createDraftCondition()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -35,6 +42,7 @@ export function FiltersFeature() {
 
   const selectedFilter = filters.find((filter) => String(filter.id) === selectedFilterId) ?? null;
   const enabledFilters = filters.filter((filter) => filter.enabled).length;
+  const forwardTargets = forwardTargetsQuery.data ?? [];
 
   // 路由参数变化时同步选中的过滤器
   useEffect(() => {
@@ -50,6 +58,7 @@ export function FiltersFeature() {
     if (selectedFilterId === "new") {
       setName("");
       setAutoLocateUnreadNearRead(true);
+      setForwardTargetIds([]);
       setConditions([createDraftCondition()]);
       setError("");
       setPreviewMessages([]);
@@ -62,6 +71,7 @@ export function FiltersFeature() {
 
     setName(selectedFilter.name);
     setAutoLocateUnreadNearRead(selectedFilter.autoLocateUnreadNearRead);
+    setForwardTargetIds(selectedFilter.forwardTargetIds);
     setConditions(toDraftConditions(selectedFilter.conditions));
     setError("");
     setPreviewMessages([]);
@@ -124,7 +134,20 @@ export function FiltersFeature() {
     if (!name.trim()) throw new Error("过滤器名称不能为空");
     if (mergedConditions.length === 0) throw new Error("至少添加一个有效条件");
 
-    return { name: name.trim(), conditions: mergedConditions, autoLocateUnreadNearRead };
+    return {
+      name: name.trim(),
+      conditions: mergedConditions,
+      autoLocateUnreadNearRead,
+      forwardTargetIds,
+    };
+  };
+
+  const toggleForwardTarget = (targetId: number) => {
+    setForwardTargetIds((current) =>
+      current.includes(targetId)
+        ? current.filter((id) => id !== targetId)
+        : [...current, targetId],
+    );
   };
 
   // ---- 事件处理 ----
@@ -313,6 +336,7 @@ export function FiltersFeature() {
                             <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
                               <span>{keywordCount} 关键词</span>
                               <span>{chatCount} 会话</span>
+                              <span>{filter.forwardTargetIds.length} 转发</span>
                             </div>
                           </button>
                         );
@@ -329,6 +353,11 @@ export function FiltersFeature() {
                   onNameChange={setName}
                   autoLocateUnreadNearRead={autoLocateUnreadNearRead}
                   onAutoLocateChange={setAutoLocateUnreadNearRead}
+                  forwardTargets={forwardTargets}
+                  selectedForwardTargetIds={forwardTargetIds}
+                  forwardTargetsLoading={forwardTargetsQuery.isLoading}
+                  onToggleForwardTarget={toggleForwardTarget}
+                  onCreateForwardTarget={() => navigate("/notifications")}
                   conditions={conditions}
                   error={error}
                   saving={saving}

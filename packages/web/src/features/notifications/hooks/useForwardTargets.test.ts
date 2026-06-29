@@ -5,6 +5,10 @@ import { api } from "@/api/client";
 import { queryKeys } from "@/shared/query/queryKeys";
 import { createQueryWrapper, createTestQueryClient } from "@/test/queryTestUtils";
 import type { ForwardTarget } from "@/types";
+import {
+  DEFAULT_FORWARD_BODY_TEMPLATE,
+  DEFAULT_FORWARD_TITLE_TEMPLATE,
+} from "@telegram-star/shared/contracts/forward-targets";
 import { NEW_FORWARD_TARGET_ID, type ForwardTargetDraft } from "../types";
 import { useForwardTargets } from "./useForwardTargets";
 
@@ -15,6 +19,8 @@ function createTarget(id: number, patch: Partial<ForwardTarget> = {}): ForwardTa
     appriseUrl: `test://${id}`,
     enabled: true,
     filterIds: [id],
+    titleTemplate: DEFAULT_FORWARD_TITLE_TEMPLATE,
+    bodyTemplate: DEFAULT_FORWARD_BODY_TEMPLATE,
     createdAt: `2026-06-29T00:00:0${id}.000Z`,
     updatedAt: `2026-06-29T00:00:0${id}.000Z`,
     ...patch,
@@ -88,6 +94,8 @@ describe("useForwardTargets", () => {
       appriseUrl: "test://created",
       enabled: true,
       filterIds: [2],
+      titleTemplate: DEFAULT_FORWARD_TITLE_TEMPLATE,
+      bodyTemplate: DEFAULT_FORWARD_BODY_TEMPLATE,
     };
 
     await act(async () => {
@@ -96,6 +104,8 @@ describe("useForwardTargets", () => {
         appriseUrl: draft.appriseUrl,
         enabled: draft.enabled,
         filterIds: draft.filterIds,
+        titleTemplate: draft.titleTemplate,
+        bodyTemplate: draft.bodyTemplate,
       });
     });
     expect(queryClient.getQueryData(queryKeys.forwardTargets.all)).toEqual([created, target]);
@@ -106,6 +116,8 @@ describe("useForwardTargets", () => {
         appriseUrl: target.appriseUrl,
         enabled: target.enabled,
         filterIds: target.filterIds,
+        titleTemplate: target.titleTemplate,
+        bodyTemplate: target.bodyTemplate,
       });
     });
     expect(queryClient.getQueryData(queryKeys.forwardTargets.all)).toEqual([created, updated]);

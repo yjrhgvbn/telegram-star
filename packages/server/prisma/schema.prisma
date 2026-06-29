@@ -75,6 +75,8 @@ model ForwardTarget {
   name        String
   appriseUrl  String   @map("apprise_url")
   enabled     Boolean  @default(true)
+  titleTemplate String? @map("title_template")
+  bodyTemplate  String? @map("body_template")
   createdAt   String   @map("created_at")
   updatedAt   String   @map("updated_at")
 

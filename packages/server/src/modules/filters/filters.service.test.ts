@@ -13,6 +13,7 @@ describe("filters.service", () => {
       ]),
       enabled: true,
       autoLocateUnreadNearRead: false,
+      forwardTargets: [{ id: 2 }, { id: 5 }],
       createdAt: "2026-06-29T00:00:00.000Z",
       updatedAt: "2026-06-29T01:00:00.000Z",
     });
@@ -22,6 +23,7 @@ describe("filters.service", () => {
       { type: "chat", values: ["1001"] },
     ]);
     expect(filter.autoLocateUnreadNearRead).toBe(false);
+    expect(filter.forwardTargetIds).toEqual([2, 5]);
   });
 
   it("normalizes history scope without inventing defaults", () => {
@@ -43,11 +45,15 @@ describe("filters.service", () => {
     const updateData = buildFilterUpdateData({
       conditions: [{ type: "keyword", values: ["夜"] }],
       autoLocateUnreadNearRead: false,
+      forwardTargetIds: [2, 5],
     });
 
     expect(updateData).toMatchObject({
       conditions: JSON.stringify([{ type: "keyword", values: ["夜"] }]),
       autoLocateUnreadNearRead: false,
+      forwardTargets: {
+        set: [{ id: 2 }, { id: 5 }],
+      },
     });
     expect(updateData).not.toHaveProperty("name");
     expect(updateData.updatedAt).toEqual(expect.any(String));

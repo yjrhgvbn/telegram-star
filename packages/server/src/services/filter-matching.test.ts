@@ -10,7 +10,7 @@ describe("filter matching", () => {
   it("parses supported conditions and drops invalid or empty values", () => {
     const conditions = parseConditions(
       JSON.stringify([
-        { type: "keyword", values: [" BTC ", "", 123, "ETH"] },
+        { type: "keyword", values: [" Release ", "", 123, "Notice"] },
         { type: "chat", values: [" 1001 "] },
         { type: "unknown", values: ["ignored"] },
         { type: "keyword", values: [] },
@@ -18,28 +18,28 @@ describe("filter matching", () => {
     );
 
     expect(conditions).toEqual([
-      { type: "keyword", values: ["BTC", "ETH"] },
+      { type: "keyword", values: ["Release", "Notice"] },
       { type: "chat", values: ["1001"] },
     ]);
   });
 
   it("requires every condition to match and keeps the first matched keyword", () => {
     const result = matchFilterConditions(
-      { chatId: "chat-1", content: "Daily BTC and ETH market notes" },
+      { chatId: "chat-1", content: "Daily RELEASE and NOTICE notes" },
       [
-        { type: "keyword", values: ["btc", "eth"] },
+        { type: "keyword", values: ["release", "notice"] },
         { type: "chat", values: ["chat-1", "chat-2"] },
       ],
     );
 
-    expect(result).toEqual({ matched: true, matchedKeyword: "btc" });
+    expect(result).toEqual({ matched: true, matchedKeyword: "release" });
   });
 
   it("fails when any condition does not match", () => {
     const result = matchFilterConditions(
-      { chatId: "chat-9", content: "Daily BTC market notes" },
+      { chatId: "chat-9", content: "Daily RELEASE notes" },
       [
-        { type: "keyword", values: ["btc"] },
+        { type: "keyword", values: ["release"] },
         { type: "chat", values: ["chat-1"] },
       ],
     );
@@ -63,7 +63,7 @@ describe("filter matching", () => {
     expect(
       hasConflictingChatConditions([
         { type: "chat", values: ["chat-1"] },
-        { type: "keyword", values: ["btc"] },
+        { type: "keyword", values: ["release"] },
         { type: "chat", values: ["chat-2"] },
       ]),
     ).toBe(true);

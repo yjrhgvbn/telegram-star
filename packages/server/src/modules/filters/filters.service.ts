@@ -46,6 +46,7 @@ export function toApiFilter(row: FilterRow): Filter {
   return filterSchema.parse({
     ...row,
     conditions: parseConditions(row.conditions),
+    forwardTargetIds: row.forwardTargets.map((target) => target.id),
   });
 }
 

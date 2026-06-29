@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { queryKeys } from "@/shared/query/queryKeys";
-import type { Filter, FilterCondition, FilterHistoryScope } from "../types";
+import type { Filter, FilterCreateInput, FilterHistoryScope, FilterUpdateInput } from "../types";
 
 export function useFilters() {
   const queryClient = useQueryClient();
@@ -24,22 +24,20 @@ export function useFilters() {
         created,
         ...(current ?? []),
       ]);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.forwardTargets.all });
     },
   });
 
   const { mutateAsync: updateFilterAsync } = useMutation({
     mutationFn: (variables: {
       id: number;
-      data: {
-        name?: string;
-        conditions?: FilterCondition[];
-        autoLocateUnreadNearRead?: boolean;
-      };
+      data: FilterUpdateInput;
     }) => api.filters.update(variables.id, variables.data),
     onSuccess: (updated, variables) => {
       queryClient.setQueryData<Filter[]>(queryKeys.filters.all, (current) =>
         (current ?? []).map((filter) => (filter.id === variables.id ? updated : filter)),
       );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.forwardTargets.all });
     },
   });
 
@@ -49,6 +47,7 @@ export function useFilters() {
       queryClient.setQueryData<Filter[]>(queryKeys.filters.all, (current) =>
         (current ?? []).filter((filter) => filter.id !== id),
       );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.forwardTargets.all });
     },
   });
 
@@ -67,14 +66,14 @@ export function useFilters() {
   });
 
   const createFilter = useCallback(
-    async (data: { name: string; conditions: FilterCondition[]; autoLocateUnreadNearRead?: boolean }) => {
+    async (data: FilterCreateInput) => {
       return createFilterAsync(data);
     },
     [createFilterAsync]
   );
 
   const updateFilter = useCallback(
-    async (id: number, data: { name?: string; conditions?: FilterCondition[]; autoLocateUnreadNearRead?: boolean }) => {
+    async (id: number, data: FilterUpdateInput) => {
       return updateFilterAsync({ id, data });
     },
     [updateFilterAsync]

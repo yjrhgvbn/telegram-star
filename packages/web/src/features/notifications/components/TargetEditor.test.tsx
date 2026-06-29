@@ -3,16 +3,22 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Filter, ForwardTarget } from "@/types";
+import {
+  DEFAULT_FORWARD_BODY_TEMPLATE,
+  DEFAULT_FORWARD_TITLE_TEMPLATE,
+  FORWARD_FORMAT_PRESETS,
+} from "@telegram-star/shared/contracts/forward-targets";
 import { TargetEditor } from "./TargetEditor";
 import type { EditableForwardTarget } from "../types";
 
 function createFilter(patch: Partial<Filter> = {}): Filter {
   return {
     id: 1,
-    name: "将夜",
-    conditions: [{ type: "keyword", values: ["将夜"] }],
+    name: "测试标题",
+    conditions: [{ type: "keyword", values: ["测试标题"] }],
     enabled: true,
     autoLocateUnreadNearRead: true,
+    forwardTargetIds: [1],
     createdAt: "2026-06-29T00:00:00.000Z",
     updatedAt: "2026-06-29T00:00:00.000Z",
     ...patch,
@@ -26,6 +32,8 @@ function createTarget(patch: Partial<ForwardTarget> = {}): ForwardTarget {
     appriseUrl: "dingtalk://old-token",
     enabled: true,
     filterIds: [1],
+    titleTemplate: DEFAULT_FORWARD_TITLE_TEMPLATE,
+    bodyTemplate: DEFAULT_FORWARD_BODY_TEMPLATE,
     createdAt: "2026-06-29T00:00:00.000Z",
     updatedAt: "2026-06-29T00:00:00.000Z",
     ...patch,
@@ -90,7 +98,32 @@ describe("TargetEditor", () => {
         appriseUrl: "discord://channel/token",
         enabled: false,
         filterIds: [1, 2],
+        titleTemplate: DEFAULT_FORWARD_TITLE_TEMPLATE,
+        bodyTemplate: DEFAULT_FORWARD_BODY_TEMPLATE,
       },
+    );
+  });
+
+  it("applies a built-in format preset and updates the live preview", async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderTargetEditor();
+    const markdownPreset = FORWARD_FORMAT_PRESETS.find((preset) => preset.id === "markdown");
+
+    await user.click(screen.getByRole("radio", { name: "Markdown 模式" }));
+
+    expect((screen.getByLabelText("标题模板") as HTMLInputElement).value).toBe(markdownPreset?.titleTemplate);
+    expect((screen.getByLabelText("正文模板") as HTMLTextAreaElement).value).toBe(markdownPreset?.bodyTemplate);
+    expect(screen.getByText((content) => content.includes("**群组**：追踪频道"))).not.toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /保存/ }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1 }),
+      expect.objectContaining({
+        titleTemplate: markdownPreset?.titleTemplate,
+        bodyTemplate: markdownPreset?.bodyTemplate,
+      }),
     );
   });
 
@@ -98,9 +131,15 @@ describe("TargetEditor", () => {
     const user = userEvent.setup();
     const { onTest } = renderTargetEditor();
 
-    await user.click(screen.getByRole("button", { name: /测试/ }));
+    await user.click(screen.getByRole("button", { name: "测试" }));
 
-    await waitFor(() => expect(onTest).toHaveBeenCalledWith("dingtalk://old-token"));
+    await waitFor(() =>
+      expect(onTest).toHaveBeenCalledWith({
+        appriseUrl: "dingtalk://old-token",
+        titleTemplate: DEFAULT_FORWARD_TITLE_TEMPLATE,
+        bodyTemplate: DEFAULT_FORWARD_BODY_TEMPLATE,
+      }),
+    );
     expect(await screen.findByText("测试消息已发送")).not.toBeNull();
   });
 

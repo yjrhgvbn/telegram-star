@@ -9,12 +9,15 @@ export const filterConditionSchema = z.object({
 
 export const filterConditionsSchema = z.array(filterConditionSchema).min(1);
 
+export const filterForwardTargetIdsSchema = z.array(z.number().int().positive());
+
 export const filterSchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
   conditions: z.array(filterConditionSchema),
   enabled: z.boolean(),
   autoLocateUnreadNearRead: z.boolean(),
+  forwardTargetIds: filterForwardTargetIdsSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -26,6 +29,7 @@ export const filterCreateInputSchema = z
     name: z.string().trim().min(1, "name is required"),
     conditions: filterConditionsSchema,
     autoLocateUnreadNearRead: z.boolean().optional(),
+    forwardTargetIds: filterForwardTargetIdsSchema.optional(),
   })
   .strict();
 
@@ -34,6 +38,7 @@ export const filterUpdateInputSchema = z
     name: z.string().trim().min(1, "name is required").optional(),
     conditions: filterConditionsSchema.optional(),
     autoLocateUnreadNearRead: z.boolean().optional(),
+    forwardTargetIds: filterForwardTargetIdsSchema.optional(),
   })
   .strict();
 

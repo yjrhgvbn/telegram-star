@@ -3,8 +3,10 @@ export type {
   FilterBackfillResponse,
   FilterCondition,
   FilterConditionType,
+  FilterCreateInput,
   FilterHistoryScope,
   FilterPreviewResponse,
+  FilterUpdateInput,
   HistoricalFilterPreviewMessage,
   LiveChatMessage,
 } from "@telegram-star/shared/contracts/filters";

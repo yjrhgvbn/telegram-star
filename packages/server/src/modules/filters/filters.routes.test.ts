@@ -34,6 +34,7 @@ function createFilter(id: number, patch: Partial<Filter> = {}): Filter {
     conditions: [{ type: "keyword", values: [`keyword-${id}`] }],
     enabled: true,
     autoLocateUnreadNearRead: true,
+    forwardTargetIds: [],
     createdAt: `2026-06-29T00:00:0${id}.000Z`,
     updatedAt: `2026-06-29T00:00:0${id}.000Z`,
     ...patch,
@@ -75,6 +76,7 @@ describe("filter routes", () => {
         name: "created",
         conditions: [{ type: "keyword", values: ["night"] }],
         autoLocateUnreadNearRead: false,
+        forwardTargetIds: [2],
       },
     });
     await app.close();
@@ -85,6 +87,7 @@ describe("filter routes", () => {
       name: "created",
       conditions: [{ type: "keyword", values: ["night"] }],
       autoLocateUnreadNearRead: false,
+      forwardTargetIds: [2],
     });
   });
 
@@ -142,6 +145,7 @@ describe("filter routes", () => {
       payload: {
         name: "updated",
         conditions: [{ type: "keyword", values: ["updated"] }],
+        forwardTargetIds: [4],
       },
     });
     const toggleResponse = await app.inject({ method: "PATCH", url: "/api/filters/3/toggle" });
@@ -167,6 +171,7 @@ describe("filter routes", () => {
     expect(filtersService.updateFilter).toHaveBeenCalledWith(3, {
       name: "updated",
       conditions: [{ type: "keyword", values: ["updated"] }],
+      forwardTargetIds: [4],
     });
     expect(filtersService.toggleFilter).toHaveBeenCalledWith(3);
     expect(filtersService.previewFilterHistory).toHaveBeenCalledWith({

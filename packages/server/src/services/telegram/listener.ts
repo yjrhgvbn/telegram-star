@@ -218,6 +218,7 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
       matchedKeyword: match.matchedKeyword,
       chatTitle,
       senderName,
+      senderId,
       content: textContent || (mediaInfo ? `[${mediaInfo.mediaType}]` : ""),
       messageDate: new Date((message.date || 0) * 1000).toISOString(),
       telegramLink,

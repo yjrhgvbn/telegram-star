@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { queryKeys } from "@/shared/query/queryKeys";
-import type { ForwardTarget, ForwardTargetCreateInput } from "@/types";
+import type { ForwardTarget, ForwardTargetCreateInput, ForwardTargetTestInput } from "@/types";
 import {
   createDraftTarget,
   isDraftTarget,
@@ -32,6 +32,7 @@ export function useForwardTargets() {
         saved,
         ...(current ?? []),
       ]);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.filters.all });
     },
   });
 
@@ -45,6 +46,7 @@ export function useForwardTargets() {
       queryClient.setQueryData<ForwardTarget[]>(queryKeys.forwardTargets.all, (current) =>
         (current ?? []).map((target) => (target.id === variables.id ? saved : target)),
       );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.filters.all });
     },
   });
 
@@ -57,6 +59,7 @@ export function useForwardTargets() {
       queryClient.setQueryData<ForwardTarget[]>(queryKeys.forwardTargets.all, (current) =>
         (current ?? []).filter((target) => target.id !== id),
       );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.filters.all });
     },
   });
 
@@ -133,8 +136,8 @@ export function useForwardTargets() {
     [deleteTargetAsync, targets],
   );
 
-  const testTarget = useCallback((appriseUrl: string) => {
-    return testTargetAsync(appriseUrl);
+  const testTarget = useCallback((data: ForwardTargetTestInput) => {
+    return testTargetAsync(data);
   }, [testTargetAsync]);
 
   const loading =

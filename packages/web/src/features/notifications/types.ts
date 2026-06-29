@@ -1,4 +1,8 @@
 import type { ForwardTarget, ForwardTargetCreateInput } from "@/types";
+import {
+  DEFAULT_FORWARD_BODY_TEMPLATE,
+  DEFAULT_FORWARD_TITLE_TEMPLATE,
+} from "@telegram-star/shared/contracts/forward-targets";
 
 export const NEW_FORWARD_TARGET_ID = "new";
 
@@ -12,6 +16,8 @@ export function createDraftTarget(): ForwardTargetDraft {
     appriseUrl: "",
     enabled: true,
     filterIds: [],
+    titleTemplate: DEFAULT_FORWARD_TITLE_TEMPLATE,
+    bodyTemplate: DEFAULT_FORWARD_BODY_TEMPLATE,
   };
 }
 

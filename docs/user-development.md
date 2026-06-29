@@ -25,7 +25,7 @@ cp .env.example .env
 
 Telegram API ID/Hash 推荐在首次打开 Web UI 时填写，配置会保存到 SQLite 数据库。也可以在 `.env` 中预先填写 `TELEGRAM_API_ID` / `TELEGRAM_API_HASH`，数据库配置会优先于 `.env`，`.env` 仅在数据库未保存配置时兜底。
 
-通知转发配置通过 Web UI 的「通知设置」页面管理，底层调用 Apprise 命令行，配置存储于 SQLite 数据库中。
+通知转发配置通过 Web UI 的「通知设置」页面管理，底层调用 Apprise 命令行，配置存储于 SQLite 数据库中。每个转发通道可独立设置标题/正文模板，并可使用简洁、详情、Markdown 三种内置格式预设。
 
 > **注意**：本地开发环境如果在非 Docker 下运行 `pnpm dev:server` 且需要测试通知推送功能，请确保本机的系统或环境中已安装 apprise 命令行工具，例如：
 > `pip3 install apprise --break-system-packages` 或 `brew install apprise`。
