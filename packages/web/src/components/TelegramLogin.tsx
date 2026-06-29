@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { queryKeys } from "@/shared/query/queryKeys";
 import { api } from "../api/client";
 import type { AuthStatus } from "../types";
 
@@ -13,6 +15,7 @@ interface Props {
 }
 
 export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
+  const queryClient = useQueryClient();
   const [telegramConfigured, setTelegramConfigured] = useState(authStatus.telegramConfigured);
   const [step, setStep] = useState<"config" | "phone" | "code" | "password">(
     authStatus.telegramConfigured ? "phone" : "config",
@@ -43,12 +46,14 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
     setLoading(true);
     setError("");
     try {
-      await api.config.update({
+      const nextConfig = await api.config.update({
         telegram: {
           apiId: apiId.trim(),
           apiHash: apiHash.trim(),
         },
       });
+      queryClient.setQueryData(queryKeys.config.status, nextConfig);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auth.status });
       setTelegramConfigured(true);
       setStep("phone");
     } catch (err: any) {

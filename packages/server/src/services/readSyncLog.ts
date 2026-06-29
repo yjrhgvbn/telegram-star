@@ -1,11 +1,12 @@
 import { db } from "../db/index.js";
+import type { ReadSyncLogLevel } from "@telegram-star/shared/contracts/messages";
 
 const READ_SYNC_LOG_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 
 let lastCleanupMs = 0;
 
-export type ReadSyncLogLevel = "info" | "warn" | "error";
+export type { ReadSyncLogLevel } from "@telegram-star/shared/contracts/messages";
 
 interface ReadSyncLogInput {
   level: ReadSyncLogLevel;

@@ -16,7 +16,7 @@ Telegram 消息追踪工具 - 监控群组/频道消息，关键词过滤，已�
 
 | 层级 | 技术 |
 | :--- | :--- |
-| 前端 | React + Vite + TypeScript |
+| 前端 | React + Vite + TypeScript + TanStack Query |
 | 后端 | Fastify + TypeScript |
 | Telegram | GramJS (MTProto) |
 | ORM | Prisma ORM v7 |
@@ -47,6 +47,13 @@ pnpm install
 # 4. 同步数据库结构并启动开发服务
 pnpm db:deploy
 pnpm dev
+
+# 可选：运行单元测试
+pnpm test
+
+# 可选：只运行前端或后端/共享包测试
+pnpm test:web
+pnpm test:server
 ```
 
 前端: http://localhost:5173
@@ -80,16 +87,24 @@ open http://localhost:3000
 ```
 telegram-star/
 ├── packages/
+│   ├── shared/          # 前后端共享 contract / schema / 类型
 │   ├── server/          # Fastify 后端
 │   │   └── src/
-│   │       ├── db/      # Prisma runtime + SQLite
-│   │       ├── routes/  # API 路由
-│   │       └── services/ # Telegram 服务
+│   │       ├── db/       # Prisma runtime + SQLite
+│   │       ├── modules/  # 领域模块 route/service/repository
+│   │       │   ├── messages/
+│   │       │   ├── media/
+│   │       │   ├── config/
+│   │       │   ├── filters/
+│   │       │   └── forward-targets/
+│   │       ├── routes/   # auth/chats 等轻量边界路由
+│   │       └── services/ # Telegram、通知、配置与缓存服务
 │   └── web/             # React + Vite 前端
 │       └── src/
-│           ├── components/
-│           ├── hooks/
-│           └── api/
+│           ├── features/ # messages/filters/notifications/settings
+│           ├── shared/   # typed API request modules + query cache
+│           ├── pages/    # 页面级 wrapper
+│           └── components/
 ├── Dockerfile
 ├── docker-compose.yml
 └── package.json
@@ -108,5 +123,7 @@ MIT
 
 - 开发文档: [docs/user-development.md](docs/user-development.md)
 - 部署文档: [docs/user-deployment.md](docs/user-deployment.md)
-- Agent 全局约束: [CLAUDE.md](CLAUDE.md)
-- Agent Server 约束: [packages/server/CLAUDE.md](packages/server/CLAUDE.md)
+- 测试策略: [docs/testing-strategy.md](docs/testing-strategy.md)
+- 代码重构路线图: [docs/code-refactor-roadmap.md](docs/code-refactor-roadmap.md)
+- Agent 全局约束: [AGENTS.md](AGENTS.md)
+- 旧 Agent 兼容说明: [CLAUDE.md](CLAUDE.md)

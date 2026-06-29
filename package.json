@@ -4,16 +4,24 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"pnpm run dev:server\" \"pnpm run dev:web\"",
-    "dev:server": "pnpm --filter @telegram-star/server build && pnpm --filter @telegram-star/server db:deploy && pnpm --filter @telegram-star/server dev",
-    "dev:web": "pnpm --filter @telegram-star/web dev",
-    "build": "pnpm --filter @telegram-star/web build && pnpm --filter @telegram-star/server build",
-    "start": "pnpm --filter @telegram-star/server build && pnpm --filter @telegram-star/server db:deploy && pnpm --filter @telegram-star/server start",
+    "dev:server": "pnpm --filter @telegram-star/shared build && pnpm --filter @telegram-star/server build && pnpm --filter @telegram-star/server db:deploy && pnpm --filter @telegram-star/server dev",
+    "dev:web": "pnpm --filter @telegram-star/shared build && pnpm --filter @telegram-star/web dev",
+    "build": "pnpm --filter @telegram-star/shared build && pnpm --filter @telegram-star/web build && pnpm --filter @telegram-star/server build",
+    "test": "vitest run",
+    "test:web": "vitest run packages/web",
+    "test:server": "vitest run packages/server packages/shared",
+    "test:watch": "vitest",
+    "start": "pnpm --filter @telegram-star/shared build && pnpm --filter @telegram-star/server build && pnpm --filter @telegram-star/server db:deploy && pnpm --filter @telegram-star/server start",
     "db:generate": "pnpm --filter @telegram-star/server db:generate",
     "db:migrate": "pnpm --filter @telegram-star/server db:migrate",
-    "db:deploy": "pnpm --filter @telegram-star/server build && pnpm --filter @telegram-star/server db:deploy",
+    "db:deploy": "pnpm --filter @telegram-star/shared build && pnpm --filter @telegram-star/server build && pnpm --filter @telegram-star/server db:deploy",
     "db:push": "pnpm --filter @telegram-star/server db:push"
   },
   "devDependencies": {
-    "concurrently": "^9.0.0"
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "concurrently": "^9.0.0",
+    "jsdom": "^29.1.1",
+    "vitest": "^4.1.9"
   }
 }

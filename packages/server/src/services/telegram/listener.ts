@@ -16,22 +16,7 @@ import { buildDialogEntityMap, buildTelegramLink, getSenderSummary } from "./uti
 import { emitMessageEvent } from "../messageEvents.js";
 import { writeReadSyncLog } from "../readSyncLog.js";
 import { extractMediaInfo, getMessageTextContent, hasMessageContent } from "./media.js";
-
-// --- Reaction 信号检测 ---
-
-/**
- * 判断消息的 reactions 中是否包含当前用户自己的 reaction。
- * GramJS 在自己 react 过的消息上会为对应 result 设置 chosen=true 或 chosenOrder 字段。
- */
-function hasUserReactionSignal(message: any): boolean {
-  const results = message?.reactions?.results;
-  if (!Array.isArray(results)) return false;
-  // chosen=true 是最明确的自有 reaction 信号；
-  // chosenOrder 仅在是非负整数时视为有效，避免 null/异常值导致误判。
-  return results.some((r: any) =>
-    r?.chosen === true || (typeof r?.chosenOrder === "number" && Number.isInteger(r.chosenOrder) && r.chosenOrder >= 0),
-  );
-}
+import { extractReactionMessageRef, hasUserReactionSignal } from "./readReactionSignal.js";
 
 // --- 实时链路：Raw 事件 ---
 
@@ -41,23 +26,8 @@ function hasUserReactionSignal(message: any): boolean {
  * 若在数据库中存在对应未读记录，立即将其标记为已读。
  */
 async function handleInteractionUpdate(update: any): Promise<void> {
-  if (update?.className !== "UpdateMessageReactions") return;
-
-  const peer = update.peer;
-  const msgId = Number(update.msgId || 0);
-  if (!peer || !msgId) return;
-
-  // 根据 peer 类型提取 chatId（与数据库存储的格式一致）
-  let chatId: string;
-  if (peer.className === "PeerChannel") {
-    chatId = peer.channelId?.toString?.() ?? "";
-  } else if (peer.className === "PeerChat") {
-    chatId = peer.chatId?.toString?.() ?? "";
-  } else {
-    return; // 私聊等其他类型暂不处理
-  }
-
-  if (!chatId) return;
+  const ref = extractReactionMessageRef(update);
+  if (!ref) return;
 
   // 仅当 reaction 来自当前用户时才触发已读
   const reactionSignalMatched = hasUserReactionSignal({ reactions: update.reactions });
@@ -66,7 +36,7 @@ async function handleInteractionUpdate(update: any): Promise<void> {
   }
 
   const row = await db.message.findFirst({
-    where: { chatId, telegramMessageId: msgId, isRead: false },
+    where: { chatId: ref.chatId, telegramMessageId: ref.telegramMessageId, isRead: false },
     select: { id: true },
   });
   if (!row) return;
@@ -76,8 +46,8 @@ async function handleInteractionUpdate(update: any): Promise<void> {
 
   console.info("[ReadSync][realtime] marked as read", {
     rowId: row.id,
-    chatId,
-    telegramMessageId: msgId,
+    chatId: ref.chatId,
+    telegramMessageId: ref.telegramMessageId,
     reason: "reaction",
   });
   await writeReadSyncLog({
@@ -86,8 +56,8 @@ async function handleInteractionUpdate(update: any): Promise<void> {
     action: "标记已读",
     message: "通过实时 Reaction 同步将消息标记为已读",
     rowId: row.id,
-    chatId,
-    telegramMessageId: msgId,
+    chatId: ref.chatId,
+    telegramMessageId: ref.telegramMessageId,
     details: { 原因: "reaction", 来源: "UpdateMessageReactions" },
   });
 }

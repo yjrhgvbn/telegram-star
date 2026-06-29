@@ -54,6 +54,15 @@ pnpm dev
 # 全量构建
 pnpm build
 
+# 运行单元测试
+pnpm test
+
+# 仅运行前端测试
+pnpm test:web
+
+# 仅运行后端与 shared 测试
+pnpm test:server
+
 # 仅启动生产链路（本机）
 pnpm start
 
@@ -82,10 +91,25 @@ pnpm db:push
 ## 6. 代码结构说明
 
 - `packages/web`: React + Vite 前端
+  - `src/features/*`: 领域功能实现。页面 wrapper 只负责挂载 feature，不承载复杂业务逻辑。
+  - `src/shared/api/*`: 按领域拆分的 typed API 调用。`src/api/client.ts` 只保留兼容聚合入口。
+  - `src/shared/query/*`: TanStack Query client 与 query keys。新增服务端状态请求优先使用 `useQuery` / `useMutation`，并通过统一 query key 做缓存更新或失效。
 - `packages/server`: Fastify + Prisma 后端
+  - `src/modules/*`: 领域模块。优先采用 `*.routes.ts` + `*.service.ts` + `*.repository.ts` 结构。
+  - `src/routes/*`: 仅保留尚未模块化或天然轻量的 HTTP 边界，例如 auth/chats。
+  - `src/services/telegram/*`: Telegram client、监听、历史拉取、媒体元信息与已读同步等外部服务边界。
+- `packages/shared`: 前后端共享 contract、schema 与类型
 - `packages/server/prisma`: schema 与 migrations
 - `packages/server/src`: 业务代码
 - `Dockerfile` 与 `docker-compose.yml`: 镜像构建与部署
+
+新增后端领域功能时，优先复用以下模板：
+
+1. 在 `packages/shared/src/contracts/<domain>.ts` 定义输入、输出与响应 schema。
+2. 在 `packages/server/src/modules/<domain>/<domain>.repository.ts` 放 Prisma 查询与写入。
+3. 在 `packages/server/src/modules/<domain>/<domain>.service.ts` 放业务编排、错误语义与响应格式化。
+4. 在 `packages/server/src/modules/<domain>/<domain>.routes.ts` 放 HTTP 注册、schema parse 和状态码映射。
+5. 为纯逻辑、格式化、边界值或高影响副作用补充 Vitest 测试。
 
 ## 7. 排障建议
 
@@ -112,3 +136,19 @@ pnpm --filter @telegram-star/server db:deploy
 - Web UI 中保存的 Telegram API ID 是否为数字，或 `.env` 中的 `TELEGRAM_API_ID` 是否为数字
 - Web UI 中保存的 Telegram API Hash 是否完整，或 `.env` 中的 `TELEGRAM_API_HASH` 是否完整
 - 本机网络是否能访问 Telegram
+
+### 7.4 单元测试
+
+当前测试使用 Vitest，优先覆盖过滤器匹配、消息分页、配置解析、媒体缓存策略、Telegram 媒体元信息、后端 service 边界等可独立验证的纯逻辑：
+
+```bash
+pnpm test
+```
+
+新增共享契约或业务规则时，应优先补充对应测试，再进行页面或后端模块拆分。
+
+更多测试分层与新增用例建议见 [测试策略](testing-strategy.md)。
+
+### 7.5 重构恢复入口
+
+跨多轮继续重构时，先阅读 [docs/code-refactor-roadmap.md](code-refactor-roadmap.md)。该文档记录每个阶段的目标、决策、完成记录、验证命令与当前架构快照，避免上下文压缩后丢失目标。

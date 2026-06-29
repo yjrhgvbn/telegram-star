@@ -7,30 +7,34 @@
 - 技术栈：React 19 + Vite + TypeScript
 - 构建：`tsc -b && vite build`
 - 开发：`vite`
-- API 访问入口：`src/api/client.ts`
-- 类型定义入口：`src/types/index.ts`
+- API 访问入口：`src/shared/api/*`
+- 兼容聚合入口：`src/api/client.ts`
+- 类型优先来源：`@telegram-star/shared/contracts/*`
 
 关键文件：
 
 - 应用入口: [packages/web/src/main.tsx](packages/web/src/main.tsx)
 - 根组件: [packages/web/src/App.tsx](packages/web/src/App.tsx)
-- API 客户端: [packages/web/src/api/client.ts](packages/web/src/api/client.ts)
+- API 客户端: [packages/web/src/shared/api](packages/web/src/shared/api)
+- 兼容聚合入口: [packages/web/src/api/client.ts](packages/web/src/api/client.ts)
 - 类型定义: [packages/web/src/types/index.ts](packages/web/src/types/index.ts)
 
 ## 2. 绝对约束
 
 - 不要擅自更改 API 返回字段语义；若后端字段变化，必须同步类型与渲染逻辑。
 - 不要引入重型状态管理库（如 Redux、MobX）除非用户明确要求。
-- 不要在组件内硬编码后端地址，统一走 `src/api/client.ts`。
+- 不要在组件内硬编码后端地址，统一走 `src/shared/api/*` 或兼容聚合入口 `src/api/client.ts`。
 - 不要提交无关样式重排或大面积格式化。
 
 ## 3. API 联动规则
 
 当后端路由或响应结构变化时，必须按顺序检查：
 
-1. `src/api/client.ts` 请求参数与返回类型
-2. `src/types/index.ts` 类型定义
-3. 受影响组件的渲染字段与交互逻辑
+1. `packages/shared/src/contracts/*` 是否需要更新
+2. `src/shared/api/*` 请求参数与返回类型
+3. `src/api/client.ts` 兼容聚合入口是否需要同步
+4. `src/types/index.ts` 旧类型定义是否仍被使用
+5. 受影响 feature/component 的渲染字段与交互逻辑
 
 若发现 breaking change，需在提交说明中明确标注。
 
@@ -59,4 +63,4 @@ pnpm start
 
 - 本文件为 web 目录就近规则。
 - 与全局规则冲突时，以本文件为准。
-- 全局规则见 [CLAUDE.md](CLAUDE.md)。
+- 全局规则以仓库根目录 [AGENTS.md](../../AGENTS.md) 为准；本文件保留给旧 Agent 兼容。

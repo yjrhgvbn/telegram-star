@@ -1,76 +1,112 @@
 import { useCallback } from "react";
-import useSWR from "swr";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { Filter, FilterCondition, FilterHistoryScope, JoinedChat } from "../types";
+import { queryKeys } from "@/shared/query/queryKeys";
+import type { Filter, FilterCondition, FilterHistoryScope } from "../types";
 
 export function useFilters() {
-  const {
-    data: filters,
-    error,
-    isLoading,
-    mutate: mutateFilters,
-  } = useSWR<Filter[]>("filters", api.filters.list);
+  const queryClient = useQueryClient();
 
-  const {
-    data: chats,
-    error: chatsError,
-    isLoading: chatsLoading,
-    mutate: mutateChats,
-  } = useSWR<JoinedChat[]>("joined-chats", api.chats.list);
+  const filtersQuery = useQuery({
+    queryKey: queryKeys.filters.all,
+    queryFn: api.filters.list,
+  });
+
+  const chatsQuery = useQuery({
+    queryKey: queryKeys.chats.joined,
+    queryFn: api.chats.list,
+  });
+
+  const { mutateAsync: createFilterAsync } = useMutation({
+    mutationFn: api.filters.create,
+    onSuccess: (created) => {
+      queryClient.setQueryData<Filter[]>(queryKeys.filters.all, (current) => [
+        created,
+        ...(current ?? []),
+      ]);
+    },
+  });
+
+  const { mutateAsync: updateFilterAsync } = useMutation({
+    mutationFn: (variables: {
+      id: number;
+      data: {
+        name?: string;
+        conditions?: FilterCondition[];
+        autoLocateUnreadNearRead?: boolean;
+      };
+    }) => api.filters.update(variables.id, variables.data),
+    onSuccess: (updated, variables) => {
+      queryClient.setQueryData<Filter[]>(queryKeys.filters.all, (current) =>
+        (current ?? []).map((filter) => (filter.id === variables.id ? updated : filter)),
+      );
+    },
+  });
+
+  const { mutateAsync: deleteFilterAsync } = useMutation({
+    mutationFn: api.filters.delete,
+    onSuccess: (_deleted, id) => {
+      queryClient.setQueryData<Filter[]>(queryKeys.filters.all, (current) =>
+        (current ?? []).filter((filter) => filter.id !== id),
+      );
+    },
+  });
+
+  const { mutateAsync: toggleFilterAsync } = useMutation({
+    mutationFn: api.filters.toggle,
+    onSuccess: (updated, id) => {
+      queryClient.setQueryData<Filter[]>(queryKeys.filters.all, (current) =>
+        (current ?? []).map((filter) => (filter.id === id ? updated : filter)),
+      );
+    },
+  });
+
+  const { mutateAsync: backfillFilterAsync } = useMutation({
+    mutationFn: (variables: { id: number; data?: FilterHistoryScope }) =>
+      api.filters.backfill(variables.id, variables.data),
+  });
 
   const createFilter = useCallback(
     async (data: { name: string; conditions: FilterCondition[]; autoLocateUnreadNearRead?: boolean }) => {
-      const created = await api.filters.create(data);
-      await mutateFilters((current) => [created, ...(current ?? [])], { revalidate: false });
-      return created;
+      return createFilterAsync(data);
     },
-    [mutateFilters]
+    [createFilterAsync]
   );
 
   const updateFilter = useCallback(
     async (id: number, data: { name?: string; conditions?: FilterCondition[]; autoLocateUnreadNearRead?: boolean }) => {
-      const updated = await api.filters.update(id, data);
-      await mutateFilters(
-        (current) => (current ?? []).map((filter) => (filter.id === id ? updated : filter)),
-        { revalidate: false }
-      );
-      return updated;
+      return updateFilterAsync({ id, data });
     },
-    [mutateFilters]
+    [updateFilterAsync]
   );
 
   const deleteFilter = useCallback(async (id: number) => {
-    await api.filters.delete(id);
-    await mutateFilters((current) => (current ?? []).filter((filter) => filter.id !== id), { revalidate: false });
-  }, [mutateFilters]);
+    await deleteFilterAsync(id);
+  }, [deleteFilterAsync]);
 
   const toggleFilter = useCallback(async (id: number) => {
-    const updated = await api.filters.toggle(id);
-    await mutateFilters(
-      (current) => (current ?? []).map((filter) => (filter.id === id ? updated : filter)),
-      { revalidate: false }
-    );
-  }, [mutateFilters]);
+    await toggleFilterAsync(id);
+  }, [toggleFilterAsync]);
 
   const backfillFilter = useCallback(async (id: number, data?: FilterHistoryScope) => {
-    return api.filters.backfill(id, data);
-  }, []);
+    return backfillFilterAsync({ id, data });
+  }, [backfillFilterAsync]);
 
   const refresh = useCallback(() => {
-    void mutateFilters();
-  }, [mutateFilters]);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.filters.all });
+  }, [queryClient]);
 
   const refreshChats = useCallback(() => {
-    void mutateChats();
-  }, [mutateChats]);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.chats.joined });
+  }, [queryClient]);
 
   return {
-    filters: filters ?? [],
-    chats: chats ?? [],
-    loading: isLoading,
-    chatsLoading,
-    error: error instanceof Error ? error.message : null,
-    chatsError: chatsError instanceof Error ? chatsError.message : null,
+    filters: filtersQuery.data ?? [],
+    chats: chatsQuery.data ?? [],
+    loading: filtersQuery.isLoading,
+    chatsLoading: chatsQuery.isLoading,
+    error: filtersQuery.error instanceof Error ? filtersQuery.error.message : null,
+    chatsError: chatsQuery.error instanceof Error ? chatsQuery.error.message : null,
     createFilter,
     updateFilter,
     deleteFilter,

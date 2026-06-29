@@ -1,9 +1,6 @@
-export type FilterConditionType = "keyword" | "chat";
+import type { FilterCondition } from "@telegram-star/shared/contracts/filters";
 
-export interface FilterCondition {
-  type: FilterConditionType;
-  values: string[];
-}
+export type { FilterCondition, FilterConditionType } from "@telegram-star/shared/contracts/filters";
 
 export interface FilterMatchInput {
   chatId: string;

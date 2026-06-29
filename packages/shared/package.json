@@ -1,0 +1,39 @@
+{
+  "name": "@telegram-star/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./contracts/config": {
+      "types": "./dist/contracts/config.d.ts",
+      "import": "./dist/contracts/config.js"
+    },
+    "./contracts/filters": {
+      "types": "./dist/contracts/filters.d.ts",
+      "import": "./dist/contracts/filters.js"
+    },
+    "./contracts/forward-targets": {
+      "types": "./dist/contracts/forward-targets.d.ts",
+      "import": "./dist/contracts/forward-targets.js"
+    },
+    "./contracts/messages": {
+      "types": "./dist/contracts/messages.d.ts",
+      "import": "./dist/contracts/messages.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

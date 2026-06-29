@@ -1,5 +1,11 @@
 import { appConfig, hasEnvTelegramConfig, updateMediaConfig, updateTelegramConfig } from "../config.js";
 import { db } from "../db/index.js";
+import type {
+  AppConfigStatus,
+  AppConfigUpdate,
+  MediaConfigStatus,
+  TelegramConfigStatus,
+} from "@telegram-star/shared/contracts/config";
 
 const TELEGRAM_CONFIG_KEY = "telegram";
 const MEDIA_CONFIG_KEY = "media";
@@ -12,34 +18,6 @@ interface StoredTelegramConfig {
 
 interface StoredMediaConfig {
   thumbIndex: number;
-}
-
-export interface TelegramConfigStatus {
-  telegramConfigured: boolean;
-  telegramConfigSource: "env" | "database" | "missing";
-  databaseConfigured: boolean;
-  apiId: number | null;
-  apiHashMasked: string | null;
-}
-
-export interface MediaConfigStatus {
-  thumbIndex: number;
-  thumbQuality: "low" | "medium" | "high";
-}
-
-export interface AppConfigStatus {
-  telegram: TelegramConfigStatus;
-  media: MediaConfigStatus;
-}
-
-export interface AppConfigUpdateInput {
-  telegram?: {
-    apiId?: unknown;
-    apiHash?: unknown;
-  };
-  media?: {
-    thumbIndex?: unknown;
-  };
 }
 
 function thumbQualityFromIndex(thumbIndex: number): MediaConfigStatus["thumbQuality"] {
@@ -233,7 +211,7 @@ export async function saveMediaConfig(input: { thumbIndex: unknown }): Promise<M
   return getMediaConfigStatus();
 }
 
-export async function saveAppConfig(input: AppConfigUpdateInput): Promise<{
+export async function saveAppConfig(input: AppConfigUpdate): Promise<{
   status: AppConfigStatus;
   changed: {
     telegram: boolean;

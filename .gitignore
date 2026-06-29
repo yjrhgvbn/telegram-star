@@ -10,3 +10,4 @@ session.txt
 .agents
 skills-lock.json
 packages/server/src/generated
+tsconfig.tsbuildinfo

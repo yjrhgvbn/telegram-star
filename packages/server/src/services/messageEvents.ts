@@ -1,3 +1,8 @@
+import {
+  messageEventPayloadSchema,
+  type MessageEventPayload,
+} from "@telegram-star/shared/contracts/messages";
+
 /**
  * 轻量级 SSE 事件总线。
  *
@@ -6,9 +11,7 @@
  * 客户端收到后触发 SWR 重新拉取，从而替代定时轮询。
  */
 
-export type MessageEventPayload =
-  | { type: "new" }
-  | { type: "read"; messageIds: number[] };
+export type { MessageEventPayload } from "@telegram-star/shared/contracts/messages";
 
 /** 已注册的 SSE 推送函数集合 */
 const subscribers = new Set<(payload: MessageEventPayload) => void>();
@@ -23,7 +26,8 @@ export function subscribeToMessageEvents(
 
 /** 向所有已连接客户端广播消息事件 */
 export function emitMessageEvent(payload: MessageEventPayload): void {
+  const event = messageEventPayloadSchema.parse(payload);
   for (const send of subscribers) {
-    send(payload);
+    send(event);
   }
 }

@@ -20,6 +20,14 @@ import {
 } from "./utils.js";
 import { extractMediaInfo, getMessageTextContent, hasMessageContent } from "./media.js";
 import type { JoinedChat, LiveChatMessage, HistoricalFilterPreviewMessage } from "./types.js";
+import {
+  getDialogPageSlice,
+  getNextDialogPage,
+  normalizeBackfillBatchSize,
+  normalizeHistoricalPreviewLimits,
+  normalizeSegmentedHistoryLimits,
+  normalizeSingleChatMessageLimits,
+} from "./historyScanPolicy.js";
 import pMap from "p-map";
 
 // --- 会话列表 ---
@@ -65,8 +73,7 @@ export async function listSingleChatMessages(options: {
   const targetChatId = options.chatId.trim();
   if (!targetChatId) throw new Error("chatId is required");
 
-  const messageLimit = Math.max(1, Math.min(options.messageLimit ?? 100, 500));
-  const chatSearchLimit = Math.max(1, Math.min(options.chatSearchLimit ?? 500, 1000));
+  const { messageLimit, chatSearchLimit } = normalizeSingleChatMessageLimits(options);
   const dialogs = await client.getDialogs({ limit: chatSearchLimit });
 
   const targetDialog = dialogs.find(
@@ -136,7 +143,7 @@ async function loadSegmentedHistory(options: {
   const client = getClient();
   if (!client) return [];
 
-  const batchSize = Math.max(20, Math.min(options.batchSize ?? 100, 200));
+  const { batchSize } = normalizeSegmentedHistoryLimits(options);
   const messages: any[] = [];
   let scanned = 0;
   let offsetId = 0;
@@ -191,17 +198,14 @@ export async function previewHistoricalFilterMessages(options: {
     return { messages: [], scannedChats: 0 };
   }
 
-  const perChatLimit = Math.max(1, Math.min(options.perChatLimit ?? 200, 10000));
-  const totalLimit = Math.max(1, Math.min(options.totalLimit ?? 50, 1000));
-  const pageSize = Math.max(1, Math.min(options.pageSize ?? 100, 500));
-  const page = Math.max(1, options.page ?? 1);
+  const { perChatLimit, totalLimit, pageSize, page } = normalizeHistoricalPreviewLimits(options);
 
   const dialogs = await client.getDialogs({ limit: 300 });
   const scopedChatIds = getScopedChatIds(options.conditions);
   const previews: HistoricalFilterPreviewMessage[] = [];
   let scannedChats = 0;
 
-  const paginatedDialogs = dialogs.slice((page - 1) * pageSize, page * pageSize);
+  const paginatedDialogs = getDialogPageSlice(dialogs, page, pageSize);
 
   await pMap(
     paginatedDialogs,
@@ -268,7 +272,7 @@ export async function previewHistoricalFilterMessages(options: {
     { concurrency: 5 },
   );
 
-  const nextPage = dialogs.length > page * pageSize ? page + 1 : undefined;
+  const nextPage = getNextDialogPage(dialogs.length, page, pageSize);
 
   return { messages: previews, scannedChats, nextPage };
 }
@@ -296,7 +300,7 @@ export async function backfillFilterHistory(options: {
     totalLimit: 1000,
   });
 
-  const batchSize = Math.max(1, Math.min(options.batchSize ?? 50, 500));
+  const batchSize = normalizeBackfillBatchSize(options.batchSize);
   let savedCount = 0;
   let skippedExistingCount = 0;
 

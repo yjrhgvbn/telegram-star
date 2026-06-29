@@ -14,6 +14,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/server/package.json ./packages/server/
 COPY packages/server/prisma.config.ts ./packages/server/
 COPY packages/server/tsconfig.json ./packages/server/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/shared/tsconfig.json ./packages/shared/
 COPY packages/web/package.json ./packages/web/
 
 # Allow postinstall scripts (required by Prisma)
@@ -24,7 +26,11 @@ RUN pnpm install --frozen-lockfile
 
 # Copy source code
 COPY packages/server/ ./packages/server/
+COPY packages/shared/ ./packages/shared/
 COPY packages/web/ ./packages/web/
+
+# Build shared contracts
+RUN pnpm --filter @telegram-star/shared build
 
 # Build frontend
 RUN pnpm --filter @telegram-star/web build
@@ -49,6 +55,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/server/package.json ./packages/server/
 COPY packages/server/prisma.config.ts ./packages/server/
 COPY packages/server/tsconfig.json ./packages/server/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/shared/tsconfig.json ./packages/shared/
 COPY packages/web/package.json ./packages/web/
 
 # Allow postinstall scripts (required by Prisma)
@@ -59,6 +67,9 @@ RUN pnpm install --prod --frozen-lockfile
 
 # Copy built frontend
 COPY --from=builder /app/packages/web/dist ./packages/web/dist
+
+# Copy shared runtime package
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 
 # Copy built server and Prisma assets for runtime start
 COPY --from=builder /app/packages/server/dist ./packages/server/dist

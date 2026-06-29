@@ -43,10 +43,13 @@ pnpm db:deploy
 
 ## 4. API 改动注意事项
 
-- 修改 routes 时，确认 web 侧类型与 API 客户端是否需要同步
-  - web API: [packages/web/src/api/client.ts](packages/web/src/api/client.ts)
-  - web 类型: [packages/web/src/types/index.ts](packages/web/src/types/index.ts)
-- 返回结构尽量保持兼容，避免前端无感知破坏。
+- 新增或修改业务接口时，优先放入 `src/modules/<domain>`：
+  - `*.routes.ts`：HTTP 注册、shared schema parse、状态码映射
+  - `*.service.ts`：业务编排、错误语义、响应格式化
+  - `*.repository.ts`：Prisma 查询与写入
+- 修改 API contract 时，优先同步 [packages/shared/src/contracts](../shared/src/contracts)。
+- web 侧 API 首选 [packages/web/src/shared/api](../web/src/shared/api)，[packages/web/src/api/client.ts](../web/src/api/client.ts) 仅作为兼容聚合入口。
+- 返回结构尽量保持 shared contract 兼容，避免前端无感知破坏。
 
 ## 5. 提交前最小验证
 
