@@ -1,11 +1,11 @@
 # Build stage
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 
 # Native modules in the dependency tree require node-gyp during install.
 RUN apk add --no-cache python3 make g++
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 
 WORKDIR /app
 
@@ -39,14 +39,14 @@ RUN pnpm --filter @telegram-star/web build
 RUN pnpm --filter @telegram-star/server build
 
 # Production stage
-FROM node:22-alpine
+FROM node:24-alpine
 
 RUN apk add --no-cache python3 py3-pip make g++
 
 RUN pip install apprise --break-system-packages
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 
 WORKDIR /app
 

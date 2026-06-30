@@ -2,7 +2,7 @@
   "name": "telegram-star",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "concurrently \"pnpm run dev:server\" \"pnpm run dev:web\"",
     "dev:server": "pnpm --filter @telegram-star/shared build && pnpm --filter @telegram-star/server build && pnpm --filter @telegram-star/server db:deploy && pnpm --filter @telegram-star/server dev",
