@@ -123,7 +123,5 @@ MIT
 
 - 开发文档: [docs/user-development.md](docs/user-development.md)
 - 部署文档: [docs/user-deployment.md](docs/user-deployment.md)
-- 测试策略: [docs/testing-strategy.md](docs/testing-strategy.md)
-- 代码重构路线图: [docs/code-refactor-roadmap.md](docs/code-refactor-roadmap.md)
+
 - Agent 全局约束: [AGENTS.md](AGENTS.md)
-- 旧 Agent 兼容说明: [CLAUDE.md](CLAUDE.md)
