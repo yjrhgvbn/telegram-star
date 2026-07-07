@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Telegram Star">
+  <defs>
+    <linearGradient id="bg" x1="64" y1="44" x2="448" y2="468" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset=".55" stop-color="#164e63"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="star" x1="150" y1="126" x2="366" y2="394" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fef9c3"/>
+      <stop offset="1" stop-color="#facc15"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="184" fill="#f8fafc" opacity=".1"/>
+  <path d="M256 102l45 102 112 11-85 74 25 110-97-58-97 58 25-110-85-74 112-11 45-102z" fill="url(#star)"/>
+  <path d="M162 238l190-76-56 178-40-74-69 45 26-61-51-12z" fill="#f8fafc" opacity=".94"/>
+  <path d="M256 266l40 74 56-178-96 104z" fill="#bae6fd" opacity=".78"/>
+</svg>

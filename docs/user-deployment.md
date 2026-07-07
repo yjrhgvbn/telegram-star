@@ -81,6 +81,12 @@ docker compose ps
 - SQLite 与 Telegram 会话持久化在卷：`telegram-star-data`
 - 应用启动后对外暴露 3000 端口
 
+多端部署关系：
+
+- 后端和 Web/PWA 仍只部署一份，由 Docker 容器托管。
+- Tauri Desktop 和 Tauri Mobile 不内置后端，只保存用户填写或扫码得到的后端根地址。
+- 桌面壳、手机壳的发版与后端 Docker 发版独立；业务页面更新随后端 Web dist 更新，壳能力更新才需要重新打包客户端。
+
 ## 2. 部署前准备
 
 1. 安装 Docker 与 Docker Compose
@@ -118,6 +124,8 @@ docker compose logs -f telegram-star
 访问地址：
 
 - http://localhost:3000
+
+如果桌面壳或手机壳连接远程后端，建议使用 HTTPS 域名作为 `serverUrl`。内网 HTTP 可用于局域网或 Tailscale 等可信网络，但不建议裸露到公网。
 
 ## 4. 升级发布
 
@@ -166,9 +174,90 @@ docker compose up -d --build
 - 生产环境建议将 `CORS_ORIGIN` 设置为明确域名
 - 定期更新镜像基础版本与依赖
 
-## 8. 常见问题
+### 7.1 多端访问与 CORS
 
-### 8.1 容器不断重启
+Web/PWA 直接访问后端同源页面时，不需要额外 CORS 配置。Tauri Desktop / Mobile 的本地壳会从本地 WebView origin 请求远程后端 `/api/health`、`/api/clients/register` 等接口，因此需要后端允许对应来源。
+
+推荐做法：
+
+- 个人内网或 Tailscale 部署可保留 `CORS_ORIGIN=*`，便于不同端连接。
+- 公网反向代理部署应优先通过 Cloudflare Access、Basic Auth 或私有网络限制访问，而不是只依赖 CORS。
+- 如果改成明确 CORS 白名单，需要把 Web 域名和 Tauri WebView origin 一并纳入测试。
+
+### 7.2 无应用层认证的访问边界
+
+当前应用按单用户自用工具设计，不内置应用层登录或单用户密码保护。因此部署后不应将无保护的后端直接暴露到不可信公网，否则消息、媒体、过滤器、通知配置、Telegram API 配置等接口都可能被访问。
+
+推荐至少采用一种网络层或反向代理层保护：
+
+| 方式 | 适用场景 | 说明 |
+| --- | --- | --- |
+| Tailscale / ZeroTier | 个人自用、跨设备访问 | 后端只暴露在私有网络内，推荐优先考虑 |
+| Cloudflare Tunnel + Access | 需要固定域名和公网访问 | 由 Cloudflare Access 负责访问控制 |
+| Nginx Basic Auth | 简单公网保护 | 成本低，但体验和安全能力有限 |
+| 局域网 / NAS 内网 | 仅家庭或办公室访问 | 不离开可信网络时最简单 |
+
+如果后续必须直接公网访问，应先重新评估并补充应用层认证，再开放服务。
+
+### 7.3 HTTPS 与缓存建议
+
+推荐响应头：
+
+```text
+/index.html
+  Cache-Control: no-cache
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/api/*
+  Cache-Control: no-store
+
+/api/media/*/thumb
+  Cache-Control: private, max-age=86400
+```
+
+说明：
+
+- `index.html` 不强缓存，便于 Web/PWA/Tauri 远程业务页发现新版本。
+- Vite hash 资源可长期缓存，提升浏览器和 WebView 二次加载速度。
+- API 默认不缓存，避免消息、配置和 Telegram 状态泄露或过期。
+- 移动端扫码配置建议使用 HTTPS serverUrl；内网 HTTP 只用于可信网络。
+
+## 8. 多端发布建议
+
+后端 / Web / PWA：
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Tauri Desktop：
+
+```bash
+pnpm build:desktop
+pnpm tauri:build
+```
+
+Tauri Mobile：
+
+```bash
+pnpm build:mobile
+pnpm tauri:android:build
+pnpm tauri:ios:build
+```
+
+说明：
+
+- `pnpm build:mobile` 只验证手机壳前端产物，不需要 Android / iOS 原生工具链。
+- `pnpm tauri:android:*` 需要 Android Studio、SDK、NDK 与目标模拟器/真机。
+- `pnpm tauri:ios:*` 需要 macOS、Xcode 与签名配置。
+- 手机壳第一版预留 Push token 字段，但未接入 APNs / FCM，部署后不会产生推送服务依赖。
+
+## 9. 常见问题
+
+### 9.1 容器不断重启
 
 查看日志：
 
@@ -178,14 +267,14 @@ docker compose logs --tail=200 telegram-star
 
 优先检查 Telegram 凭证配置状态与数据库文件权限。
 
-### 8.2 迁移失败
+### 9.2 迁移失败
 
 确认：
 
 - migration 文件存在于镜像内 `packages/server/prisma/migrations`
 - `DATABASE_URL` 与 `DB_PATH` 指向可写路径
 
-### 8.3 页面可访问但无消息
+### 9.3 页面可访问但无消息
 
 - 先在 UI 完成 Telegram API 配置与 Telegram 登录
 - 确认已创建筛选器

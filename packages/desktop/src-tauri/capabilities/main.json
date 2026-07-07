@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Telegram Star 本地轻壳只给主窗口开放桌面端必需能力：通知、外链、窗口状态和更新检查。",
+  "windows": ["main"],
+  "permissions": [
+    "notification:default",
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "tg:*" }]
+    },
+    "updater:default",
+    "window-state:default"
+  ]
+}

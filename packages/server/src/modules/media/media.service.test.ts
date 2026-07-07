@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   InvalidMediaThumbParamsError,
+  MEDIA_THUMB_CACHE_CONTROL,
   parseMediaThumbParams,
 } from "./media.service.js";
 
@@ -22,5 +23,9 @@ describe("media service", () => {
     expect(() => parseMediaThumbParams({ chatId: "-1001", messageId: "abc" })).toThrow(
       InvalidMediaThumbParamsError,
     );
+  });
+
+  it("uses private browser caching for thumbnail payloads", () => {
+    expect(MEDIA_THUMB_CACHE_CONTROL).toBe("private, max-age=86400");
   });
 });

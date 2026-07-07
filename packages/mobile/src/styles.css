@@ -1,0 +1,359 @@
+@import "@fontsource-variable/geist";
+
+:root {
+  color-scheme: light;
+  font-family:
+    "Geist Variable",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: #182033;
+  background: #edf4f8;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --mobile-border: rgba(44, 64, 90, 0.12);
+  --mobile-muted: #5f7085;
+  --mobile-panel: rgba(255, 255, 255, 0.72);
+  --mobile-ink: #182033;
+  --mobile-blue: #2468d8;
+  --mobile-green: #13865d;
+  --mobile-red: #bf3f4a;
+  --mobile-amber: #9a6b12;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+}
+
+.mobile-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    linear-gradient(rgba(44, 64, 90, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(44, 64, 90, 0.05) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(237, 244, 248, 0.7)),
+    #edf4f8;
+  background-size: 32px 32px, 32px 32px, 100% 100%;
+  color: var(--mobile-ink);
+}
+
+.mobile-shell--connected {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.brand-block,
+.panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 8px;
+  background: #182033;
+  color: white;
+  font-size: 14px;
+  font-weight: 780;
+  letter-spacing: 0;
+}
+
+.eyebrow {
+  margin: 0 0 2px;
+  color: var(--mobile-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+h2 {
+  font-size: 24px;
+  line-height: 1.18;
+}
+
+.mobile-content {
+  display: grid;
+  min-height: 100dvh;
+  padding: 14px 14px max(16px, env(safe-area-inset-bottom));
+}
+
+.mobile-shell--connected .mobile-content {
+  height: 100dvh;
+  min-height: 100dvh;
+  padding: 0;
+}
+
+.connection-panel,
+.state-panel {
+  align-self: start;
+  justify-self: center;
+  width: min(100%, 560px);
+  border-radius: 8px;
+  background: var(--mobile-panel);
+  padding: 18px;
+  box-shadow: 0 18px 56px rgba(44, 64, 90, 0.1);
+  backdrop-filter: blur(18px);
+}
+
+.panel-heading svg {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: rgba(36, 104, 216, 0.12);
+  color: var(--mobile-blue);
+  padding: 10px;
+}
+
+.connection-form,
+.scan-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.connection-form label,
+.scan-panel label {
+  color: var(--mobile-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+}
+
+.input-row input,
+.scan-panel textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--mobile-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--mobile-ink);
+  outline: 0;
+  padding: 12px 13px;
+}
+
+.scan-panel textarea {
+  min-height: 92px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.input-row input:focus,
+.scan-panel textarea:focus {
+  border-color: rgba(36, 104, 216, 0.55);
+  box-shadow: 0 0 0 3px rgba(36, 104, 216, 0.14);
+}
+
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 0 14px;
+  font-weight: 720;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.primary-button {
+  background: var(--mobile-blue);
+  color: white;
+  box-shadow: 0 12px 24px rgba(36, 104, 216, 0.22);
+}
+
+.secondary-button {
+  background: white;
+  color: var(--mobile-ink);
+  box-shadow: inset 0 0 0 1px var(--mobile-border);
+}
+
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.primary-button svg,
+.secondary-button svg,
+.inline-error svg,
+.state-panel svg {
+  width: 18px;
+  height: 18px;
+}
+
+.scan-panel {
+  border-radius: 8px;
+  border: 1px solid var(--mobile-border);
+  background: rgba(255, 255, 255, 0.52);
+  padding: 12px;
+}
+
+.scan-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--mobile-ink);
+  font-size: 14px;
+  font-weight: 720;
+}
+
+.scan-heading svg {
+  width: 18px;
+  height: 18px;
+  color: var(--mobile-blue);
+}
+
+.qr-video {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  border: 1px solid var(--mobile-border);
+  background: #101827;
+  object-fit: cover;
+}
+
+.inline-error,
+.inline-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.inline-error {
+  background: rgba(191, 63, 74, 0.1);
+  color: var(--mobile-red);
+}
+
+.inline-warning {
+  background: rgba(154, 107, 18, 0.12);
+  color: var(--mobile-amber);
+}
+
+.state-panel {
+  align-self: center;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.state-panel > svg {
+  width: 48px;
+  height: 48px;
+  color: var(--mobile-blue);
+}
+
+.state-panel.offline > svg {
+  color: var(--mobile-red);
+}
+
+.state-panel p {
+  max-width: 100%;
+  color: var(--mobile-muted);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.remote-frame-shell {
+  display: grid;
+  height: 100dvh;
+  min-height: 100dvh;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 0;
+  background: transparent;
+}
+
+.remote-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  background: #edf4f8;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 430px) {
+  .input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-shell--setup .mobile-content {
+    min-height: auto;
+  }
+
+  .connection-panel,
+  .state-panel {
+    padding: 16px;
+  }
+
+  .primary-button,
+  .secondary-button {
+    width: 100%;
+  }
+}

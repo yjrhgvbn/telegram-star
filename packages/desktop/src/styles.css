@@ -1,0 +1,315 @@
+@import "@fontsource-variable/geist";
+
+:root {
+  color-scheme: light;
+  font-family:
+    "Geist Variable",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: oklch(0.245 0.024 260);
+  background: oklch(0.976 0.006 248);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --shell-background: oklch(0.976 0.006 248);
+  --shell-foreground: oklch(0.245 0.024 260);
+  --shell-card: oklch(0.995 0.003 250 / 96%);
+  --shell-border: oklch(0.855 0.014 252);
+  --shell-muted: oklch(0.505 0.03 258);
+  --shell-primary: oklch(0.59 0.19 242);
+  --shell-primary-foreground: oklch(0.99 0.004 240);
+  --shell-success: oklch(0.58 0.15 154);
+  --shell-danger: oklch(0.59 0.21 28);
+  --shell-ring: oklch(0.66 0.16 242);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  border: 0;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.desktop-shell {
+  position: relative;
+  display: grid;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--shell-background) 92%, white) 0%,
+      var(--shell-background) 50%,
+      color-mix(in oklab, var(--shell-background) 94%, var(--shell-primary)) 100%
+    );
+  color: var(--shell-foreground);
+}
+
+.desktop-shell--connected {
+  background: white;
+}
+
+.shell-surface {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--shell-border) 42%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--shell-border) 38%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, transparent, color-mix(in oklab, var(--shell-background) 70%, white));
+  background-size: 32px 32px, 32px 32px, 100% 100%;
+  opacity: 0.34;
+  mask-image: linear-gradient(to bottom, black, transparent 68%);
+}
+
+.shell-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+
+.connection-panel,
+.state-panel {
+  align-self: center;
+  justify-self: center;
+  width: min(520px, calc(100vw - 32px));
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--shell-border) 82%, transparent);
+  background: color-mix(in oklab, var(--shell-card) 92%, white);
+  padding: 22px;
+  box-shadow:
+    0 18px 52px color-mix(in oklab, var(--shell-foreground) 12%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 70%);
+  backdrop-filter: blur(18px);
+}
+
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--shell-primary);
+  color: var(--shell-primary-foreground);
+  font-size: 13px;
+  font-weight: 760;
+  letter-spacing: 0;
+  box-shadow: 0 8px 22px color-mix(in oklab, var(--shell-primary) 24%, transparent);
+}
+
+.eyebrow {
+  margin: 0 0 2px;
+  color: var(--shell-muted);
+  font-size: 12px;
+  font-weight: 640;
+}
+
+h1 {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.connection-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.connection-form label {
+  color: var(--shell-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.input-row input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  border: 1px solid color-mix(in oklab, var(--shell-border) 84%, transparent);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 86%);
+  color: var(--shell-foreground);
+  outline: 0;
+  padding: 0 13px;
+}
+
+.input-row input:focus {
+  border-color: color-mix(in oklab, var(--shell-ring) 72%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--shell-ring) 22%, transparent);
+}
+
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 0 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.primary-button {
+  background: var(--shell-primary);
+  color: var(--shell-primary-foreground);
+  box-shadow: 0 10px 24px color-mix(in oklab, var(--shell-primary) 26%, transparent);
+}
+
+.secondary-button {
+  background: white;
+  color: var(--shell-foreground);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--shell-border) 82%, transparent);
+}
+
+.primary-button:hover,
+.secondary-button:hover {
+  transform: translateY(-1px);
+}
+
+.inline-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--shell-danger) 12%, white);
+  color: var(--shell-danger);
+  padding: 11px 12px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.state-panel {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.state-panel > svg {
+  width: 42px;
+  height: 42px;
+  color: var(--shell-primary);
+}
+
+.state-panel.offline > svg {
+  color: var(--shell-danger);
+}
+
+.state-panel p {
+  max-width: 460px;
+  color: var(--shell-muted);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.remote-frame-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: white;
+}
+
+.remote-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: white;
+}
+
+.primary-button svg,
+.secondary-button svg,
+.inline-error svg {
+  width: 17px;
+  height: 17px;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 560px) {
+  .connection-panel,
+  .state-panel {
+    padding: 18px;
+  }
+
+  .input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .primary-button,
+  .secondary-button {
+    width: 100%;
+  }
+}

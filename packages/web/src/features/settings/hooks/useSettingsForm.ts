@@ -168,6 +168,7 @@ export function useSettingsForm({ telegramAuthorized }: UseSettingsFormOptions) 
   return {
     status,
     mediaStatus,
+    telegramAuthorized,
     apiId,
     apiHash,
     thumbIndex,

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Telegram Star",
+  "version": "0.1.0",
+  "identifier": "com.telegramstar.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm --filter @telegram-star/desktop dev:shell",
+    "devUrl": "http://127.0.0.1:5180",
+    "beforeBuildCommand": "pnpm --filter @telegram-star/desktop build:shell",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Telegram Star",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 640,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "capabilities": ["main"],
+      "csp": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": []
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all",
+    "icon": [
+      "../../web/public/icons/icon-192.png",
+      "../../web/public/icons/icon-512.png"
+    ]
+  }
+}

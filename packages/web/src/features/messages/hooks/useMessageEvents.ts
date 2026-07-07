@@ -3,6 +3,9 @@ import {
   messageEventPayloadSchema,
   type MessageEventPayload,
 } from "@telegram-star/shared/contracts/messages";
+import { getMessageEventsUrl as resolveMessageEventsUrl } from "@/shared/api/url";
+
+export { getMessageEventsUrl } from "@/shared/api/url";
 
 type LegacyMessageEventPayload = { type: "legacy-refresh" };
 export type ParsedMessageEventPayload = MessageEventPayload | LegacyMessageEventPayload;
@@ -21,10 +24,6 @@ export interface UseMessageEventsOptions {
 
 const defaultCreateMessageEventSource = (url: string) => new EventSource(url);
 
-export function getMessageEventsUrl(isDev = Boolean(import.meta.env.DEV)) {
-  return isDev ? "http://localhost:3000/api/messages/events" : "/api/messages/events";
-}
-
 export function parseMessageEventData(data: string): ParsedMessageEventPayload | null {
   try {
     const parsed = messageEventPayloadSchema.safeParse(JSON.parse(data));
@@ -38,7 +37,7 @@ export function parseMessageEventData(data: string): ParsedMessageEventPayload |
 export function useMessageEvents({
   onNewMessage,
   onReadMessages,
-  eventsUrl = getMessageEventsUrl(),
+  eventsUrl = resolveMessageEventsUrl(),
   createEventSource = defaultCreateMessageEventSource,
 }: UseMessageEventsOptions) {
   const handlersRef = useRef({ onNewMessage, onReadMessages });

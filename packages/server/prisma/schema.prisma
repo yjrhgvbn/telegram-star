@@ -93,3 +93,22 @@ model AppConfig {
 
   @@map("app_configs")
 }
+
+model ClientDevice {
+  id           String    @id
+  name         String
+  type         String
+  platform     String
+  os           String?
+  appVersion   String?   @map("app_version")
+  // capabilities 以 JSON 字符串保存，避免 SQLite / Prisma Json 字段兼容差异影响部署。
+  capabilities String    @default("{}")
+  pushToken    String?   @map("push_token")
+  lastSeenAt   DateTime  @map("last_seen_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  revokedAt    DateTime? @map("revoked_at")
+
+  @@index([lastSeenAt])
+  @@index([type, platform])
+  @@map("client_devices")
+}

@@ -1,6 +1,7 @@
 import type { ZodType } from "zod";
-
-const BASE = "/api";
+import { getRuntimeServerUrl } from "@/shared/runtime/serverConfig";
+import { formatServerUnavailableMessage, isNetworkError } from "./errors";
+import { getApiUrl } from "./url";
 
 export async function request<T>(
   url: string,
@@ -8,13 +9,25 @@ export async function request<T>(
   responseSchema?: ZodType<T>,
 ): Promise<T> {
   const hasBody = options?.body !== undefined && options?.body !== null;
-  const res = await fetch(`${BASE}${url}`, {
-    headers: {
-      ...(hasBody ? { "Content-Type": "application/json" } : {}),
-      ...(options?.headers ?? {}),
-    },
-    ...options,
-  });
+  const serverUrl = getRuntimeServerUrl();
+  const requestUrl = getApiUrl(url, serverUrl);
+  let res: Response;
+
+  try {
+    res = await fetch(requestUrl, {
+      headers: {
+        ...(hasBody ? { "Content-Type": "application/json" } : {}),
+        ...(options?.headers ?? {}),
+      },
+      ...options,
+    });
+  } catch (error) {
+    if (isNetworkError(error)) {
+      throw new Error(formatServerUnavailableMessage(serverUrl));
+    }
+
+    throw error;
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Request failed" }));

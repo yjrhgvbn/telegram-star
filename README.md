@@ -10,6 +10,7 @@ Telegram 消息追踪工具 - 监控群组/频道消息，关键词过滤，已�
 - 👍 **已读管理** - 点赞标记为已读，支持批量操作
 - 🔗 **跳转原文** - 一键跳转 Telegram 客户端查看原始消息
 - 🔔 **通知转发** - 将命中消息转发到外部应用（基于 Apprise，支持钉钉、飞书、Discord 等 90+ 平台），并支持每个通道单独配置消息格式
+- 🖥️ **桌面轻壳** - Tauri 本地壳连接远程后端，提供托盘、系统通知、外链和更新检查入口
 - 🐳 **Docker 部署** - 一键启动，数据持久化
 
 ## 技术栈
@@ -17,6 +18,8 @@ Telegram 消息追踪工具 - 监控群组/频道消息，关键词过滤，已�
 | 层级 | 技术 |
 | :--- | :--- |
 | 前端 | React + Vite + TypeScript + TanStack Query |
+| 桌面壳 | Tauri + React + Vite |
+| 手机壳 | Tauri Mobile + React + Vite |
 | 后端 | Fastify + TypeScript |
 | Telegram | GramJS (MTProto) |
 | ORM | Prisma ORM v7 |
@@ -54,10 +57,18 @@ pnpm test
 # 可选：只运行前端或后端/共享包测试
 pnpm test:web
 pnpm test:server
+
+# 可选：启动桌面本地壳开发页
+pnpm dev:desktop
+
+# 可选：启动手机本地壳开发页
+pnpm dev:mobile
 ```
 
 前端: http://localhost:5173
 后端 API: http://localhost:3000
+桌面壳开发页: http://127.0.0.1:5180
+手机壳开发页: http://127.0.0.1:5182
 
 ### Docker 部署
 
@@ -88,6 +99,12 @@ open http://localhost:3000
 telegram-star/
 ├── packages/
 │   ├── shared/          # 前后端共享 contract / schema / 类型
+│   ├── desktop/         # Tauri 本地轻壳，连接远程后端业务页
+│   │   ├── src/          # 连接页、加载页、离线页、本地配置与原生桥接
+│   │   └── src-tauri/    # Tauri v2 原生工程配置
+│   ├── mobile/          # Tauri Mobile 本地轻壳，支持手输/扫码配置后端
+│   │   ├── src/          # 手机连接页、扫码配置、设备注册与远程业务页承载
+│   │   └── src-tauri/    # Tauri Mobile 原生工程配置
 │   ├── server/          # Fastify 后端
 │   │   └── src/
 │   │       ├── db/       # Prisma runtime + SQLite
@@ -123,5 +140,8 @@ MIT
 
 - 开发文档: [docs/user-development.md](docs/user-development.md)
 - 部署文档: [docs/user-deployment.md](docs/user-deployment.md)
+- 多端客户端设计: [docs/multiplatform-client-design.md](docs/multiplatform-client-design.md)
+- 多端客户端工作事项: [docs/multiplatform-client-work-items.md](docs/multiplatform-client-work-items.md)
+- 发布检查清单: [docs/release-checklist.md](docs/release-checklist.md)
 
 - Agent 全局约束: [AGENTS.md](AGENTS.md)

@@ -1,4 +1,7 @@
 import { config } from "dotenv";
+import { resolve } from "path";
+
+config({ path: resolve(import.meta.dirname, "../../../.env") });
 config();
 
 const databaseUrl = process.env.DATABASE_URL;

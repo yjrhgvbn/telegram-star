@@ -8,6 +8,9 @@
 - pnpm 10+
 - Python 3 & pip (用于安装 Apprise)
 - Docker（可选，用于容器化验证）
+- Rust 与 Tauri CLI（可选，仅在运行或打包桌面 / 手机 App 时需要）
+- Android Studio / Android SDK / NDK（可选，仅在运行或打包 Android Tauri Mobile 时需要）
+- Xcode（可选，仅在运行或打包 iOS Tauri Mobile 时需要，macOS）
 - Telegram 开发者凭证：`TELEGRAM_API_ID`、`TELEGRAM_API_HASH`（可启动后在 Web UI 中填写）
 
 ## 2. 初始化
@@ -41,12 +44,19 @@ pnpm dev
 
 - 前端：http://localhost:5173
 - 后端：http://localhost:3000
+- 桌面本地壳开发页：http://127.0.0.1:5180
+- 手机本地壳开发页：http://127.0.0.1:5182
 
 说明：
 
 - `pnpm db:deploy` 会先构建 server，再执行 `prisma migrate deploy`。
 - `pnpm dev` 会并行启动 web 与 server。
 - server 使用 `tsdown --watch` 持续构建，由 Node 运行 `dist/index.js`。
+- `pnpm dev:desktop` 只启动 Tauri 本地壳的 Vite 页面，用于验证连接页、加载页和离线页。
+- `pnpm tauri:dev` 通过 `packages/desktop/src-tauri` 启动原生桌面壳，需要本机已安装 Rust 与 Tauri CLI。
+- 桌面壳的托盘、系统通知、窗口状态、系统外链和更新检查只在 `pnpm tauri:dev` / `pnpm tauri:build` 的原生 Tauri 环境中完整生效。
+- `pnpm dev:mobile` 只启动 Tauri Mobile 本地壳的 Vite 页面，用于验证手机连接页、二维码内容导入和远程业务页承载。
+- `pnpm tauri:android:*` / `pnpm tauri:ios:*` 会进入 Tauri Mobile 原生命令，需要额外安装 Android 或 iOS 工具链。
 
 ## 4. 常用命令
 
@@ -62,6 +72,34 @@ pnpm test:web
 
 # 仅运行后端与 shared 测试
 pnpm test:server
+
+# 仅启动桌面本地壳开发页
+pnpm dev:desktop
+
+# 仅构建桌面本地壳前端产物
+pnpm build:desktop
+
+# 仅启动手机本地壳开发页
+pnpm dev:mobile
+
+# 仅构建手机本地壳前端产物
+pnpm build:mobile
+
+# 启动 Tauri 原生桌面壳（需要 Rust 与 Tauri CLI）
+pnpm tauri:dev
+
+# 打包 Tauri 原生桌面壳（需要 Rust 与 Tauri CLI）
+pnpm tauri:build
+
+# 初始化/运行/打包 Android 手机壳（需要 Android Studio / SDK / NDK）
+pnpm tauri:android:init
+pnpm tauri:android:dev
+pnpm tauri:android:build
+
+# 初始化/运行/打包 iOS 手机壳（需要 macOS + Xcode）
+pnpm tauri:ios:init
+pnpm tauri:ios:dev
+pnpm tauri:ios:build
 
 # 仅启动生产链路（本机）
 pnpm start
@@ -79,6 +117,26 @@ pnpm db:deploy
 pnpm db:push
 ```
 
+桌面壳更新通道可在原生打包时通过环境变量配置：
+
+```bash
+TAURI_UPDATER_PUBKEY="<public key>"
+TAURI_UPDATER_ENDPOINT_TEMPLATE="https://updates.example.com/{{channel}}/{{target}}/{{arch}}/{{current_version}}"
+pnpm tauri:build
+```
+
+说明：
+
+- `{{channel}}` 由本地壳替换为 `stable` 或 `beta`。
+- `{{target}}`、`{{arch}}`、`{{current_version}}` 由 Tauri updater 继续处理。
+- 未配置这些变量时，桌面壳仍可启动，检查更新入口会显示“更新通道尚未配置”。
+
+构建范围说明：
+
+- `pnpm build` 包含 shared、web、desktop 前端壳、mobile 前端壳和 server 构建。
+- `pnpm build` 不执行 `cargo tauri build`、Android build 或 iOS build，避免普通 Web/server CI 被本机原生工具链阻塞。
+- 原生桌面和手机包分别使用 `pnpm tauri:build`、`pnpm tauri:android:build`、`pnpm tauri:ios:build` 验证。
+
 ## 5. 数据库变更流程（推荐）
 
 1. 修改 `packages/server/prisma/schema.prisma`
@@ -94,6 +152,14 @@ pnpm db:push
   - `src/features/*`: 领域功能实现。页面 wrapper 只负责挂载 feature，不承载复杂业务逻辑。
   - `src/shared/api/*`: 按领域拆分的 typed API 调用。`src/api/client.ts` 只保留兼容聚合入口。
   - `src/shared/query/*`: TanStack Query client 与 query keys。新增服务端状态请求优先使用 `useQuery` / `useMutation`，并通过统一 query key 做缓存更新或失效。
+- `packages/desktop`: Tauri + React 本地轻壳
+  - `src/runtime/*`: 桌面壳本地 serverUrl 存储、health check、远程业务页 URL 构造和 Tauri 原生桥接。
+  - `src/shell/*`: 连接页、加载页、离线页、远程业务页承载和桌面能力入口。
+  - `src-tauri/*`: Tauri v2 原生工程配置；不内置 Fastify / Prisma / Telegram 后端，只承载托盘、通知、外链、窗口状态和更新检查等客户端能力。
+- `packages/mobile`: Tauri Mobile + React 本地轻壳
+  - `src/runtime/*`: 手机壳本地 serverUrl 存储、health check、二维码配置解析、设备注册和系统外链。
+  - `src/shell/*`: 手机连接页、扫码/导入配置、加载页、离线页和远程业务页承载。
+  - `src-tauri/*`: Tauri Mobile 原生工程配置；不内置后端，Android/iOS 工程由 Tauri CLI init 命令生成。
 - `packages/server`: Fastify + Prisma 后端
   - `src/modules/*`: 领域模块。优先采用 `*.routes.ts` + `*.service.ts` + `*.repository.ts` 结构。
   - `src/routes/*`: 仅保留尚未模块化或天然轻量的 HTTP 边界，例如 auth/chats。

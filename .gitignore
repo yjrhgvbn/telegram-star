@@ -1,4 +1,5 @@
 node_modules
+.pnpm-store
 dist
 data
 *.db
@@ -10,4 +11,8 @@ session.txt
 .agents
 skills-lock.json
 packages/server/src/generated
+packages/desktop/src-tauri/gen
+packages/desktop/src-tauri/target
+packages/mobile/src-tauri/gen
+packages/mobile/src-tauri/target
 tsconfig.tsbuildinfo

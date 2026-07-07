@@ -2,6 +2,7 @@ import type {
   JoinedChat,
   AuthStatus,
 } from "../types";
+import { clientsApi } from "@/shared/api/clients";
 import { configApi } from "@/shared/api/config";
 import { filtersApi } from "@/shared/api/filters";
 import { forwardTargetsApi } from "@/shared/api/forward-targets";
@@ -17,6 +18,8 @@ export type {
 
 // Auth
 export const api = {
+  clients: clientsApi,
+
   config: configApi,
 
   auth: {

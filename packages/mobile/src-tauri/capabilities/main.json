@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "main",
+  "description": "Telegram Star 手机轻壳只开放通知和系统外链能力；扫码优先使用 WebView 相机能力。",
+  "windows": ["main"],
+  "permissions": [
+    "notification:default",
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "tg:*" }]
+    }
+  ]
+}

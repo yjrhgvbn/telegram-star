@@ -1,0 +1,36 @@
+{
+  "name": "@telegram-star/mobile",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5182 --strictPort",
+    "dev:shell": "vite --host 127.0.0.1 --port 5182 --strictPort",
+    "build": "pnpm --filter @telegram-star/shared build && tsc -p tsconfig.json && vite build",
+    "build:shell": "pnpm --filter @telegram-star/shared build && tsc -p tsconfig.json && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 5183",
+    "tauri:android:init": "cargo tauri android init",
+    "tauri:android:dev": "cargo tauri android dev",
+    "tauri:android:build": "cargo tauri android build",
+    "tauri:ios:init": "cargo tauri ios init",
+    "tauri:ios:dev": "cargo tauri ios dev",
+    "tauri:ios:build": "cargo tauri ios build"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.2.8",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-notification": "^2.3.3",
+    "@tauri-apps/plugin-opener": "^2.5.4",
+    "@telegram-star/shared": "workspace:*",
+    "lucide-react": "^1.8.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  }
+}

@@ -1,4 +1,15 @@
 export type {
+  ClientCapabilities,
+  ClientDevice,
+  ClientDeviceActionResponse,
+  ClientDeviceHeartbeatResponse,
+  ClientDeviceRegisterInput,
+  ClientOs,
+  ClientPlatform,
+  ClientRuntimeType,
+} from "@telegram-star/shared/contracts/clients";
+
+export type {
   Filter,
   FilterBackfillResponse,
   FilterCondition,

@@ -11,6 +11,9 @@ export const queryKeys = {
   chats: {
     joined: ["chats", "joined"] as const,
   },
+  clients: {
+    all: ["clients"] as const,
+  },
   forwardTargets: {
     all: ["forward-targets"] as const,
   },

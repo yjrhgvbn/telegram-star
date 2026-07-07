@@ -14,6 +14,10 @@
       "types": "./dist/contracts/config.d.ts",
       "import": "./dist/contracts/config.js"
     },
+    "./contracts/clients": {
+      "types": "./dist/contracts/clients.d.ts",
+      "import": "./dist/contracts/clients.js"
+    },
     "./contracts/filters": {
       "types": "./dist/contracts/filters.d.ts",
       "import": "./dist/contracts/filters.js"
@@ -21,6 +25,10 @@
     "./contracts/forward-targets": {
       "types": "./dist/contracts/forward-targets.d.ts",
       "import": "./dist/contracts/forward-targets.js"
+    },
+    "./contracts/health": {
+      "types": "./dist/contracts/health.d.ts",
+      "import": "./dist/contracts/health.js"
     },
     "./contracts/messages": {
       "types": "./dist/contracts/messages.d.ts",

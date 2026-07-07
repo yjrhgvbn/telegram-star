@@ -11,6 +11,7 @@ import {
   Play,
   Sticker,
 } from "lucide-react";
+import { getMediaThumbUrl } from "@/shared/api/url";
 import type { Message } from "@/types";
 
 interface Props {
@@ -43,6 +44,10 @@ function parseExtra(extra: string | null): Record<string, unknown> {
   }
 }
 
+function getMessageThumbUrl(message: Message): string {
+  return getMediaThumbUrl(message.chatId, message.telegramMessageId);
+}
+
 /**
  * 图片缩略图：stripped base64 占位 → 代理清晰缩略图懒加载渐进替换。
  * 使用 IntersectionObserver 控制可见时才加载。
@@ -70,7 +75,7 @@ function PhotoPreview({ message }: Props) {
     return () => obs.disconnect();
   }, []);
 
-  const thumbSrc = `/api/media/${message.chatId}/${message.telegramMessageId}/thumb`;
+  const thumbSrc = getMessageThumbUrl(message);
   const strippedSrc = message.mediaThumbBase64
     ? `data:image/jpeg;base64,${message.mediaThumbBase64}`
     : null;
@@ -115,7 +120,7 @@ function PhotoPreview({ message }: Props) {
 function VideoPreview({ message }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
-  const thumbSrc = `/api/media/${message.chatId}/${message.telegramMessageId}/thumb`;
+  const thumbSrc = getMessageThumbUrl(message);
   const strippedSrc = message.mediaThumbBase64
     ? `data:image/jpeg;base64,${message.mediaThumbBase64}`
     : null;
@@ -159,7 +164,7 @@ function VideoPreview({ message }: Props) {
 function StickerPreview({ message }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
-  const thumbSrc = `/api/media/${message.chatId}/${message.telegramMessageId}/thumb`;
+  const thumbSrc = getMessageThumbUrl(message);
   const extra = parseExtra(message.mediaExtra);
 
   return (

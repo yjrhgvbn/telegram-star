@@ -1,51 +1,219 @@
-import { Image, KeyRound } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  AlertCircle,
+  Image,
+  KeyRound,
+  MonitorSmartphone,
+  Server,
+  type LucideIcon,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { SettingRow } from "./SettingRow";
-import { SettingsStatusPanel } from "./SettingsStatusPanel";
+import { ClientDevicesSettings } from "./ClientDevicesSettings";
+import { ClientRuntimeSettings } from "./ClientRuntimeSettings";
+import { ServerConnectionSettings } from "./ServerConnectionSettings";
+import { SettingsItem, SettingsSection } from "./SettingsSection";
 import {
   thumbQualityOptions,
   type useSettingsForm,
 } from "../hooks/useSettingsForm";
+import { useServerConnectionSettings } from "../hooks/useServerConnectionSettings";
 
 export const SETTINGS_FORM_ID = "settings-form";
 
 type SettingsFormState = ReturnType<typeof useSettingsForm>;
+type SettingsSectionId = "connection" | "telegram" | "clients" | "media";
+
+interface SettingsNavItem {
+  id: SettingsSectionId;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  badge: string;
+  tone: "neutral" | "good" | "warning" | "danger";
+}
+
+function getToneBadgeVariant(
+  tone: SettingsNavItem["tone"],
+): "default" | "secondary" | "destructive" | "outline" {
+  if (tone === "good") return "secondary";
+  if (tone === "danger") return "destructive";
+  return "outline";
+}
 
 export function SettingsForm({
   settings,
 }: {
   settings: SettingsFormState;
 }) {
-  return (
-    <Card className="bg-card/80 shadow-sm ring-1 ring-foreground/10" size="sm">
-      <CardContent className="px-4 py-4">
-        <form
-          id={SETTINGS_FORM_ID}
-          onSubmit={settings.handleSave}
-          className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]"
-        >
-          <SettingsStatusPanel
-            status={settings.status}
-            mediaStatus={settings.mediaStatus}
-            apiId={settings.apiId}
-            thumbIndex={settings.thumbIndex}
-            invalidItems={settings.invalidItems}
-            summary={settings.statusSummary}
-          />
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>("connection");
+  const serverConnection = useServerConnectionSettings();
+  const telegramIssues = settings.invalidItems.filter((item) => item.kind.startsWith("telegram"));
+  const mediaIssues = settings.invalidItems.filter((item) => item.kind === "media");
+  const telegramConfigured = settings.status?.telegramConfigured ?? false;
+  const telegramTone: SettingsNavItem["tone"] = settings.loading
+    ? "neutral"
+    : telegramIssues.some((item) => item.tone === "danger")
+      ? "danger"
+      : telegramIssues.length > 0
+        ? "warning"
+        : "good";
+  const mediaTone: SettingsNavItem["tone"] = settings.loading
+    ? "neutral"
+    : mediaIssues.length > 0
+      ? "warning"
+      : "good";
+  const connectionTone: SettingsNavItem["tone"] =
+    serverConnection.summary.tone === "connected"
+      ? "good"
+      : serverConnection.summary.tone === "failed"
+        ? "danger"
+        : "neutral";
+  const navItems = useMemo<SettingsNavItem[]>(
+    () => [
+      {
+        id: "connection",
+        title: "连接",
+        description: "后端地址",
+        icon: Server,
+        badge: serverConnection.summary.title,
+        tone: connectionTone,
+      },
+      {
+        id: "telegram",
+        title: "Telegram",
+        description: "API 与授权",
+        icon: KeyRound,
+        badge: telegramConfigured ? "已配置" : "缺失",
+        tone: telegramTone,
+      },
+      {
+        id: "clients",
+        title: "客户端",
+        description: "设备与壳能力",
+        icon: MonitorSmartphone,
+        badge: "设备",
+        tone: "neutral",
+      },
+      {
+        id: "media",
+        title: "媒体",
+        description: "缩略图策略",
+        icon: Image,
+        badge: settings.mediaStatus?.thumbQuality ?? "medium",
+        tone: mediaTone,
+      },
+    ],
+    [
+      connectionTone,
+      mediaTone,
+      serverConnection.summary.title,
+      settings.mediaStatus?.thumbQuality,
+      telegramConfigured,
+      telegramTone,
+    ],
+  );
+  const activeNavItem = navItems.find((item) => item.id === activeSection) ?? navItems[0];
 
-          <div className="flex min-w-0 flex-col gap-3">
-            <SettingRow
-              icon={KeyRound}
-              title="Telegram API"
+  return (
+    <form
+      id={SETTINGS_FORM_ID}
+      onSubmit={settings.handleSave}
+      className="grid min-h-[560px] gap-3 lg:grid-cols-[260px_minmax(0,1fr)]"
+    >
+      <aside className="min-w-0 rounded-lg bg-card/58 p-2 shadow-[0_18px_55px_color-mix(in_oklab,var(--foreground)_7%,transparent)] backdrop-blur">
+        <div className="hidden px-2 py-2 lg:block">
+          <p className="text-xs font-medium text-muted-foreground">设置分组</p>
+        </div>
+        <nav
+          className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible"
+          aria-label="设置分类"
+        >
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = item.id === activeSection;
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-current={active ? "page" : undefined}
+                onClick={() => setActiveSection(item.id)}
+                className={cn(
+                  "flex min-w-44 shrink-0 items-center gap-2 rounded-lg px-2.5 py-2.5 text-left transition lg:min-w-0",
+                  active
+                    ? "bg-background/92 text-foreground shadow-[0_10px_30px_color-mix(in_oklab,var(--foreground)_9%,transparent)]"
+                    : "text-muted-foreground hover:bg-background/56 hover:text-foreground",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/70",
+                    active && "bg-primary/10 text-primary",
+                  )}
+                >
+                  <Icon className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium leading-5">
+                    {item.title}
+                  </span>
+                  <span className="block truncate text-xs leading-4">{item.description}</span>
+                </span>
+                <Badge
+                  variant={getToneBadgeVariant(item.tone)}
+                  className="h-5 px-1.5 text-[11px]"
+                >
+                  {item.badge}
+                </Badge>
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
+
+      <div className="min-w-0">
+        {activeSection === "connection" && activeNavItem && (
+          <SettingsSection
+            icon={activeNavItem.icon}
+            title="连接"
+            description="后端地址"
+            meta={
+              <Badge
+                variant={getToneBadgeVariant(activeNavItem.tone)}
+                className="h-6 px-2"
+              >
+                {serverConnection.summary.title}
+              </Badge>
+            }
+          >
+            <ServerConnectionSettings settings={serverConnection} />
+          </SettingsSection>
+        )}
+
+        {activeSection === "telegram" && activeNavItem && (
+          <SettingsSection
+            icon={activeNavItem.icon}
+            title="Telegram"
+            description="API 与授权"
+            meta={
+              <Badge
+                variant={getToneBadgeVariant(telegramTone)}
+                className="h-6 px-2"
+              >
+                {telegramIssues.length > 0 ? `${telegramIssues.length} 项需处理` : "正常"}
+              </Badge>
+            }
+          >
+            <SettingsItem
+              title="API 凭据"
               meta={
                 <Badge
-                  variant={settings.status?.telegramConfigured ? "secondary" : "destructive"}
-                  className="h-6 rounded-lg px-2"
+                  variant={telegramConfigured ? "secondary" : "destructive"}
+                  className="h-6 px-2"
                 >
-                  {settings.status?.telegramConfigured ? "有效" : "缺失"}
+                  {telegramConfigured ? "有效" : "缺失"}
                 </Badge>
               }
             >
@@ -77,18 +245,84 @@ export function SettingsForm({
                   />
                 </div>
               </div>
-            </SettingRow>
+            </SettingsItem>
 
-            <SettingRow
-              icon={Image}
-              title="媒体缩略图"
-              meta={
-                <Badge variant="secondary" className="h-6 rounded-lg px-2">
-                  {settings.mediaStatus?.thumbQuality ?? "medium"}
+            <SettingsItem title="当前状态">
+              <div className="flex flex-wrap gap-1.5">
+                <Badge variant="outline" className="h-6 px-2">
+                  {settings.status?.telegramConfigSource === "database" ? "数据库配置" : "环境变量"}
                 </Badge>
-              }
+                <Badge
+                  variant={settings.status?.databaseConfigured ? "secondary" : "outline"}
+                  className="h-6 px-2"
+                >
+                  {settings.status?.databaseConfigured ? "Hash 已保存" : "Hash 未保存"}
+                </Badge>
+                <Badge
+                  variant={settings.telegramAuthorized ? "secondary" : "outline"}
+                  className="h-6 px-2"
+                >
+                  {settings.telegramAuthorized ? "已授权" : "未授权"}
+                </Badge>
+                <Badge variant="outline" className="h-6 px-2">
+                  API ID {(settings.status?.apiId ?? settings.apiId) || "-"}
+                </Badge>
+              </div>
+            </SettingsItem>
+
+            {telegramIssues.length > 0 && (
+              <SettingsItem title="待处理项">
+                <div className="flex flex-col gap-2">
+                  {telegramIssues.map((item) => (
+                    <div
+                      key={item.title}
+                      className={cn(
+                        "flex items-start gap-2 rounded-lg px-3 py-2 text-sm shadow-[inset_0_1px_0_color-mix(in_oklab,var(--background)_72%,transparent)]",
+                        item.tone === "danger"
+                          ? "bg-destructive/10 text-destructive"
+                          : "bg-background/58 text-foreground",
+                      )}
+                    >
+                      <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                      <span className="min-w-0">
+                        <span className="block font-medium leading-5">{item.title}</span>
+                        <span className="block text-xs opacity-75">{item.detail}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </SettingsItem>
+            )}
+          </SettingsSection>
+        )}
+
+        {activeSection === "clients" && activeNavItem && (
+          <SettingsSection
+            icon={activeNavItem.icon}
+            title="客户端"
+            description="设备与壳能力"
+          >
+            <ClientDevicesSettings />
+            <ClientRuntimeSettings />
+          </SettingsSection>
+        )}
+
+        {activeSection === "media" && activeNavItem && (
+          <SettingsSection
+            icon={activeNavItem.icon}
+            title="媒体"
+            description="缩略图策略"
+            meta={
+              <Badge variant="secondary" className="h-6 px-2">
+                {settings.mediaStatus?.thumbQuality ?? "medium"}
+              </Badge>
+            }
+          >
+            <SettingsItem
+              title="缩略图质量"
+              description="影响消息列表中的图片预览大小和清晰度。"
             >
-              <div className="grid grid-cols-3 gap-1.5 rounded-lg bg-muted/65 p-1">
+              <div className="grid grid-cols-3 gap-1 rounded-lg bg-background/60 p-1 shadow-[inset_0_1px_5px_color-mix(in_oklab,var(--foreground)_6%,transparent)]">
                 {thumbQualityOptions.map((option) => {
                   const selected = settings.thumbIndex === option.value;
                   return (
@@ -98,10 +332,10 @@ export function SettingsForm({
                       onClick={() => settings.setThumbIndex(option.value)}
                       aria-pressed={selected}
                       className={cn(
-                        "flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-md px-2 py-2 text-center transition",
+                        "flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-2 py-1.5 text-center transition",
                         selected
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
+                          ? "bg-card text-foreground shadow-[0_8px_24px_color-mix(in_oklab,var(--foreground)_8%,transparent)]"
+                          : "text-muted-foreground hover:bg-card/70 hover:text-foreground",
                       )}
                     >
                       <span className="text-sm font-medium leading-5">{option.title}</span>
@@ -110,10 +344,29 @@ export function SettingsForm({
                   );
                 })}
               </div>
-            </SettingRow>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+            </SettingsItem>
+
+            {mediaIssues.length > 0 && (
+              <SettingsItem title="待处理项">
+                <div className="flex flex-col gap-2">
+                  {mediaIssues.map((item) => (
+                    <div
+                      key={item.title}
+                      className="flex items-start gap-2 rounded-lg bg-background/58 px-3 py-2 text-sm text-foreground shadow-[inset_0_1px_0_color-mix(in_oklab,var(--background)_72%,transparent)]"
+                    >
+                      <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                      <span className="min-w-0">
+                        <span className="block font-medium leading-5">{item.title}</span>
+                        <span className="block text-xs opacity-75">{item.detail}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </SettingsItem>
+            )}
+          </SettingsSection>
+        )}
+      </div>
+    </form>
   );
 }

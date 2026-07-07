@@ -1,5 +1,8 @@
 import { getCacheStats, getThumbBuffer } from "../../services/mediaCache.js";
 
+// 缩略图是用户私有数据，只允许浏览器本地缓存，不能被共享代理/CDN 复用。
+export const MEDIA_THUMB_CACHE_CONTROL = "private, max-age=86400";
+
 export interface MediaThumbParamsInput {
   chatId?: string;
   messageId?: string;
@@ -53,7 +56,7 @@ export async function getMediaThumbPayload(
     buffer: result.buffer,
     mimeType: result.mimeType,
     contentLength: result.buffer.byteLength,
-    cacheControl: "private, no-cache",
+    cacheControl: MEDIA_THUMB_CACHE_CONTROL,
   };
 }
 
