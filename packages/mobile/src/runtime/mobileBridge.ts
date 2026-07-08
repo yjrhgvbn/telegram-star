@@ -1,4 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
+import { getPreferredNativeExternalUrl } from "@telegram-star/shared";
 
 export const MOBILE_BRIDGE_CAPABILITY_QUERY_MESSAGE =
   "telegram-star:mobile-capability-query";
@@ -159,7 +160,16 @@ export async function openExternalUrl(url: string): Promise<void> {
 
   if (isTauri()) {
     const { openUrl } = await import("@tauri-apps/plugin-opener");
-    await openUrl(normalized);
+    const preferredUrl = getPreferredNativeExternalUrl(normalized);
+    try {
+      await openUrl(preferredUrl);
+    } catch (error) {
+      if (preferredUrl !== normalized) {
+        await openUrl(normalized);
+        return;
+      }
+      throw error;
+    }
     return;
   }
 

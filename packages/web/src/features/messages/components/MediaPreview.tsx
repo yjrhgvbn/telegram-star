@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { getMediaThumbUrl } from "@/shared/api/url";
 import type { Message } from "@/types";
+import { useClientExternalLink } from "@/shared/runtime/ClientShellBridgeProvider";
 
 interface Props {
   message: Message;
@@ -275,6 +276,8 @@ function PollPreview({ message }: Props) {
 
 /** 根据 mediaType 渲染对应的预览组件 */
 export function MediaPreview({ message }: Props) {
+  const handleExternalLink = useClientExternalLink();
+
   if (!message.mediaType) return null;
 
   const link = message.telegramLink;
@@ -286,7 +289,11 @@ export function MediaPreview({ message }: Props) {
         rel="noopener noreferrer"
         className="media-preview__link"
         title="在 Telegram 中查看"
-        onClick={() => sessionStorage.setItem("telegram_jump_msg_id", message.id.toString())}
+        onClick={(event) =>
+          handleExternalLink(event, link, () =>
+            sessionStorage.setItem("telegram_jump_msg_id", message.id.toString()),
+          )
+        }
       >
         {content}
       </a>

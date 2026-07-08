@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { getPreferredNativeExternalUrl } from "@telegram-star/shared";
 
 export const EVENT_SWITCH_SERVER = "telegram-star://switch-server";
 export const EVENT_CHECK_UPDATE = "telegram-star://check-update";
@@ -242,7 +243,16 @@ export async function openExternalUrl(url: string): Promise<void> {
 
   if (isTauri()) {
     const { openUrl } = await import("@tauri-apps/plugin-opener");
-    await openUrl(normalized);
+    const preferredUrl = getPreferredNativeExternalUrl(normalized);
+    try {
+      await openUrl(preferredUrl);
+    } catch (error) {
+      if (preferredUrl !== normalized) {
+        await openUrl(normalized);
+        return;
+      }
+      throw error;
+    }
     return;
   }
 

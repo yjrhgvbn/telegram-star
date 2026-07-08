@@ -34,7 +34,7 @@
     }
   },
   "bundle": {
-    "active": false,
+    "active": true,
     "targets": "all",
     "icon": [
       "../../web/public/icons/icon-192.png",

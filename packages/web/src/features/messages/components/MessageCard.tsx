@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useClientExternalLink } from "@/shared/runtime/ClientShellBridgeProvider";
 import { MediaPreview } from "./MediaPreview";
 import type { Message } from "@/types";
 
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Props) {
+  const handleExternalLink = useClientExternalLink();
   const timeAgo = getTimeAgo(message.messageDate);
   const exactTime = new Date(message.messageDate).toLocaleString("zh-CN");
   const content = message.content.trim();
@@ -107,7 +109,18 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
               variant="ghost"
               size="sm"
               nativeButton={false}
-              render={<a href={message.telegramLink} target="_blank" rel="noopener noreferrer" onClick={() => sessionStorage.setItem("telegram_jump_msg_id", message.id.toString())} />}
+              render={
+                <a
+                  href={message.telegramLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) =>
+                    handleExternalLink(event, message.telegramLink, () =>
+                      sessionStorage.setItem("telegram_jump_msg_id", message.id.toString()),
+                    )
+                  }
+                />
+              }
             >
               查看原文
               <ExternalLink data-icon="inline-end" />

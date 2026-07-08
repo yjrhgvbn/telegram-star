@@ -5,13 +5,14 @@ import { MessagesPage } from "./pages/MessagesPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { ClientShellBridgeProvider } from "./shared/runtime/ClientShellBridgeProvider";
 import { useClientDeviceRegistration } from "./shared/runtime/useClientDeviceRegistration";
 
 function App() {
   useClientDeviceRegistration();
 
   return (
-    <>
+    <ClientShellBridgeProvider>
       <Routes>
         <Route path="/" element={<Navigate to="/messages" replace />} />
         <Route path="/messages" element={<MessagesPage />} />
@@ -23,7 +24,7 @@ function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <PwaUpdatePrompt />
-    </>
+    </ClientShellBridgeProvider>
   );
 }
 
