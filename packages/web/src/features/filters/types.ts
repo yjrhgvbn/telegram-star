@@ -9,5 +9,6 @@ export type DraftCondition = {
 
 export const conditionTypeOptions: Array<{ value: FilterConditionType; label: string }> = [
   { value: "keyword", label: "关键词" },
+  { value: "regex", label: "正则" },
   { value: "chat", label: "会话" },
 ];

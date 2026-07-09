@@ -1,4 +1,4 @@
-import { Inbox, KeyRound, ListFilter, MessageCircle, Plus, Settings2, SlidersHorizontal } from "lucide-react";
+import { Inbox, KeyRound, ListFilter, MessageCircle, Plus, Regex, Settings2, SlidersHorizontal } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,8 @@ export function FilterPanel({
     switch (type) {
       case "keyword":
         return KeyRound;
+      case "regex":
+        return Regex;
       case "chat":
       case "group":
       case "channel":
@@ -39,6 +41,8 @@ export function FilterPanel({
     switch (type) {
       case "keyword":
         return "bg-amber-500/15 text-amber-700";
+      case "regex":
+        return "bg-primary/10 text-primary";
       case "chat":
       case "group":
       case "channel":
@@ -56,6 +60,7 @@ export function FilterPanel({
     return conditions
       .map((condition) => {
         if (condition.type === "keyword") return `关键词 ${condition.values.length}`;
+        if (condition.type === "regex") return `正则 ${condition.values.length}`;
         return `会话 ${condition.values.length}`;
       })
       .join(" · ");
@@ -63,6 +68,7 @@ export function FilterPanel({
 
   const getFilterIcon = (conditions: FilterCondition[]) => {
     if (conditions.some((condition) => condition.type === "keyword")) return KeyRound;
+    if (conditions.some((condition) => condition.type === "regex")) return Regex;
     if (conditions.some((condition) => condition.type === "chat")) return MessageCircle;
     return ListFilter;
   };

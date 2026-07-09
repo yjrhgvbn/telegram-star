@@ -25,7 +25,7 @@ interface FilterFormProps {
   saving: boolean;
   onUpdateCondition: (id: string, updater: (condition: DraftCondition) => DraftCondition) => void;
   onRemoveCondition: (id: string) => void;
-  onAppendKeywords: (id: string) => void;
+  onAppendValues: (id: string) => void;
   onAddCondition: () => void;
   onSave: () => void;
   onDelete: () => void;
@@ -48,7 +48,7 @@ export function FilterForm({
   saving,
   onUpdateCondition,
   onRemoveCondition,
-  onAppendKeywords,
+  onAppendValues,
   onAddCondition,
   onSave,
   onDelete,
@@ -218,7 +218,7 @@ export function FilterForm({
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium">匹配条件</div>
-              <div className="text-xs text-muted-foreground">关键词与会话条件会合并保存</div>
+              <div className="text-xs text-muted-foreground">会话条件会合并保存</div>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={onAddCondition}>
               <Plus data-icon="inline-start" />
@@ -232,7 +232,7 @@ export function FilterForm({
               condition={condition}
               onUpdate={onUpdateCondition}
               onRemove={onRemoveCondition}
-              onAppendKeywords={onAppendKeywords}
+              onAppendValues={onAppendValues}
             />
           ))}
         </div>

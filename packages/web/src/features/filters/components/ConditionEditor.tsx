@@ -1,8 +1,9 @@
-import { Hash, MessageSquareText, Plus, Trash2, X } from "lucide-react";
+import { Hash, MessageSquareText, Plus, Regex, Trash2, X } from "lucide-react";
 import { JoinedChatPicker } from "./JoinedChatPicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { FilterConditionType } from "@/types";
 import { conditionTypeOptions, type DraftCondition } from "../types";
@@ -12,12 +13,14 @@ interface ConditionEditorProps {
   condition: DraftCondition;
   onUpdate: (id: string, updater: (condition: DraftCondition) => DraftCondition) => void;
   onRemove: (id: string) => void;
-  onAppendKeywords: (id: string) => void;
+  onAppendValues: (id: string) => void;
 }
 
-export function ConditionEditor({ condition, onUpdate, onRemove, onAppendKeywords }: ConditionEditorProps) {
+export function ConditionEditor({ condition, onUpdate, onRemove, onAppendValues }: ConditionEditorProps) {
   const typeLabel = conditionTypeOptions.find((option) => option.value === condition.type)?.label ?? "条件";
-  const TypeIcon = condition.type === "keyword" ? Hash : MessageSquareText;
+  const TypeIcon = condition.type === "keyword" ? Hash : condition.type === "regex" ? Regex : MessageSquareText;
+  const inputPlaceholder =
+    condition.type === "regex" ? "输入正则表达式，每行一个" : "输入关键词，多个请用逗号分隔";
 
   return (
     <section className="rounded-lg bg-background/70 p-3 shadow-sm ring-1 ring-foreground/10">
@@ -68,29 +71,40 @@ export function ConditionEditor({ condition, onUpdate, onRemove, onAppendKeyword
           </div>
         </div>
 
-        {condition.type === "keyword" ? (
+        {condition.type !== "chat" ? (
           <div className="space-y-2.5">
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                placeholder="输入关键词，多个请用逗号分隔"
-                value={condition.input}
-                onChange={(event) =>
-                  onUpdate(condition.id, (current) => ({ ...current, input: event.target.value }))
-                }
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    onAppendKeywords(condition.id);
+              {condition.type === "regex" ? (
+                <Textarea
+                  placeholder={inputPlaceholder}
+                  value={condition.input}
+                  onChange={(event) =>
+                    onUpdate(condition.id, (current) => ({ ...current, input: event.target.value }))
                   }
-                }}
-                className="h-10 bg-card/75"
-              />
+                  className="min-h-24 bg-card/75"
+                />
+              ) : (
+                <Input
+                  placeholder={inputPlaceholder}
+                  value={condition.input}
+                  onChange={(event) =>
+                    onUpdate(condition.id, (current) => ({ ...current, input: event.target.value }))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      onAppendValues(condition.id);
+                    }
+                  }}
+                  className="h-10 bg-card/75"
+                />
+              )}
               <Button
                 type="button"
                 variant="secondary"
                 size="lg"
-                className="sm:w-24"
-                onClick={() => onAppendKeywords(condition.id)}
+                className="sm:w-24 sm:self-start"
+                onClick={() => onAppendValues(condition.id)}
               >
                 <Plus data-icon="inline-start" />
                 添加

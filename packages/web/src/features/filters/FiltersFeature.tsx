@@ -14,7 +14,13 @@ import type { HistoricalFilterPreviewMessage } from "@/types";
 import { FilterForm } from "./components/FilterForm";
 import { PreviewPanel } from "./components/PreviewPanel";
 import type { DraftCondition } from "./types";
-import { createDraftCondition, normalizeConditions, toDraftConditions } from "./utils";
+import {
+  assertValidRegexConditions,
+  createDraftCondition,
+  mergePersistableConditions,
+  normalizeConditions,
+  toDraftConditions,
+} from "./utils";
 
 export function FiltersFeature() {
   const { filterId: routeFilterId } = useParams<{ filterId?: string }>();
@@ -97,10 +103,11 @@ export function FiltersFeature() {
     );
   };
 
-  const appendKeywordValues = (id: string) => {
+  const appendConditionValues = (id: string) => {
     updateCondition(id, (condition) => {
+      const separator = condition.type === "regex" ? /\n/ : /[,，\n]/;
       const nextValues = condition.input
-        .split(/[,，\n]/)
+        .split(separator)
         .map((item) => item.trim())
         .filter(Boolean);
 
@@ -118,21 +125,11 @@ export function FiltersFeature() {
 
   const buildPayload = () => {
     const normalized = normalizeConditions(conditions);
-    const keywordConditions = normalized.filter((c) => c.type === "keyword");
-    const chatValues = Array.from(
-      new Set(
-        normalized
-          .filter((c) => c.type === "chat")
-          .flatMap((c) => c.values),
-      ),
-    );
-    const mergedConditions =
-      chatValues.length > 0
-        ? [...keywordConditions, { type: "chat" as const, values: chatValues }]
-        : keywordConditions;
+    const mergedConditions = mergePersistableConditions(normalized);
 
     if (!name.trim()) throw new Error("过滤器名称不能为空");
     if (mergedConditions.length === 0) throw new Error("至少添加一个有效条件");
+    assertValidRegexConditions(mergedConditions);
 
     return {
       name: name.trim(),
@@ -311,6 +308,9 @@ export function FiltersFeature() {
                         const chatCount = filter.conditions
                           .filter((condition) => condition.type === "chat")
                           .reduce((count, condition) => count + condition.values.length, 0);
+                        const regexCount = filter.conditions
+                          .filter((condition) => condition.type === "regex")
+                          .reduce((count, condition) => count + condition.values.length, 0);
 
                         return (
                           <button
@@ -335,6 +335,7 @@ export function FiltersFeature() {
                             </div>
                             <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
                               <span>{keywordCount} 关键词</span>
+                              <span>{regexCount} 正则</span>
                               <span>{chatCount} 会话</span>
                               <span>{filter.forwardTargetIds.length} 转发</span>
                             </div>
@@ -363,7 +364,7 @@ export function FiltersFeature() {
                   saving={saving}
                   onUpdateCondition={updateCondition}
                   onRemoveCondition={removeCondition}
-                  onAppendKeywords={appendKeywordValues}
+                  onAppendValues={appendConditionValues}
                   onAddCondition={addCondition}
                   onSave={handleSave}
                   onDelete={handleDelete}

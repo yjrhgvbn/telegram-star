@@ -80,7 +80,7 @@ function FilterFormHarness({
       saving={false}
       onUpdateCondition={vi.fn()}
       onRemoveCondition={vi.fn()}
-      onAppendKeywords={vi.fn()}
+      onAppendValues={vi.fn()}
       onAddCondition={onAddCondition}
       onSave={onSave}
       onDelete={onDelete}

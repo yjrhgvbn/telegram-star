@@ -12,7 +12,10 @@ describe("filters contract", () => {
       {
         id: 1,
         name: "项目更新",
-        conditions: [{ type: "keyword", values: ["更新"] }],
+        conditions: [
+          { type: "keyword", values: ["更新"] },
+          { type: "regex", values: ["v\\d+\\.\\d+"] },
+        ],
         enabled: true,
         autoLocateUnreadNearRead: true,
         forwardTargetIds: [2],
@@ -22,7 +25,27 @@ describe("filters contract", () => {
     ]);
 
     expect(filters[0]?.conditions[0]?.values).toEqual(["更新"]);
+    expect(filters[0]?.conditions[1]).toEqual({ type: "regex", values: ["v\\d+\\.\\d+"] });
     expect(filters[0]?.forwardTargetIds).toEqual([2]);
+  });
+
+  it("accepts regex conditions and rejects invalid regex patterns", () => {
+    expect(
+      filterCreateInputSchema.parse({
+        name: "版本号",
+        conditions: [{ type: "regex", values: ["v\\d+\\.\\d+"] }],
+      }),
+    ).toEqual({
+      name: "版本号",
+      conditions: [{ type: "regex", values: ["v\\d+\\.\\d+"] }],
+    });
+
+    expect(() =>
+      filterCreateInputSchema.parse({
+        name: "坏正则",
+        conditions: [{ type: "regex", values: ["("] }],
+      }),
+    ).toThrow();
   });
 
   it("accepts optional forward target bindings on create and update", () => {

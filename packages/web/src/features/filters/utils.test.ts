@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normalizeConditions, toDraftConditions } from "./utils";
+import {
+  assertValidRegexConditions,
+  mergePersistableConditions,
+  normalizeConditions,
+  toDraftConditions,
+} from "./utils";
 import type { DraftCondition } from "./types";
 
 describe("filter form utils", () => {
@@ -15,6 +20,21 @@ describe("filter form utils", () => {
 
     expect(normalizeConditions(conditions)).toEqual([
       { type: "keyword", values: ["发布", "公告", "需求", "修复"] },
+    ]);
+  });
+
+  it("normalizes regex draft input line by line without splitting commas", () => {
+    const conditions: DraftCondition[] = [
+      {
+        id: "regex-1",
+        type: "regex",
+        values: [" v\\d+\\.\\d+ "],
+        input: "foo,bar\n  release\\s+\\d+ ",
+      },
+    ];
+
+    expect(normalizeConditions(conditions)).toEqual([
+      { type: "regex", values: ["v\\d+\\.\\d+", "foo,bar", "release\\s+\\d+"] },
     ]);
   });
 
@@ -37,9 +57,31 @@ describe("filter form utils", () => {
     expect(
       normalizeConditions([
         { id: "keyword-1", type: "keyword", values: [], input: "   " },
+        { id: "regex-1", type: "regex", values: [], input: "   " },
         { id: "chat-1", type: "chat", values: [], input: "" },
       ]),
     ).toEqual([]);
+  });
+
+  it("preserves regex conditions while merging chat conditions for persistence", () => {
+    expect(
+      mergePersistableConditions([
+        { type: "keyword", values: ["发布"] },
+        { type: "chat", values: ["1001"] },
+        { type: "regex", values: ["v\\d+"] },
+        { type: "chat", values: ["1001", "1002"] },
+      ]),
+    ).toEqual([
+      { type: "keyword", values: ["发布"] },
+      { type: "regex", values: ["v\\d+"] },
+      { type: "chat", values: ["1001", "1002"] },
+    ]);
+  });
+
+  it("throws a readable error for invalid regex conditions", () => {
+    expect(() =>
+      assertValidRegexConditions([{ type: "regex", values: ["("] }]),
+    ).toThrow("正则表达式无效：(");
   });
 
   it("converts persisted conditions into editable drafts without sharing value arrays", () => {

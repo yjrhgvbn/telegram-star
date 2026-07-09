@@ -1,11 +1,34 @@
 import { z } from "zod";
 
-export const filterConditionTypeSchema = z.enum(["keyword", "chat"]);
+export const filterConditionTypeSchema = z.enum(["keyword", "chat", "regex"]);
 
-export const filterConditionSchema = z.object({
-  type: filterConditionTypeSchema,
-  values: z.array(z.string().trim().min(1)).min(1),
-});
+export function isValidFilterRegexPattern(pattern: string): boolean {
+  try {
+    new RegExp(pattern, "i");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const filterConditionSchema = z
+  .object({
+    type: filterConditionTypeSchema,
+    values: z.array(z.string().trim().min(1)).min(1),
+  })
+  .superRefine((condition, ctx) => {
+    if (condition.type !== "regex") return;
+
+    condition.values.forEach((value, index) => {
+      if (isValidFilterRegexPattern(value)) return;
+
+      ctx.addIssue({
+        code: "custom",
+        path: ["values", index],
+        message: "invalid regex pattern",
+      });
+    });
+  });
 
 export const filterConditionsSchema = z.array(filterConditionSchema).min(1);
 

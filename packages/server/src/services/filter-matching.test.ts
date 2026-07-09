@@ -11,6 +11,7 @@ describe("filter matching", () => {
     const conditions = parseConditions(
       JSON.stringify([
         { type: "keyword", values: [" Release ", "", 123, "Notice"] },
+        { type: "regex", values: [" v\\d+\\.\\d+ ", "(", ""] },
         { type: "chat", values: [" 1001 "] },
         { type: "unknown", values: ["ignored"] },
         { type: "keyword", values: [] },
@@ -19,6 +20,7 @@ describe("filter matching", () => {
 
     expect(conditions).toEqual([
       { type: "keyword", values: ["Release", "Notice"] },
+      { type: "regex", values: ["v\\d+\\.\\d+"] },
       { type: "chat", values: ["1001"] },
     ]);
   });
@@ -33,6 +35,18 @@ describe("filter matching", () => {
     );
 
     expect(result).toEqual({ matched: true, matchedKeyword: "release" });
+  });
+
+  it("matches regex conditions case-insensitively", () => {
+    const result = matchFilterConditions(
+      { chatId: "chat-1", content: "Release V12.4 is live" },
+      [
+        { type: "regex", values: ["v\\d+\\.\\d+"] },
+        { type: "chat", values: ["chat-1"] },
+      ],
+    );
+
+    expect(result).toEqual({ matched: true, matchedKeyword: "v\\d+\\.\\d+" });
   });
 
   it("fails when any condition does not match", () => {
@@ -57,6 +71,10 @@ describe("filter matching", () => {
       error: "condition.values must contain non-empty strings",
     });
     expect(validateConditions([{ type: "chat", values: ["chat-1"] }])).toEqual({ valid: true });
+    expect(validateConditions([{ type: "regex", values: ["("] }])).toEqual({
+      valid: false,
+      error: "condition.regex values must be valid regular expressions",
+    });
   });
 
   it("detects multiple chat condition groups", () => {

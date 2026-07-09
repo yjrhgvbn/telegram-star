@@ -2,6 +2,26 @@ import type { FilterCondition } from "@telegram-star/shared/contracts/filters";
 
 export type { FilterCondition, FilterConditionType } from "@telegram-star/shared/contracts/filters";
 
+const SUPPORTED_CONDITION_TYPES = ["keyword", "chat", "regex"] as const;
+
+function isSupportedConditionType(type: unknown): type is FilterCondition["type"] {
+  return SUPPORTED_CONDITION_TYPES.includes(type as FilterCondition["type"]);
+}
+
+function isValidRegexPattern(pattern: string): boolean {
+  try {
+    new RegExp(pattern, "i");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeConditionValues(type: FilterCondition["type"], values: string[]): string[] {
+  if (type !== "regex") return values;
+  return values.filter(isValidRegexPattern);
+}
+
 export interface FilterMatchInput {
   chatId: string;
   content: string;
@@ -21,20 +41,22 @@ export function parseConditions(raw: string): FilterCondition[] {
 
     return parsed
       .filter((item) => item && typeof item === "object")
-      .map((item) => ({
-        type: item.type,
-        values: Array.isArray(item.values)
+      .map((item) => {
+        if (!isSupportedConditionType(item.type)) return null;
+
+        const values = Array.isArray(item.values)
           ? item.values
               .filter((value: unknown) => typeof value === "string")
               .map((value: string) => value.trim())
               .filter(Boolean)
-          : [],
-      }))
-      .filter(
-        (item): item is FilterCondition =>
-          (item.type === "keyword" || item.type === "chat") &&
-          item.values.length > 0,
-      );
+          : [];
+
+        return {
+          type: item.type,
+          values: normalizeConditionValues(item.type, values),
+        };
+      })
+      .filter((item): item is FilterCondition => item !== null && item.values.length > 0);
   } catch {
     return [];
   }
@@ -55,8 +77,8 @@ export function validateConditions(conditions: FilterCondition[]): { valid: bool
   }
 
   for (const condition of conditions) {
-    if (!condition || !["keyword", "chat"].includes(condition.type)) {
-      return { valid: false, error: "condition.type must be keyword or chat" };
+    if (!condition || !isSupportedConditionType(condition.type)) {
+      return { valid: false, error: "condition.type must be keyword, chat, or regex" };
     }
 
     if (!Array.isArray(condition.values) || condition.values.length === 0) {
@@ -65,6 +87,10 @@ export function validateConditions(conditions: FilterCondition[]): { valid: bool
 
     if (condition.values.some((value) => typeof value !== "string" || !value.trim())) {
       return { valid: false, error: "condition.values must contain non-empty strings" };
+    }
+
+    if (condition.type === "regex" && condition.values.some((value) => !isValidRegexPattern(value))) {
+      return { valid: false, error: "condition.regex values must be valid regular expressions" };
     }
   }
 
@@ -94,6 +120,19 @@ export function matchFilterConditions(
         if (normalizedContent.includes(keyword.toLowerCase())) {
           conditionMatched = true;
           matchedKeyword ??= keyword;
+          break;
+        }
+      }
+    }
+
+    if (condition.type === "regex") {
+      for (const pattern of condition.values) {
+        if (!isValidRegexPattern(pattern)) continue;
+
+        const regex = new RegExp(pattern, "i");
+        if (regex.test(input.content)) {
+          conditionMatched = true;
+          matchedKeyword ??= pattern;
           break;
         }
       }
