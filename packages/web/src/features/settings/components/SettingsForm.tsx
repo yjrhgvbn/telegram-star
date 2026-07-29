@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   AlertCircle,
   Image,
@@ -7,6 +7,7 @@ import {
   Server,
   type LucideIcon,
 } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ export const SETTINGS_FORM_ID = "settings-form";
 
 type SettingsFormState = ReturnType<typeof useSettingsForm>;
 type SettingsSectionId = "connection" | "telegram" | "clients" | "media";
+const SETTINGS_SECTION_IDS: SettingsSectionId[] = ["connection", "telegram", "clients", "media"];
 
 interface SettingsNavItem {
   id: SettingsSectionId;
@@ -47,7 +49,12 @@ export function SettingsForm({
 }: {
   settings: SettingsFormState;
 }) {
-  const [activeSection, setActiveSection] = useState<SettingsSectionId>("connection");
+  const { sectionId: routeSectionId } = useParams<{ sectionId?: string }>();
+  const navigate = useNavigate();
+  const activeSection = SETTINGS_SECTION_IDS.includes(routeSectionId as SettingsSectionId)
+    ? (routeSectionId as SettingsSectionId)
+    : "connection";
+  const isSectionSelected = routeSectionId !== undefined;
   const serverConnection = useServerConnectionSettings();
   const telegramIssues = settings.invalidItems.filter((item) => item.kind.startsWith("telegram"));
   const mediaIssues = settings.invalidItems.filter((item) => item.kind === "media");
@@ -120,14 +127,20 @@ export function SettingsForm({
     <form
       id={SETTINGS_FORM_ID}
       onSubmit={settings.handleSave}
-      className="grid min-h-[560px] gap-3 lg:grid-cols-[260px_minmax(0,1fr)]"
+      className="flex h-full min-h-0 min-w-0"
     >
-      <aside className="min-w-0 rounded-lg bg-card/58 p-2 shadow-[0_18px_55px_color-mix(in_oklab,var(--foreground)_7%,transparent)] backdrop-blur">
-        <div className="hidden px-2 py-2 lg:block">
-          <p className="text-xs font-medium text-muted-foreground">设置分组</p>
+      <aside
+        className={cn(
+          "min-h-0 shrink-0 flex-col border-r border-border bg-sidebar/54",
+          isSectionSelected ? "hidden lg:flex lg:w-[252px]" : "flex w-full lg:w-[252px]",
+        )}
+      >
+        <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
+          <p className="text-sm font-semibold">设置分类</p>
+          <Badge variant="outline">{navItems.length}</Badge>
         </div>
         <nav
-          className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible"
+          className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2"
           aria-label="设置分类"
         >
           {navItems.map((item) => {
@@ -139,31 +152,36 @@ export function SettingsForm({
                 key={item.id}
                 type="button"
                 aria-current={active ? "page" : undefined}
-                onClick={() => setActiveSection(item.id)}
+                onClick={() => navigate(`/settings/${item.id}`)}
                 className={cn(
-                  "flex min-w-44 shrink-0 items-center gap-2 rounded-lg px-2.5 py-2.5 text-left transition lg:min-w-0",
+                  "relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
                   active
-                    ? "bg-background/92 text-foreground shadow-[0_10px_30px_color-mix(in_oklab,var(--foreground)_9%,transparent)]"
-                    : "text-muted-foreground hover:bg-background/56 hover:text-foreground",
+                    ? "bg-card text-foreground shadow-sm ring-1 ring-border"
+                    : "text-muted-foreground hover:bg-card/72 hover:text-foreground",
                 )}
               >
                 <span
                   className={cn(
-                    "flex size-8 shrink-0 items-center justify-center rounded-md bg-muted/70",
-                    active && "bg-primary/10 text-primary",
+                    "absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-transparent",
+                    active && "bg-primary",
+                  )}
+                />
+                <span
+                  className={cn(
+                    "flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary text-primary",
                   )}
                 >
-                  <Icon className="size-4" />
+                  <Icon className="size-3.5" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium leading-5">
+                  <span className="block truncate text-sm font-medium leading-5 text-foreground">
                     {item.title}
                   </span>
                   <span className="block truncate text-xs leading-4">{item.description}</span>
                 </span>
                 <Badge
                   variant={getToneBadgeVariant(item.tone)}
-                  className="h-5 px-1.5 text-[11px]"
+                  className="max-w-20 truncate"
                 >
                   {item.badge}
                 </Badge>
@@ -173,7 +191,13 @@ export function SettingsForm({
         </nav>
       </aside>
 
-      <div className="min-w-0">
+      <div
+        className={cn(
+          "min-h-0 min-w-0 flex-1 overflow-y-auto p-3",
+          isSectionSelected ? "block" : "hidden lg:block",
+        )}
+      >
+        <div className="mx-auto w-full max-w-[980px]">
         {activeSection === "connection" && activeNavItem && (
           <SettingsSection
             icon={activeNavItem.icon}
@@ -366,6 +390,7 @@ export function SettingsForm({
             )}
           </SettingsSection>
         )}
+        </div>
       </div>
     </form>
   );

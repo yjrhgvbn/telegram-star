@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -214,29 +214,29 @@ export function TargetEditor({
   };
 
   return (
-    <Card className={cn("bg-card/80 shadow-sm ring-1 ring-foreground/10", !enabled && "opacity-75")} size="sm">
-      <CardHeader className="gap-3 px-4 pt-4 pb-0">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <Card className={cn("bg-card/88", !enabled && "opacity-75")} size="sm">
+      <CardHeader className="border-b px-3 pb-2.5">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <CardTitle className="text-base">{isNew ? "新建通道" : "编辑通道"}</CardTitle>
             <div className="mt-1 text-xs text-muted-foreground">
               {filterIds.length} 个订阅规则
             </div>
           </div>
-          <Badge variant={invalid ? "destructive" : enabled ? "secondary" : "outline"} className="h-7 rounded-lg px-2.5">
+          <Badge variant={invalid ? "destructive" : enabled ? "secondary" : "outline"}>
             {invalid ? "待完善" : enabled ? "已启用" : "已停用"}
           </Badge>
         </div>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-4 px-4 pb-4">
+      <CardContent className="flex flex-col gap-3 px-3">
         {(error || notice) && (
           <div
             className={cn(
-              "flex items-center gap-2 rounded-lg px-3 py-2 text-sm ring-1",
+              "flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
               error
-                ? "bg-destructive/10 text-destructive ring-destructive/20"
-                : "bg-primary/10 text-primary ring-primary/20",
+                ? "bg-destructive/10 text-destructive"
+                : "bg-secondary text-secondary-foreground",
             )}
           >
             {error ? <AlertCircle className="size-4 shrink-0" /> : <CheckCircle2 className="size-4 shrink-0" />}
@@ -251,7 +251,7 @@ export function TargetEditor({
               value={name}
               onChange={(event) => handleNameChange(event.target.value)}
               placeholder="例如：研发群 / 飞书值班群"
-              className="h-10 bg-background/70"
+              className="h-9 bg-background/76"
             />
           </div>
 
@@ -259,7 +259,7 @@ export function TargetEditor({
             type="button"
             role="switch"
             aria-checked={enabled}
-            className="flex items-center justify-between gap-3 rounded-lg bg-background/70 px-3 py-2.5 text-left ring-1 ring-foreground/10 transition hover:bg-background lg:self-end"
+            className="flex items-center justify-between gap-3 rounded-lg bg-muted/42 px-3 py-2.5 text-left transition-colors hover:bg-muted/65 lg:self-end"
             onClick={handleEnabledChange}
           >
             <span className="text-sm font-medium">通道状态</span>
@@ -280,11 +280,11 @@ export function TargetEditor({
             value={appriseUrl}
             onChange={(event) => handleUrlChange(event.target.value)}
             placeholder="dingtalk://Token / discord://ID/Token"
-            className="h-10 bg-background/70"
+            className="h-9 bg-background/76"
           />
         </div>
 
-        <div className="flex flex-col gap-3 rounded-lg bg-background/55 p-3 ring-1 ring-foreground/10">
+        <div className="flex flex-col gap-3 rounded-lg bg-muted/42 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-sm font-medium">消息格式</span>
             <Badge variant="outline" className="rounded-md">
@@ -326,7 +326,7 @@ export function TargetEditor({
                   value={titleTemplate}
                   onChange={(event) => handleTitleTemplateChange(event.target.value)}
                   placeholder={DEFAULT_FORWARD_TITLE_TEMPLATE}
-                  className="h-10 bg-background/70"
+                  className="h-9 bg-background/76"
                 />
               </div>
 
@@ -339,7 +339,7 @@ export function TargetEditor({
                   value={bodyTemplate}
                   onChange={(event) => handleBodyTemplateChange(event.target.value)}
                   placeholder={DEFAULT_FORWARD_BODY_TEMPLATE}
-                  className="min-h-36 bg-background/70"
+                  className="min-h-32 bg-background/76"
                 />
               </div>
 
@@ -362,7 +362,7 @@ export function TargetEditor({
 
             <div className="flex min-w-0 flex-col gap-2">
               <span className="text-sm font-medium">消息预览</span>
-              <div className="min-h-44 rounded-lg bg-muted/45 p-3 ring-1 ring-foreground/10">
+              <div className="min-h-40 rounded-lg border border-border/72 bg-card/72 p-3">
                 <div className="break-words text-sm font-medium text-foreground">{preview.title}</div>
                 <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-muted-foreground">
                   {preview.body}
@@ -407,7 +407,9 @@ export function TargetEditor({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+      </CardContent>
+
+      <CardFooter className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -447,8 +449,7 @@ export function TargetEditor({
               保存
             </Button>
           </div>
-        </div>
-      </CardContent>
+      </CardFooter>
     </Card>
   );
 }

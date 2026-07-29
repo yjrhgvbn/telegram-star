@@ -1,6 +1,7 @@
-import { CheckCircle2, Clock3, ExternalLink, KeyRound, MessageSquareText } from "lucide-react";
+import { CheckCircle2, Clock3, ExternalLink, KeyRound } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useClientExternalLink } from "@/shared/runtime/ClientShellBridgeProvider";
@@ -28,65 +29,63 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
     <Card
       size="sm"
       className={cn(
-        "relative overflow-visible border-transparent bg-card/88 shadow-sm ring-1 ring-border/16 transition-all duration-200 hover:bg-card/96 hover:shadow-md hover:ring-primary/18",
-        !message.isRead && "bg-card/98 ring-primary/20",
-        message.isRead && "bg-card/74",
-        isAnchor && "shadow-md ring-2 ring-primary/24"
+        "relative overflow-visible bg-card/82 transition-colors hover:bg-card",
+        !message.isRead && "border-primary/28 bg-card",
+        message.isRead && "text-foreground/88",
+        isAnchor && "border-primary shadow-[0_0_0_2px_color-mix(in_oklab,var(--primary)_12%,transparent)]",
       )}
     >
-      {!message.isRead && <span className="absolute top-3 left-0 h-10 w-1 rounded-r-full bg-primary shadow-[0_0_16px_color-mix(in_oklab,var(--primary)_36%,transparent)]" aria-hidden />}
-
-      <CardHeader className="px-4 pb-0">
+      <CardHeader className="px-3 pb-0">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className={cn(
-              "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md shadow-sm ring-1 ring-border/25",
-              message.isRead ? "bg-muted/50 text-muted-foreground" : "bg-primary/12 text-primary",
-            )}>
-              <MessageSquareText className="size-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <CardTitle className="min-w-0 truncate text-[0.95rem] leading-tight">{message.chatTitle}</CardTitle>
+          <div className="flex min-w-0 flex-1 items-start gap-2">
+            <span
+              className={cn(
+                "mt-1.5 size-2 shrink-0 rounded-full",
+                message.isRead ? "bg-muted-foreground/28" : "bg-primary",
+              )}
+              aria-hidden
+            />
+            <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <CardTitle className="min-w-0 truncate text-sm leading-tight">{message.chatTitle}</CardTitle>
                 {mediaLabel && (
-                  <span className="rounded-md bg-muted/70 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  <Badge variant="outline">
                     {mediaLabel}
-                  </span>
+                  </Badge>
                 )}
                 {message.matchedKeyword && (
-                  <span className="inline-flex items-center gap-1 rounded-md bg-warning/24 px-1.5 py-0.5 text-[11px] font-medium text-warning-foreground">
-                    <KeyRound className="size-3" />
+                  <Badge variant="secondary">
+                    <KeyRound data-icon="inline-start" />
                     {message.matchedKeyword}
-                  </span>
+                  </Badge>
                 )}
               </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                <span className="max-w-40 truncate font-medium text-foreground/72">{message.senderName}</span>
-                <span className="inline-flex items-center gap-1">
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <span className="max-w-48 truncate font-medium text-foreground/72">{message.senderName}</span>
+                <span className="inline-flex items-center gap-1" title={exactTime}>
                   <Clock3 className="size-3" />
                   {timeAgo}
                 </span>
-                <span className="text-muted-foreground/72">{exactTime}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+          <div className="shrink-0">
             {message.isRead ? (
-              <span className="inline-flex items-center gap-1 text-muted-foreground/75">
-                <CheckCircle2 className="size-3.5" />
+              <Badge variant="ghost">
+                <CheckCircle2 data-icon="inline-start" />
                 已读
-              </span>
+              </Badge>
             ) : (
-              <span className="rounded-full bg-primary px-2 py-0.5 text-primary-foreground">未读</span>
+              <Badge>未读</Badge>
             )}
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-2.5 px-4 pb-4">
+      <CardContent className="flex flex-col gap-2 px-3 pb-3">
         {content.length > 0 && (
-          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90">
+          <p className="whitespace-pre-wrap break-words text-sm leading-5.5 text-foreground/90">
             {renderHighlightedContent(contentPreview, searchQuery)}
             {hasTruncatedContent && <span className="text-muted-foreground">...</span>}
           </p>
@@ -94,9 +93,9 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
 
         <MediaPreview message={message} />
 
-        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Button
-            variant={message.isRead ? "outline" : "default"}
+            variant={message.isRead ? "ghost" : "secondary"}
             size="sm"
             onClick={() => onToggleRead(message.id)}
             title={message.isRead ? "标记为未读" : "标记为已读"}
@@ -105,26 +104,20 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
           </Button>
 
           {message.telegramLink && (
-            <Button
-              variant="ghost"
-              size="sm"
-              nativeButton={false}
-              render={
-                <a
-                  href={message.telegramLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(event) =>
-                    handleExternalLink(event, message.telegramLink, () =>
-                      sessionStorage.setItem("telegram_jump_msg_id", message.id.toString()),
-                    )
-                  }
-                />
+            <a
+              href={message.telegramLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+              onClick={(event) =>
+                handleExternalLink(event, message.telegramLink, () =>
+                  sessionStorage.setItem("telegram_jump_msg_id", message.id.toString()),
+                )
               }
             >
               查看原文
               <ExternalLink data-icon="inline-end" />
-            </Button>
+            </a>
           )}
         </div>
       </CardContent>

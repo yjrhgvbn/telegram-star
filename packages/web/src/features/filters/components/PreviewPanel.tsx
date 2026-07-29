@@ -36,8 +36,8 @@ export function PreviewPanel({
   onBackfill,
 }: PreviewPanelProps) {
   return (
-    <Card className="bg-card/80 shadow-sm ring-1 ring-foreground/10" size="sm">
-      <CardHeader className="gap-3 px-4 pt-4 pb-0">
+    <Card className="bg-card/88" size="sm">
+      <CardHeader className="border-b px-3 pb-2.5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle className="text-base">历史验证</CardTitle>
@@ -45,23 +45,23 @@ export function PreviewPanel({
               {selectedFilter ? "可预览并回拉命中消息" : "保存后可执行历史回拉"}
             </div>
           </div>
-          <Badge variant={selectedFilter ? "secondary" : "outline"} className="h-7 rounded-lg px-2.5">
-            <History className="size-3.5" />
+          <Badge variant={selectedFilter ? "secondary" : "outline"}>
+            <History data-icon="inline-start" />
             {selectedFilter ? "已保存" : "草稿"}
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 px-4 pb-4">
-        <div className="rounded-lg bg-background/70 p-3 ring-1 ring-foreground/10">
+      <CardContent className="flex flex-col gap-3 px-3">
+        <div className="rounded-lg bg-muted/42 p-3">
           <label className="text-sm font-medium">扫描深度</label>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-1.5 flex gap-2">
             <Input
               value={previewLimit}
               inputMode="numeric"
               onChange={(event) => onPreviewLimitChange(event.target.value.replace(/[^0-9]/g, ""))}
-              className="h-10 bg-card/75"
+              className="h-9 bg-card/78"
             />
-            <Button type="button" size="lg" className="sm:w-28" onClick={onPreview} disabled={previewLoading}>
+            <Button type="button" className="w-22" onClick={onPreview} disabled={previewLoading}>
               {previewLoading ? (
                 <LoaderCircle className="animate-spin" data-icon="inline-start" />
               ) : (
@@ -76,7 +76,6 @@ export function PreviewPanel({
           <Button
             type="button"
             variant="outline"
-            size="lg"
             onClick={onBackfill}
             disabled={backfillLoading || !selectedFilter}
           >
@@ -90,7 +89,7 @@ export function PreviewPanel({
         </div>
 
         {(previewSummary || backfillSummary) && (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             {previewSummary && (
               <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/45 px-3 py-2 text-sm text-muted-foreground">
                 <SearchCheck className="size-4 text-primary" />
@@ -109,7 +108,7 @@ export function PreviewPanel({
           </div>
         )}
 
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-medium">预览结果</div>
             <Badge variant="outline" className="rounded-md">
@@ -117,15 +116,15 @@ export function PreviewPanel({
             </Badge>
           </div>
           {previewMessages.length === 0 ? (
-            <div className="flex min-h-40 flex-col items-center justify-center rounded-lg bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground ring-1 ring-foreground/10">
-              <Inbox className="mb-2 size-6 text-muted-foreground/70" />
-              暂无预览结果
+            <div className="flex min-h-24 flex-col items-center justify-center rounded-lg border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
+              <Inbox className="mb-1.5 size-5 text-muted-foreground/70" />
+              运行预览后显示命中结果
             </div>
           ) : (
             previewMessages.map((message) => (
               <article
                 key={`${message.chatId}-${message.id}`}
-                className="rounded-lg bg-background/70 p-3 ring-1 ring-foreground/10"
+                className="rounded-lg border border-border/72 bg-background/58 p-3"
               >
                 <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span className="font-medium text-foreground/80">{message.chatTitle}</span>

@@ -14,7 +14,7 @@ const DEFAULT_VIEWPORT_WIDTH = 1024;
 const MOBILE_BREAKPOINT = 640;
 const MIN_CONTENT_WIDTH = 100;
 const TEXT_PREVIEW_LIMIT = 360;
-const TEXT_LINE_HEIGHT = 24;
+const TEXT_LINE_HEIGHT = 22;
 const CONTENT_BLOCK_GAP = 10;
 
 // This font string must stay in sync with the app's global message text font.
@@ -38,8 +38,8 @@ export function estimateMessageItemHeight(
   const isMobile = viewportWidth < MOBILE_BREAKPOINT;
 
   // Base height includes card chrome, header, action row and sub-pixel spacing.
-  const fixedBaseHeight = isMobile ? 188.35 : 142.66;
-  const horizontalPadding = isMobile ? 64 : 80;
+  const fixedBaseHeight = isMobile ? 168.35 : 122.66;
+  const horizontalPadding = isMobile ? 48 : 56;
   const availableWidth = Math.max(MIN_CONTENT_WIDTH, containerWidth - horizontalPadding);
 
   let height = fixedBaseHeight;

@@ -20,7 +20,7 @@ describe("estimateMessageItemHeight", () => {
       containerWidth: 580,
     });
 
-    expect(height).toBeCloseTo(142.66);
+    expect(height).toBeCloseTo(122.66);
   });
 
   it("uses the mobile base and sticker height", () => {
@@ -29,7 +29,7 @@ describe("estimateMessageItemHeight", () => {
       containerWidth: 390,
     });
 
-    expect(height).toBeCloseTo(188.35 + 160 + 10);
+    expect(height).toBeCloseTo(168.35 + 160 + 10);
   });
 
   it("estimates visual media with mediaExtra aspect ratio", () => {
@@ -44,7 +44,7 @@ describe("estimateMessageItemHeight", () => {
       },
     );
 
-    expect(height).toBeCloseTo(142.66 + 300 + 10);
+    expect(height).toBeCloseTo(122.66 + ((580 - 56) * 300) / 500 + 10);
   });
 
   it("falls back to default visual media height for invalid mediaExtra", () => {
@@ -59,7 +59,7 @@ describe("estimateMessageItemHeight", () => {
       },
     );
 
-    expect(height).toBeCloseTo(142.66 + 240 + 10);
+    expect(height).toBeCloseTo(122.66 + 240 + 10);
   });
 
   it("counts hard line breaks in message text", () => {
@@ -69,6 +69,6 @@ describe("estimateMessageItemHeight", () => {
       measureLineCount: () => 1,
     });
 
-    expect(height).toBeCloseTo(142.66 + 3 * 24 + 10);
+    expect(height).toBeCloseTo(122.66 + 3 * 22 + 10);
   });
 });

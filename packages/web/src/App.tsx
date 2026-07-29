@@ -20,7 +20,9 @@ function App() {
         <Route path="/filters" element={<FiltersPage />} />
         <Route path="/filters/:filterId" element={<FiltersPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/notifications/:targetId" element={<NotificationsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/:sectionId" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <PwaUpdatePrompt />

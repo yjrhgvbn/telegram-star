@@ -23,11 +23,11 @@ export function ConditionEditor({ condition, onUpdate, onRemove, onAppendValues 
     condition.type === "regex" ? "输入正则表达式，每行一个" : "输入关键词，多个请用逗号分隔";
 
   return (
-    <section className="rounded-lg bg-background/70 p-3 shadow-sm ring-1 ring-foreground/10">
-      <div className="space-y-3">
+    <section className="rounded-lg border border-border/72 bg-background/58 p-3">
+      <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-secondary text-primary">
               <TypeIcon className="size-4" />
             </span>
             <div className="min-w-0">
@@ -39,7 +39,7 @@ export function ConditionEditor({ condition, onUpdate, onRemove, onAppendValues 
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex rounded-lg bg-muted/70 p-1">
+            <div className="flex rounded-lg bg-muted/66 p-0.5">
               {conditionTypeOptions.map((option) => {
                 const active = condition.type === option.value;
                 return (
@@ -48,7 +48,7 @@ export function ConditionEditor({ condition, onUpdate, onRemove, onAppendValues 
                     type="button"
                     aria-pressed={active}
                     className={cn(
-                      "rounded-md px-3 py-1.5 text-xs font-medium transition",
+                      "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
                       active
                         ? "bg-background text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground",
@@ -72,7 +72,7 @@ export function ConditionEditor({ condition, onUpdate, onRemove, onAppendValues 
         </div>
 
         {condition.type !== "chat" ? (
-          <div className="space-y-2.5">
+          <div className="flex flex-col gap-2.5">
             <div className="flex flex-col gap-2 sm:flex-row">
               {condition.type === "regex" ? (
                 <Textarea
@@ -81,7 +81,7 @@ export function ConditionEditor({ condition, onUpdate, onRemove, onAppendValues 
                   onChange={(event) =>
                     onUpdate(condition.id, (current) => ({ ...current, input: event.target.value }))
                   }
-                  className="min-h-24 bg-card/75"
+                  className="min-h-20 bg-card/78"
                 />
               ) : (
                 <Input
@@ -96,14 +96,13 @@ export function ConditionEditor({ condition, onUpdate, onRemove, onAppendValues 
                       onAppendValues(condition.id);
                     }
                   }}
-                  className="h-10 bg-card/75"
+                  className="h-9 bg-card/78"
                 />
               )}
               <Button
                 type="button"
                 variant="secondary"
-                size="lg"
-                className="sm:w-24 sm:self-start"
+                className="sm:w-20 sm:self-start"
                 onClick={() => onAppendValues(condition.id)}
               >
                 <Plus data-icon="inline-start" />
@@ -117,7 +116,7 @@ export function ConditionEditor({ condition, onUpdate, onRemove, onAppendValues 
                 </span>
               ) : (
                 condition.values.map((value) => (
-                  <Badge key={value} variant="secondary" className="h-7 gap-1 rounded-md px-2.5">
+                  <Badge key={value} variant="secondary">
                     {value}
                     <button
                       type="button"
@@ -137,7 +136,7 @@ export function ConditionEditor({ condition, onUpdate, onRemove, onAppendValues 
             </div>
           </div>
         ) : (
-          <div className="space-y-2.5">
+          <div className="flex flex-col gap-2.5">
             <JoinedChatPicker
               label="已选"
               selected={condition.values}

@@ -1,7 +1,7 @@
 import { useRef, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, Inbox, Loader2 } from "lucide-react";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowDown, Inbox, ListFilter, Loader2, MessageSquareText } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { MessageCard } from "./MessageCard";
@@ -124,13 +124,13 @@ export function MessageList({
   // ═══ 骨架屏 ═══════════════════════════════════════════════════════════════
   if (loading) {
     return (
-      <div className="flex h-full flex-col p-4 sm:p-6">
-        <div className="mx-auto w-full max-w-[980px] space-y-3">
-          <Skeleton className="h-32 w-full rounded-lg" />
-          <Skeleton className="h-32 w-full rounded-lg" />
-          <Skeleton className="h-32 w-full rounded-lg" />
+      <div className="flex h-full flex-col p-3 sm:p-4">
+        <div className="mx-auto flex w-full max-w-[980px] flex-col gap-2">
+          <Skeleton className="h-24 w-full rounded-lg" />
+          <Skeleton className="h-24 w-full rounded-lg" />
+          <Skeleton className="h-24 w-full rounded-lg" />
         </div>
-        <p className="py-3 text-center text-sm text-muted-foreground">加载消息中...</p>
+        <p className="py-3 text-center text-xs text-muted-foreground">正在同步消息</p>
       </div>
     );
   }
@@ -138,17 +138,35 @@ export function MessageList({
   // ═══ 空状态 ═══════════════════════════════════════════════════════════════
   if (messages.length === 0) {
     return (
-      <div className="p-4 sm:p-6">
-        <Card className="mx-auto max-w-md border border-dashed border-border/70 bg-card/70 text-center">
-          <CardHeader>
-            <div className="mx-auto mb-2 flex size-11 items-center justify-center rounded-lg bg-muted">
-              <Inbox className="size-5 text-muted-foreground" />
+      <div className="flex h-full items-center justify-center p-4">
+        <Card className="w-full max-w-lg bg-card/86" size="sm">
+          <CardHeader className="items-center text-center">
+            <div className="mb-1 flex size-9 items-center justify-center rounded-lg bg-secondary text-primary">
+              <Inbox className="size-4" />
             </div>
-            <CardTitle>暂无消息</CardTitle>
+            <CardTitle className="text-base">等待下一条命中消息</CardTitle>
             <CardDescription>
-              添加过滤器来开始追踪 Telegram 消息，匹配的消息会出现在这里。
+              连接与过滤规则都在运行，符合条件的内容会自动进入这里。
             </CardDescription>
           </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 rounded-lg bg-muted/45 px-3 py-2.5 text-center">
+              <span className="flex min-w-0 flex-col items-center gap-1 text-xs font-medium">
+                <MessageSquareText className="size-3.5 text-primary" />
+                Telegram
+              </span>
+              <span className="h-px w-4 bg-border" aria-hidden />
+              <span className="flex min-w-0 flex-col items-center gap-1 text-xs font-medium">
+                <ListFilter className="size-3.5 text-primary" />
+                过滤规则
+              </span>
+              <span className="h-px w-4 bg-border" aria-hidden />
+              <span className="flex min-w-0 flex-col items-center gap-1 text-xs font-medium">
+                <Inbox className="size-3.5 text-primary" />
+                消息箱
+              </span>
+            </div>
+          </CardContent>
         </Card>
       </div>
     );
@@ -156,26 +174,31 @@ export function MessageList({
 
   // ═══ 主体：TanStack Virtual 虚拟列表 ═══════════════════════════════════════
   const virtualItems = virtualizer.getVirtualItems();
+  // Height diagnostics are useful during tuning, but should never cover message content by default.
+  const showHeightDebug =
+    import.meta.env.DEV &&
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("debugMessageHeights");
 
   return (
     <div className="relative h-full w-full">
       <div
         ref={scrollRef}
-        className="h-full overflow-y-auto px-0 pt-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="h-full overflow-y-auto px-0 pt-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         data-message-scroll
       >
         {/* ── 顶部指示器 ── */}
         {loadingOlder ? (
-          <div className="mx-auto flex max-w-[980px] items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+          <div className="mx-auto flex max-w-[980px] items-center justify-center gap-2 py-3 text-xs text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            加载历史消息...
+            加载历史消息
           </div>
         ) : !hasOlder ? (
-          <p className="mx-auto max-w-[980px] py-4 text-center text-sm text-muted-foreground">
+          <p className="mx-auto max-w-[980px] py-3 text-center text-xs text-muted-foreground">
             已加载全部历史消息
           </p>
         ) : (
-          <div className="py-4" aria-hidden />
+          <div className="py-3" aria-hidden />
         )}
 
         {/* ── 虚拟列表容器 ── */}
@@ -189,7 +212,7 @@ export function MessageList({
           {virtualItems.map((vItem) => {
             const msg = messages[vItem.index];
             let diffElement = null;
-            if (import.meta.env.DEV) {
+            if (showHeightDebug) {
               const containerWidth = scrollRef.current?.clientWidth || 400;
               const estHeight = estimateMessageItemHeight(msg, {
                 containerWidth,
@@ -225,7 +248,7 @@ export function MessageList({
               >
                 {diffElement}
 
-                <div className="mx-auto w-full max-w-[980px] px-4 pb-4 sm:px-6">
+                <div className="mx-auto w-full max-w-[980px] px-3 pb-2 sm:px-4">
                   <MessageCard
                     message={msg}
                     onToggleRead={onToggleRead}
@@ -240,9 +263,9 @@ export function MessageList({
 
         {/* ── 底部加载指示器 ── */}
         {loadingNewer && (
-          <div className="mx-auto flex max-w-[980px] items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+          <div className="mx-auto flex max-w-[980px] items-center justify-center gap-2 py-3 text-xs text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            加载新消息...
+            加载新消息
           </div>
         )}
       </div>
@@ -253,10 +276,10 @@ export function MessageList({
           <Button
             size="sm"
             variant="default"
-            className="flex items-center gap-1.5 rounded-full px-4 shadow-lg"
+            className="rounded-full px-4 shadow-md"
             onClick={onFlushPending}
           >
-            <ArrowDown className="size-3.5" />
+            <ArrowDown data-icon="inline-start" />
             有新消息
           </Button>
         </div>

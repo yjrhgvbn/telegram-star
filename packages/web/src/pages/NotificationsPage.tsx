@@ -1,13 +1,8 @@
-import {
-  AlertCircle,
-  BellRing,
-  CheckCircle2,
-  Inbox,
-  Plus,
-  RefreshCw,
-  Webhook,
-} from "lucide-react";
+import { useEffect } from "react";
+import { AlertCircle, ArrowLeft, CheckCircle2, Plus, RefreshCw, Webhook } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
+import { WorkspaceHeader } from "@/components/WorkspaceHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,14 +11,37 @@ import {
   TargetList,
   useForwardTargets,
 } from "@/features/notifications";
+import { NEW_FORWARD_TARGET_ID } from "@/features/notifications/types";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useFilters } from "@/hooks/useFilters";
 import { cn } from "@/lib/utils";
 
 export function NotificationsPage() {
+  const { targetId: routeTargetId } = useParams<{ targetId?: string }>();
+  const navigate = useNavigate();
   const { authStatus, authLoading, handleLoginSuccess } = useAuthStatus();
   const { filters } = useFilters();
   const forwardTargets = useForwardTargets();
+  const isTargetSelected = routeTargetId !== undefined;
+
+  useEffect(() => {
+    if (!routeTargetId) return;
+    if (routeTargetId === NEW_FORWARD_TARGET_ID) {
+      forwardTargets.addTarget();
+      return;
+    }
+    forwardTargets.setSelectedTargetId(routeTargetId);
+  }, [forwardTargets.addTarget, forwardTargets.setSelectedTargetId, routeTargetId]);
+
+  const handleAddTarget = () => {
+    forwardTargets.addTarget();
+    navigate(`/notifications/${NEW_FORWARD_TARGET_ID}`);
+  };
+
+  const handleSelectTarget = (id: string) => {
+    forwardTargets.setSelectedTargetId(id);
+    navigate(`/notifications/${id}`);
+  };
 
   return (
     <AppShell
@@ -32,96 +50,114 @@ export function NotificationsPage() {
       authLoading={authLoading}
       onLoginSuccess={handleLoginSuccess}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
-        <main className="min-w-0 flex-1 overflow-auto px-3 py-3 sm:px-4 lg:px-5">
-          <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-4">
-            <header className="rounded-lg bg-card/80 p-4 shadow-sm ring-1 ring-foreground/10">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-sm font-medium text-primary">
-                    <BellRing className="size-4" />
-                    通知转发
-                  </div>
-                  <h1 className="mt-1 text-xl font-semibold tracking-normal text-foreground sm:text-2xl">
-                    转发通道
-                  </h1>
-                </div>
+      <div className="flex min-h-0 flex-1 flex-col bg-background/72">
+        <WorkspaceHeader
+          title={
+            isTargetSelected
+              ? (forwardTargets.selectedTarget?.name.trim() || "新建转发通道")
+              : "转发通道"
+          }
+          description={`${forwardTargets.targets.length} 个通道 · ${forwardTargets.subscribedRules} 个订阅规则`}
+          leading={
+            isTargetSelected ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="lg:hidden"
+                onClick={() => navigate("/notifications")}
+                aria-label="返回通道列表"
+              >
+                <ArrowLeft />
+              </Button>
+            ) : null
+          }
+          actions={
+            <>
+              <Badge variant="outline" className="hidden sm:inline-flex">
+                <Webhook data-icon="inline-start" />
+                {forwardTargets.targets.length}
+              </Badge>
+              <Badge variant="secondary" className="hidden sm:inline-flex">
+                <CheckCircle2 data-icon="inline-start" />
+                {forwardTargets.enabledTargets} 启用
+              </Badge>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                onClick={forwardTargets.refresh}
+                disabled={forwardTargets.loading}
+                aria-label="刷新通道"
+              >
+                <RefreshCw className={cn(forwardTargets.loading && "animate-spin")} />
+              </Button>
+              <Button type="button" size="sm" onClick={handleAddTarget}>
+                <Plus data-icon="inline-start" />
+                新建
+              </Button>
+            </>
+          }
+        />
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary" className="h-7 gap-1.5 rounded-lg px-2.5">
-                    <Webhook className="size-3.5" />
-                    {forwardTargets.targets.length} 个通道
-                  </Badge>
-                  <Badge variant="secondary" className="h-7 gap-1.5 rounded-lg px-2.5">
-                    <CheckCircle2 className="size-3.5 text-success" />
-                    {forwardTargets.enabledTargets} 个启用
-                  </Badge>
-                  <Badge variant="outline" className="h-7 rounded-lg px-2.5">
-                    {forwardTargets.subscribedRules} 个规则
-                  </Badge>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={forwardTargets.refresh}
-                    disabled={forwardTargets.loading}
-                  >
-                    <RefreshCw
-                      className={cn(forwardTargets.loading && "animate-spin")}
-                      data-icon="inline-start"
-                    />
-                    刷新
-                  </Button>
-                  <Button type="button" size="sm" onClick={forwardTargets.addTarget}>
-                    <Plus data-icon="inline-start" />
-                    新建
-                  </Button>
-                </div>
-              </div>
-            </header>
+        {forwardTargets.error ? (
+          <div className="flex shrink-0 items-center gap-2 border-b border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <AlertCircle className="size-4 shrink-0" />
+            <span>{forwardTargets.error}</span>
+          </div>
+        ) : null}
 
-            {forwardTargets.error && (
-              <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive ring-1 ring-destructive/20">
-                <AlertCircle className="size-4 shrink-0" />
-                <span>{forwardTargets.error}</span>
-              </div>
+        <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <aside
+            className={cn(
+              "min-h-0 shrink-0 flex-col border-r border-border bg-sidebar/54 p-2",
+              isTargetSelected ? "hidden lg:flex lg:w-[252px]" : "flex w-full lg:w-[252px]",
             )}
+          >
+            <TargetList
+              targets={forwardTargets.visibleTargets}
+              selectedTargetId={forwardTargets.selectedTargetId}
+              loading={forwardTargets.loading}
+              onAdd={handleAddTarget}
+              onSelect={handleSelectTarget}
+            />
+          </aside>
 
-            <div className="grid items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-              <aside className="min-w-0">
-                <TargetList
-                  targets={forwardTargets.visibleTargets}
-                  selectedTargetId={forwardTargets.selectedTargetId}
-                  loading={forwardTargets.loading}
-                  onAdd={forwardTargets.addTarget}
-                  onSelect={forwardTargets.setSelectedTargetId}
+          <div
+            className={cn(
+              "min-h-0 min-w-0 flex-1 overflow-y-auto p-3",
+              isTargetSelected ? "block" : "hidden lg:block",
+            )}
+          >
+            <div className="mx-auto w-full max-w-[1080px]">
+              {forwardTargets.selectedTarget ? (
+                <TargetEditor
+                  key={forwardTargets.selectedTarget.id || "new"}
+                  target={forwardTargets.selectedTarget}
+                  allFilters={filters}
+                  onDraftChange={forwardTargets.setDraftTarget}
+                  onSave={async (target, data) => {
+                    const saved = await forwardTargets.saveTarget(target, data);
+                    navigate(`/notifications/${saved.id}`, { replace: target.id === 0 });
+                    return saved;
+                  }}
+                  onDelete={async (target) => {
+                    await forwardTargets.deleteTarget(target);
+                    navigate("/notifications", { replace: true });
+                  }}
+                  onTest={forwardTargets.testTarget}
                 />
-              </aside>
-
-              <div className="min-w-0">
-                {forwardTargets.selectedTarget ? (
-                  <TargetEditor
-                    key={forwardTargets.selectedTarget.id || "new"}
-                    target={forwardTargets.selectedTarget}
-                    allFilters={filters}
-                    onDraftChange={forwardTargets.setDraftTarget}
-                    onSave={forwardTargets.saveTarget}
-                    onDelete={forwardTargets.deleteTarget}
-                    onTest={forwardTargets.testTarget}
-                  />
-                ) : (
-                  <Card className="bg-card/80 shadow-sm ring-1 ring-foreground/10" size="sm">
-                    <CardContent className="flex min-h-64 flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
-                      <Inbox className="size-7 text-muted-foreground/70" />
-                      选择或新建一个转发通道
-                      <Button type="button" size="sm" onClick={forwardTargets.addTarget}>
-                        <Plus data-icon="inline-start" />
-                        新建通道
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+              ) : (
+                <Card className="mx-auto max-w-md bg-card/86" size="sm">
+                  <CardContent className="flex min-h-32 flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
+                    选择一个通道，或创建新的转发目的地。
+                    <Button type="button" size="sm" onClick={handleAddTarget}>
+                      <Plus data-icon="inline-start" />
+                      新建通道
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </main>

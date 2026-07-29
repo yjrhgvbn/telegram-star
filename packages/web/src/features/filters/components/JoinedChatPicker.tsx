@@ -117,8 +117,8 @@ export function JoinedChatPicker({
       <button
         type="button"
         className={cn(
-          "flex w-full items-center justify-between gap-3 rounded-lg bg-card/75 px-3 py-2.5 text-left transition ring-1 ring-foreground/10",
-          resolvedOpen ? "bg-accent/55 ring-primary/20" : "hover:bg-background",
+          "flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-card/78 px-3 py-2.5 text-left transition-colors",
+          resolvedOpen ? "border-primary/40 bg-accent/45" : "hover:bg-background",
         )}
         onClick={() => handleOpenChange(!resolvedOpen)}
       >
@@ -135,11 +135,11 @@ export function JoinedChatPicker({
 
       {resolvedOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/22 p-4 backdrop-blur-sm"
           onClick={() => handleOpenChange(false)}
         >
           <div
-            className="flex h-[min(78vh,680px)] w-[min(92vw,680px)] flex-col overflow-hidden rounded-lg bg-background/95 shadow-xl ring-1 ring-foreground/10"
+            className="flex h-[min(78vh,680px)] w-[min(92vw,680px)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
@@ -160,12 +160,12 @@ export function JoinedChatPicker({
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   autoFocus
-                  className="h-10 bg-card/75 pl-9"
+                  className="h-9 bg-background/78 pl-9"
                 />
               </div>
             </div>
 
-            <div className="flex-1 space-y-1 overflow-y-auto px-3 pb-3">
+            <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-3">
               {chatsLoading ? (
                 <p className="py-4 text-center text-xs text-muted-foreground">加载中...</p>
               ) : sortedItems.length === 0 ? (

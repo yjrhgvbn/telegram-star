@@ -10,7 +10,7 @@ export function PwaUpdatePrompt() {
   return (
     <div
       role="status"
-      className="fixed bottom-4 left-4 right-4 mx-auto flex max-w-md items-center gap-3 rounded-lg bg-card px-3 py-3 text-sm text-card-foreground shadow-lg ring-1 ring-foreground/10 sm:left-auto sm:right-4"
+      className="fixed right-4 bottom-18 left-4 mx-auto flex max-w-md items-center gap-3 rounded-lg border border-border bg-card px-3 py-3 text-sm text-card-foreground shadow-lg sm:right-4 sm:left-auto md:bottom-4"
     >
       <div className="min-w-0 flex-1">
         <div className="font-medium">新版本可用</div>

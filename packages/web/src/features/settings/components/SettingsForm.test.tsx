@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { useState, type ComponentProps, type FormEvent } from "react";
+import { useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SERVER_CONFIG_STORAGE_KEY } from "@/shared/runtime/serverConfig";
 import { createQueryWrapper } from "@/test/queryTestUtils";
@@ -76,9 +77,18 @@ describe("SettingsForm", () => {
   it("edits Telegram settings and thumb quality in one form", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
+    const QueryWrapper = createQueryWrapper();
     mockClientDevicesFetch();
     render(<SettingsFormHarness onSubmit={onSubmit} />, {
-      wrapper: createQueryWrapper(),
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <MemoryRouter initialEntries={["/settings/connection"]}>
+          <QueryWrapper>
+            <Routes>
+              <Route path="/settings/:sectionId" element={<>{children}</>} />
+            </Routes>
+          </QueryWrapper>
+        </MemoryRouter>
+      ),
     });
 
     const serverUrlInput = screen.getByLabelText("后端地址") as HTMLInputElement;

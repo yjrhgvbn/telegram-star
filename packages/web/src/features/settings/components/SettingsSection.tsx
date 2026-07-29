@@ -16,11 +16,11 @@ export function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <section className="min-w-0 rounded-lg bg-card/72 p-3 text-card-foreground shadow-[0_24px_70px_color-mix(in_oklab,var(--foreground)_8%,transparent)] backdrop-blur">
-      <header className="flex min-w-0 flex-col gap-2 px-1 pb-2 sm:flex-row sm:items-center sm:justify-between">
+    <section className="min-w-0 overflow-hidden rounded-lg border border-border/72 bg-card/88 text-card-foreground shadow-sm">
+      <header className="flex min-w-0 items-center justify-between gap-2 border-b border-border px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Icon className="size-4" />
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-secondary text-primary">
+            <Icon className="size-3.5" />
           </span>
           <div className="min-w-0">
             <h2 className="text-base font-semibold leading-6 text-foreground">{title}</h2>
@@ -31,7 +31,7 @@ export function SettingsSection({
         </div>
         {meta && <div className="flex shrink-0 flex-wrap items-center gap-1.5">{meta}</div>}
       </header>
-      <div className="flex min-w-0 flex-col gap-2.5">{children}</div>
+      <div className="flex min-w-0 flex-col gap-2 p-3">{children}</div>
     </section>
   );
 }
@@ -53,7 +53,7 @@ export function SettingsItem({
     <div
       data-setting-item
       className={cn(
-        "grid min-w-0 gap-3 rounded-lg bg-muted/38 px-3 py-3 lg:grid-cols-[minmax(150px,0.3fr)_minmax(0,1fr)] lg:items-start",
+        "grid min-w-0 gap-3 rounded-lg border border-border/65 bg-muted/30 px-3 py-2.5 lg:grid-cols-[minmax(150px,0.3fr)_minmax(0,1fr)] lg:items-start",
         className,
       )}
     >

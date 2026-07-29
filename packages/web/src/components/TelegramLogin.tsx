@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -121,18 +120,16 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
   if (authStatus.authorized) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/35 px-4 backdrop-blur-md">
-      <Card className="w-full max-w-md animate-in fade-in-0 zoom-in-95 border-border/80 bg-card/98 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/22 px-4 backdrop-blur-md">
+      <Card className="w-full max-w-md animate-in border-border bg-card shadow-xl fade-in-0 zoom-in-95">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-            <Sparkles className="size-5" />
-          </div>
+          <img src="/icons/icon.svg" alt="" className="mx-auto mb-2 size-11 rounded-xl shadow-sm" />
           <CardTitle className="text-xl">Telegram Star</CardTitle>
-          <CardDescription>连接你的 Telegram 账号开始追踪消息</CardDescription>
+          <CardDescription>连接 Telegram，开始运行你的消息规则</CardDescription>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-4">
-          {error && <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+          {error && <div className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
 
           {step === "config" && (
             <form onSubmit={handleSaveConfig} className="flex flex-col gap-3">

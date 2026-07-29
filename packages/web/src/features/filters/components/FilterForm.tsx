@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, BellRing, CheckCircle2, LoaderCircle, LocateFixed, Plus, Save, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { Filter, ForwardTarget } from "@/types";
@@ -74,14 +74,14 @@ export function FilterForm({
   };
 
   return (
-    <Card className="bg-card/80 shadow-sm ring-1 ring-foreground/10" size="sm">
-      <CardHeader className="gap-3 px-4 pt-4 pb-0">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <Card className="bg-card/88" size="sm">
+      <CardHeader className="border-b px-3 pb-2.5">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <CardTitle className="text-base">
               {selectedFilter ? "规则编辑" : "创建规则"}
             </CardTitle>
-            <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+            <div className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
               <span>{conditions.length} 个条件</span>
               <span>·</span>
               <span>{conditionValueCount} 个取值</span>
@@ -90,30 +90,29 @@ export function FilterForm({
           <Badge
             variant={selectedFilter?.enabled === false ? "outline" : "secondary"}
             className={cn(
-              "h-7 rounded-lg px-2.5",
               selectedFilter?.enabled === false ? "text-muted-foreground" : "text-success",
             )}
           >
-            <CheckCircle2 className="size-3.5" />
+            <CheckCircle2 data-icon="inline-start" />
             {selectedFilter ? (selectedFilter.enabled ? "已启用" : "已停用") : "草稿"}
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 px-4 pb-4">
+      <CardContent className="flex flex-col gap-3 px-3">
         {error && (
-          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive ring-1 ring-destructive/20">
+          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
             <AlertCircle className="size-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        <div className="space-y-2">
+        <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium">过滤器名称</label>
           <Input
             placeholder="例如：项目公告 / 值班提醒观察"
             value={name}
             onChange={(event) => onNameChange(event.target.value)}
-            className="h-10 bg-background/70 text-base md:text-sm"
+            className="h-9 bg-background/76 text-base md:text-sm"
           />
         </div>
 
@@ -122,14 +121,14 @@ export function FilterForm({
           role="switch"
           aria-checked={autoLocateUnreadNearRead}
           className={cn(
-            "flex w-full items-center gap-3 rounded-lg bg-background/70 p-3 text-left transition ring-1 ring-foreground/10 hover:bg-background",
-            autoLocateUnreadNearRead && "ring-primary/25",
+            "flex w-full items-center gap-3 rounded-lg bg-muted/42 px-3 py-2.5 text-left transition-colors hover:bg-muted/65",
+            autoLocateUnreadNearRead && "bg-accent/45",
           )}
           onClick={() => onAutoLocateChange(!autoLocateUnreadNearRead)}
         >
           <span
             className={cn(
-              "flex size-9 shrink-0 items-center justify-center rounded-lg",
+              "flex size-8 shrink-0 items-center justify-center rounded-md",
               autoLocateUnreadNearRead ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
             )}
           >
@@ -156,10 +155,10 @@ export function FilterForm({
           </span>
         </button>
 
-        <div className="flex flex-col gap-3 rounded-lg bg-background/70 p-3 ring-1 ring-foreground/10">
+        <div className="flex flex-col gap-3 rounded-lg bg-muted/42 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-secondary text-primary">
                 <BellRing className="size-4" />
               </span>
               <div className="min-w-0">
@@ -178,12 +177,12 @@ export function FilterForm({
           </div>
 
           {forwardTargetsLoading ? (
-            <div className="flex min-h-12 items-center gap-2 rounded-md bg-muted/45 px-3 text-sm text-muted-foreground">
+            <div className="flex min-h-10 items-center gap-2 rounded-md bg-background/62 px-3 text-sm text-muted-foreground">
               <LoaderCircle className="animate-spin" data-icon="inline-start" />
               读取转发通道中
             </div>
           ) : forwardTargets.length === 0 ? (
-            <div className="rounded-md bg-muted/45 px-3 py-3 text-sm text-muted-foreground">
+            <div className="rounded-md bg-background/62 px-3 py-2.5 text-sm text-muted-foreground">
               暂无可用转发通道
             </div>
           ) : (
@@ -214,7 +213,7 @@ export function FilterForm({
           )}
         </div>
 
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium">匹配条件</div>
@@ -237,8 +236,10 @@ export function FilterForm({
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <Button type="button" size="lg" onClick={onSave} disabled={saving}>
+      </CardContent>
+
+      <CardFooter className="flex flex-wrap items-center gap-1.5">
+          <Button type="button" onClick={onSave} disabled={saving}>
             {saving ? (
               <LoaderCircle className="animate-spin" data-icon="inline-start" />
             ) : (
@@ -248,13 +249,12 @@ export function FilterForm({
           </Button>
           {selectedFilter && (
             <>
-              <Button type="button" variant="outline" size="lg" onClick={onToggle}>
+              <Button type="button" variant="outline" onClick={onToggle}>
                 {selectedFilter.enabled ? "停用过滤器" : "启用过滤器"}
               </Button>
               <Button
                 type="button"
                 variant={deleteConfirming ? "destructive" : "outline"}
-                size="lg"
                 onClick={handleDeleteClick}
                 disabled={saving}
                 className={cn(
@@ -265,14 +265,13 @@ export function FilterForm({
                 {deleteConfirming ? "确认删除" : "删除"}
               </Button>
               {deleteConfirming && (
-                <Button type="button" variant="ghost" size="lg" onClick={() => setDeleteConfirming(false)}>
+                <Button type="button" variant="ghost" onClick={() => setDeleteConfirming(false)}>
                   取消
                 </Button>
               )}
             </>
           )}
-        </div>
-      </CardContent>
+      </CardFooter>
     </Card>
   );
 }
