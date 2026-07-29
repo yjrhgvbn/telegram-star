@@ -1,18 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, ListFilter, Plus } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  FlaskConical,
+  ListFilter,
+  LoaderCircle,
+  Plus,
+} from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
+import { api } from "@/api/client";
 import { AppShell } from "@/components/AppShell";
 import { WorkspaceHeader } from "@/components/WorkspaceHeader";
-import { api } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useFilters } from "@/hooks/useFilters";
-import { cn } from "@/lib/utils";
 import { queryKeys } from "@/shared/query/queryKeys";
-import type { HistoricalFilterPreviewMessage } from "@/types";
+import type { HistoricalFilterPreviewSample } from "@/types";
 import { FilterForm } from "./components/FilterForm";
+import { FilterLibrary } from "./components/FilterLibrary";
 import { PreviewPanel } from "./components/PreviewPanel";
 import type { DraftCondition } from "./types";
 import {
@@ -27,87 +35,168 @@ export function FiltersFeature() {
   const { filterId: routeFilterId } = useParams<{ filterId?: string }>();
   const navigate = useNavigate();
   const { authStatus, authLoading, handleLoginSuccess } = useAuthStatus();
-  const { filters, createFilter, updateFilter, deleteFilter, toggleFilter } = useFilters();
+  const {
+    filters,
+    chats,
+    loading,
+    chatsLoading,
+    createFilter,
+    updateFilter,
+    deleteFilter,
+    toggleFilter,
+  } = useFilters();
   const forwardTargetsQuery = useQuery({
     queryKey: queryKeys.forwardTargets.all,
     queryFn: api.forwardTargets.list,
   });
 
-  const [selectedFilterId, setSelectedFilterId] = useState<string>("new");
   const [name, setName] = useState("");
   const [autoLocateUnreadNearRead, setAutoLocateUnreadNearRead] = useState(true);
   const [forwardTargetIds, setForwardTargetIds] = useState<number[]>([]);
   const [conditions, setConditions] = useState<DraftCondition[]>([createDraftCondition()]);
+  const [isDirty, setIsDirty] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [backfillLoading, setBackfillLoading] = useState(false);
-  const [previewMessages, setPreviewMessages] = useState<HistoricalFilterPreviewMessage[]>([]);
-  const [previewSummary, setPreviewSummary] = useState<{ scannedChats: number; total: number } | null>(null);
+  const [previewSamples, setPreviewSamples] = useState<HistoricalFilterPreviewSample[]>([]);
+  const [previewSummary, setPreviewSummary] = useState<{
+    scannedChats: number;
+    total: number;
+  } | null>(null);
+  const [previewConditionSignature, setPreviewConditionSignature] = useState<string | null>(null);
   const [previewLimit, setPreviewLimit] = useState("200");
-  const [backfillSummary, setBackfillSummary] = useState<string>("");
+  const [backfillSummary, setBackfillSummary] = useState("");
 
-  const selectedFilter = filters.find((filter) => String(filter.id) === selectedFilterId) ?? null;
+  const isEditorSelected = routeFilterId !== undefined;
+  const selectedFilter =
+    routeFilterId && routeFilterId !== "new"
+      ? filters.find((filter) => String(filter.id) === routeFilterId) ?? null
+      : null;
   const enabledFilters = filters.filter((filter) => filter.enabled).length;
   const forwardTargets = forwardTargetsQuery.data ?? [];
-  const isEditorSelected = routeFilterId !== undefined;
+  const persistedConditions = useMemo(
+    () => mergePersistableConditions(normalizeConditions(conditions)),
+    [conditions],
+  );
+  const currentConditionSignature = useMemo(
+    () => JSON.stringify(persistedConditions),
+    [persistedConditions],
+  );
+  const previewStale =
+    previewConditionSignature !== null &&
+    previewConditionSignature !== currentConditionSignature;
+  const draftReady = Boolean(name.trim()) && persistedConditions.length > 0;
+  const previewReady = previewSummary !== null && !previewStale;
+  const readinessCount = Number(draftReady) + 1 + Number(previewReady);
+  const readinessLabel = previewReady
+    ? `准备度 ${readinessCount} / 3 · 已验证`
+    : previewStale
+      ? `准备度 ${readinessCount} / 3 · 需要重新验证`
+      : `准备度 ${readinessCount} / 3 · 尚未验证`;
 
-  // 路由参数变化时同步选中的过滤器
+  // 路由是列表 / 新建 / 编辑三种工作模式的唯一来源，避免未来增加子面板时状态互相漂移。
   useEffect(() => {
-    if (!routeFilterId || routeFilterId === "new") {
-      setSelectedFilterId("new");
-      return;
-    }
-    setSelectedFilterId(routeFilterId);
-  }, [routeFilterId]);
+    if (!routeFilterId) return;
 
-  // 选中过滤器变化时重置表单状态
-  useEffect(() => {
-    if (selectedFilterId === "new") {
+    if (routeFilterId === "new") {
       setName("");
       setAutoLocateUnreadNearRead(true);
       setForwardTargetIds([]);
       setConditions([createDraftCondition()]);
-      setError("");
-      setPreviewMessages([]);
-      setPreviewSummary(null);
-      setBackfillSummary("");
+    } else if (selectedFilter) {
+      setName(selectedFilter.name);
+      setAutoLocateUnreadNearRead(selectedFilter.autoLocateUnreadNearRead);
+      setForwardTargetIds(selectedFilter.forwardTargetIds);
+      setConditions(toDraftConditions(selectedFilter.conditions));
+    } else {
       return;
     }
 
-    if (!selectedFilter) return;
-
-    setName(selectedFilter.name);
-    setAutoLocateUnreadNearRead(selectedFilter.autoLocateUnreadNearRead);
-    setForwardTargetIds(selectedFilter.forwardTargetIds);
-    setConditions(toDraftConditions(selectedFilter.conditions));
+    setIsDirty(false);
     setError("");
-    setPreviewMessages([]);
+    setPreviewSamples([]);
     setPreviewSummary(null);
+    setPreviewConditionSignature(null);
     setBackfillSummary("");
-  }, [selectedFilterId, selectedFilter]);
+    // Only reset when the route resolves to a different rule. Cache updates for
+    // the current rule must not wipe an unsaved draft.
+  }, [routeFilterId, selectedFilter?.id]);
 
-  // ---- 条件编辑操作 ----
+  useEffect(() => {
+    if (
+      !routeFilterId ||
+      routeFilterId === "new" ||
+      loading ||
+      selectedFilter
+    ) {
+      return;
+    }
 
-  const updateCondition = (id: string, updater: (condition: DraftCondition) => DraftCondition) => {
+    navigate("/filters", { replace: true });
+  }, [loading, navigate, routeFilterId, selectedFilter]);
+
+  const buildConditions = () => {
+    if (persistedConditions.length === 0) {
+      throw new Error("至少添加一个有效条件");
+    }
+
+    assertValidRegexConditions(persistedConditions);
+    return persistedConditions;
+  };
+
+  const buildPayload = () => {
+    const nextConditions = buildConditions();
+    if (!name.trim()) throw new Error("请为规则填写名称");
+
+    return {
+      name: name.trim(),
+      conditions: nextConditions,
+      autoLocateUnreadNearRead,
+      forwardTargetIds,
+    };
+  };
+
+  const updateCondition = (
+    id: string,
+    updater: (condition: DraftCondition) => DraftCondition,
+  ) => {
     setConditions((current) =>
-      current.map((condition) => (condition.id === id ? updater(condition) : condition)),
+      current.map((condition) =>
+        condition.id === id ? updater(condition) : condition,
+      ),
     );
+    setIsDirty(true);
   };
 
   const addCondition = () => {
     setConditions((current) => [...current, createDraftCondition()]);
+    setIsDirty(true);
   };
 
   const removeCondition = (id: string) => {
     setConditions((current) =>
-      current.length === 1 ? [createDraftCondition()] : current.filter((c) => c.id !== id),
+      current.length === 1
+        ? [createDraftCondition()]
+        : current.filter((condition) => condition.id !== id),
     );
+    setIsDirty(true);
   };
 
   const appendConditionValues = (id: string) => {
+    const draft = conditions.find((condition) => condition.id === id);
+    const separator = draft?.type === "regex" ? /\n/ : /[,，\n]/;
+    if (
+      !draft ||
+      draft.input
+        .split(separator)
+        .map((item) => item.trim())
+        .every((item) => !item)
+    ) {
+      return;
+    }
+
     updateCondition(id, (condition) => {
-      const separator = condition.type === "regex" ? /\n/ : /[,，\n]/;
       const nextValues = condition.input
         .split(separator)
         .map((item) => item.trim())
@@ -123,33 +212,24 @@ export function FiltersFeature() {
     });
   };
 
-  // ---- 构建提交 payload，验证基本字段 ----
-
-  const buildPayload = () => {
-    const normalized = normalizeConditions(conditions);
-    const mergedConditions = mergePersistableConditions(normalized);
-
-    if (!name.trim()) throw new Error("过滤器名称不能为空");
-    if (mergedConditions.length === 0) throw new Error("至少添加一个有效条件");
-    assertValidRegexConditions(mergedConditions);
-
-    return {
-      name: name.trim(),
-      conditions: mergedConditions,
-      autoLocateUnreadNearRead,
-      forwardTargetIds,
-    };
-  };
-
   const toggleForwardTarget = (targetId: number) => {
     setForwardTargetIds((current) =>
       current.includes(targetId)
         ? current.filter((id) => id !== targetId)
         : [...current, targetId],
     );
+    setIsDirty(true);
   };
 
-  // ---- 事件处理 ----
+  const handleNameChange = (nextName: string) => {
+    setName(nextName);
+    setIsDirty(true);
+  };
+
+  const handleAutoLocateChange = (value: boolean) => {
+    setAutoLocateUnreadNearRead(value);
+    setIsDirty(true);
+  };
 
   const handleSave = async () => {
     try {
@@ -159,13 +239,14 @@ export function FiltersFeature() {
       const saved = selectedFilter
         ? await updateFilter(selectedFilter.id, payload)
         : await createFilter(payload);
-      setSelectedFilterId(String(saved.id));
+
+      setIsDirty(false);
+      setBackfillSummary("");
       if (!selectedFilter) {
         navigate(`/filters/${saved.id}`, { replace: true });
       }
-      setBackfillSummary("");
-    } catch (err: any) {
-      setError(err.message || "保存失败");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "保存失败");
     } finally {
       setSaving(false);
     }
@@ -175,18 +256,24 @@ export function FiltersFeature() {
     try {
       setPreviewLoading(true);
       setError("");
-      const payload = buildPayload();
+      const nextConditions = buildConditions();
       const result = await api.filters.preview({
-        conditions: payload.conditions,
+        conditions: nextConditions,
         perChatLimit: Number(previewLimit) || 200,
       });
-      setPreviewMessages(result.messages);
-      setPreviewSummary({ scannedChats: result.scannedChats, total: result.total });
+
+      setPreviewSamples(result.samples);
+      setPreviewSummary({
+        scannedChats: result.scannedChats,
+        total: result.total,
+      });
+      setPreviewConditionSignature(JSON.stringify(nextConditions));
       setBackfillSummary("");
-    } catch (err: any) {
-      setError(err.message || "预览失败");
-      setPreviewMessages([]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "测试失败");
+      setPreviewSamples([]);
       setPreviewSummary(null);
+      setPreviewConditionSignature(null);
     } finally {
       setPreviewLoading(false);
     }
@@ -194,26 +281,45 @@ export function FiltersFeature() {
 
   const handleBackfill = async () => {
     if (!selectedFilter) {
-      setError("请先保存过滤器，再执行历史拉取");
+      setError("请先保存规则，再执行历史回拉");
+      return;
+    }
+
+    if (isDirty) {
+      setError("当前修改尚未保存，请先保存后再回拉历史消息");
       return;
     }
 
     try {
       setBackfillLoading(true);
       setError("");
-      buildPayload();
       const result = await api.filters.backfill(selectedFilter.id, {
         perChatLimit: Number(previewLimit) || 200,
       });
       setBackfillSummary(
-        `扫描 ${result.scannedChats} 个会话，命中 ${result.matchedCount} 条，新增 ${result.savedCount} 条，跳过已存在 ${result.skippedExistingCount} 条`,
+        `扫描 ${result.scannedChats} 个会话，命中 ${result.matchedCount} 条，新增 ${result.savedCount} 条，跳过已存在 ${result.skippedExistingCount} 条。`,
       );
-      setPreviewMessages([]);
+      setPreviewSamples([]);
       setPreviewSummary(null);
-    } catch (err: any) {
-      setError(err.message || "历史拉取失败");
+      setPreviewConditionSignature(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "历史回拉失败");
     } finally {
       setBackfillLoading(false);
+    }
+  };
+
+  const handleToggle = async () => {
+    if (!selectedFilter) return;
+
+    try {
+      setSaving(true);
+      setError("");
+      await toggleFilter(selectedFilter.id);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "更新规则状态失败");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -224,14 +330,66 @@ export function FiltersFeature() {
       setSaving(true);
       setError("");
       await deleteFilter(selectedFilter.id);
-      setSelectedFilterId("new");
       navigate("/filters", { replace: true });
-    } catch (err: any) {
-      setError(err.message || "删除失败");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "删除失败");
     } finally {
       setSaving(false);
     }
   };
+
+  const handleBackToList = () => {
+    if (isDirty && !window.confirm("当前修改尚未保存，确定返回规则列表吗？")) {
+      return;
+    }
+
+    navigate("/filters");
+  };
+
+  if (!isEditorSelected) {
+    return (
+      <AppShell
+        activeTab="filters"
+        authStatus={authStatus}
+        authLoading={authLoading}
+        onLoginSuccess={handleLoginSuccess}
+      >
+        <div className="flex min-h-0 flex-1 flex-col bg-background/72">
+          <WorkspaceHeader
+            title="过滤器"
+            description={`${filters.length} 个规则 · ${enabledFilters} 个正在监听`}
+            actions={
+              <>
+                <Badge variant="outline" className="hidden sm:inline-flex">
+                  <ListFilter data-icon="inline-start" />
+                  {filters.length}
+                </Badge>
+                <Badge variant="secondary" className="hidden sm:inline-flex">
+                  <CheckCircle2 data-icon="inline-start" />
+                  {enabledFilters} 启用
+                </Badge>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => navigate("/filters/new")}
+                >
+                  <Plus data-icon="inline-start" />
+                  新建
+                </Button>
+              </>
+            }
+          />
+          <FilterLibrary
+            filters={filters}
+            chats={chats}
+            loading={loading}
+            onCreate={() => navigate("/filters/new")}
+            onSelect={(id) => navigate(`/filters/${id}`)}
+          />
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell
@@ -240,180 +398,150 @@ export function FiltersFeature() {
       authLoading={authLoading}
       onLoginSuccess={handleLoginSuccess}
     >
-      <div className="flex min-h-0 flex-1 flex-col bg-background/72">
+      <div className="relative flex min-h-0 flex-1 flex-col bg-background/84">
         <WorkspaceHeader
-          title={selectedFilter ? selectedFilter.name : isEditorSelected ? "新建过滤器" : "过滤器"}
-          description={`${filters.length} 个规则 · ${enabledFilters} 个启用`}
-          leading={
-            isEditorSelected ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="lg:hidden"
-                onClick={() => navigate("/filters")}
-                aria-label="返回过滤器列表"
+          className="min-h-16 bg-card/78 px-4 py-2"
+          title={
+            <span className="flex min-w-0 items-center gap-2">
+              <Input
+                id="filter-name"
+                name="filter-name"
+                aria-label="过滤器名称"
+                placeholder="未命名规则"
+                value={name}
+                onChange={(event) => handleNameChange(event.target.value)}
+                className="h-7 w-auto min-w-20 max-w-64 border-transparent bg-transparent px-0 text-base font-semibold shadow-none [field-sizing:content] focus-visible:border-input focus-visible:bg-card focus-visible:px-2"
+              />
+              <Badge
+                variant="secondary"
+                className={previewReady
+                  ? "hidden shrink-0 bg-success/10 text-success sm:inline-flex"
+                  : "hidden shrink-0 bg-warning/16 text-warning-foreground sm:inline-flex"}
               >
-                <ArrowLeft />
-              </Button>
-            ) : null
+                {readinessLabel}
+              </Badge>
+            </span>
+          }
+          description={
+            selectedFilter
+              ? `${selectedFilter.enabled ? "正在监听" : "已停用"} · ${persistedConditions.length} 个条件`
+              : "尚未保存 · 可直接测试当前草稿"
+          }
+          leading={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleBackToList}
+              aria-label="返回规则列表"
+            >
+              <ArrowLeft />
+            </Button>
           }
           actions={
             <>
-              <Badge variant="outline" className="hidden sm:inline-flex">
-                <ListFilter data-icon="inline-start" />
-                {filters.length}
-              </Badge>
-              <Badge variant="secondary" className="hidden sm:inline-flex">
-                <CheckCircle2 data-icon="inline-start" />
-                {enabledFilters} 启用
-              </Badge>
-              <Button type="button" size="sm" onClick={() => navigate("/filters/new")}>
-                <Plus data-icon="inline-start" />
-                新建
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                className="hidden md:inline-flex xl:hidden"
+                onClick={handlePreview}
+                disabled={previewLoading}
+                aria-label={previewLoading ? "正在测试当前草稿" : "立即测试当前草稿"}
+                title="测试当前草稿"
+              >
+                {previewLoading ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : (
+                  <FlaskConical />
+                )}
+              </Button>
+              {selectedFilter ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleToggle}
+                  disabled={saving}
+                >
+                  {selectedFilter.enabled ? "停用监听" : "启用监听"}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? (
+                  <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                ) : null}
+                {selectedFilter ? "保存修改" : "创建并启用"}
               </Button>
             </>
           }
         />
 
         <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-          <aside
-            className={cn(
-              "min-h-0 shrink-0 flex-col border-r border-border bg-sidebar/54",
-              isEditorSelected ? "hidden lg:flex lg:w-[252px]" : "flex w-full lg:w-[252px]",
-            )}
-          >
-            <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
-              <span className="text-sm font-semibold">已保存规则</span>
-              <Badge variant="outline">{filters.length}</Badge>
-            </div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto xl:grid xl:grid-cols-[minmax(460px,1fr)_372px] xl:overflow-hidden">
+            <section className="min-w-0 shrink-0 bg-card/26 pb-20 md:pb-0 xl:min-h-0 xl:overflow-y-auto">
+              <FilterForm
+                selectedFilter={selectedFilter}
+                autoLocateUnreadNearRead={autoLocateUnreadNearRead}
+                onAutoLocateChange={handleAutoLocateChange}
+                chats={chats}
+                chatsLoading={chatsLoading}
+                forwardTargets={forwardTargets}
+                selectedForwardTargetIds={forwardTargetIds}
+                forwardTargetsLoading={forwardTargetsQuery.isLoading}
+                onToggleForwardTarget={toggleForwardTarget}
+                onCreateForwardTarget={() => navigate("/notifications")}
+                conditions={conditions}
+                error={error}
+                saving={saving}
+                onUpdateCondition={updateCondition}
+                onRemoveCondition={removeCondition}
+                onAppendValues={appendConditionValues}
+                onAddCondition={addCondition}
+                onDelete={handleDelete}
+              />
+            </section>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-              <button
-                type="button"
-                className={cn(
-                  "relative flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left transition-colors",
-                  selectedFilterId === "new"
-                    ? "bg-card text-foreground shadow-sm ring-1 ring-border"
-                    : "text-muted-foreground hover:bg-card/72 hover:text-foreground",
-                )}
-                onClick={() => navigate("/filters/new")}
-              >
-                <span
-                  className={cn(
-                    "absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-transparent",
-                    selectedFilterId === "new" && "bg-primary",
-                  )}
-                />
-                <span className="min-w-0 truncate text-sm font-medium">新建过滤器</span>
-                <Plus className="size-4 shrink-0" />
-              </button>
-
-              {filters.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
-                  暂无已保存规则
-                </div>
-              ) : (
-                filters.map((filter) => {
-                  const active = String(filter.id) === selectedFilterId;
-                  const keywordCount = filter.conditions
-                    .filter((condition) => condition.type === "keyword")
-                    .reduce((count, condition) => count + condition.values.length, 0);
-                  const chatCount = filter.conditions
-                    .filter((condition) => condition.type === "chat")
-                    .reduce((count, condition) => count + condition.values.length, 0);
-                  const regexCount = filter.conditions
-                    .filter((condition) => condition.type === "regex")
-                    .reduce((count, condition) => count + condition.values.length, 0);
-
-                  return (
-                    <button
-                      key={filter.id}
-                      type="button"
-                      className={cn(
-                        "relative flex w-full flex-col gap-1 rounded-lg px-2.5 py-2 text-left transition-colors",
-                        active
-                          ? "bg-card text-foreground shadow-sm ring-1 ring-border"
-                          : "text-muted-foreground hover:bg-card/72 hover:text-foreground",
-                      )}
-                      onClick={() => navigate(`/filters/${filter.id}`)}
-                    >
-                      <span
-                        className={cn(
-                          "absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-transparent",
-                          active && "bg-primary",
-                        )}
-                      />
-                      <span className="flex w-full items-center justify-between gap-3">
-                        <span className="min-w-0 truncate text-sm font-medium text-foreground">{filter.name}</span>
-                        <span
-                          className={cn(
-                            "size-2 shrink-0 rounded-full",
-                            filter.enabled ? "bg-success" : "bg-muted-foreground/35",
-                          )}
-                        />
-                      </span>
-                      <span className="truncate text-[11px] text-muted-foreground">
-                        {keywordCount} 关键词 · {regexCount} 正则 · {chatCount} 会话 · {filter.forwardTargetIds.length} 转发
-                      </span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </aside>
-
-          <div
-            className={cn(
-              "min-h-0 min-w-0 flex-1 overflow-y-auto",
-              isEditorSelected ? "block" : "hidden lg:block",
-            )}
-          >
-            <div className="grid min-w-0 gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="min-w-0">
-                <FilterForm
-                  selectedFilter={selectedFilter}
-                  name={name}
-                  onNameChange={setName}
-                  autoLocateUnreadNearRead={autoLocateUnreadNearRead}
-                  onAutoLocateChange={setAutoLocateUnreadNearRead}
-                  forwardTargets={forwardTargets}
-                  selectedForwardTargetIds={forwardTargetIds}
-                  forwardTargetsLoading={forwardTargetsQuery.isLoading}
-                  onToggleForwardTarget={toggleForwardTarget}
-                  onCreateForwardTarget={() => navigate("/notifications")}
-                  conditions={conditions}
-                  error={error}
-                  saving={saving}
-                  onUpdateCondition={updateCondition}
-                  onRemoveCondition={removeCondition}
-                  onAppendValues={appendConditionValues}
-                  onAddCondition={addCondition}
-                  onSave={handleSave}
-                  onDelete={handleDelete}
-                  onToggle={() => {
-                    if (selectedFilter) void toggleFilter(selectedFilter.id);
-                  }}
-                />
-              </div>
-
-              <div className="min-w-0">
-                <PreviewPanel
-                  selectedFilter={selectedFilter}
-                  previewLoading={previewLoading}
-                  backfillLoading={backfillLoading}
-                  previewMessages={previewMessages}
-                  previewSummary={previewSummary}
-                  backfillSummary={backfillSummary}
-                  previewLimit={previewLimit}
-                  onPreviewLimitChange={setPreviewLimit}
-                  onPreview={handlePreview}
-                  onBackfill={handleBackfill}
-                />
-              </div>
-            </div>
+            <PreviewPanel
+              className="mx-3 mb-4 flex shrink-0 rounded-xl border border-border sm:mx-4 sm:mb-4 xl:m-0 xl:rounded-none xl:border-y-0 xl:border-r-0"
+              selectedFilter={selectedFilter}
+              conditions={conditions}
+              chats={chats}
+              draftDirty={isDirty || !selectedFilter}
+              previewStale={previewStale}
+              previewLoading={previewLoading}
+              backfillLoading={backfillLoading}
+              previewSamples={previewSamples}
+              previewSummary={previewSummary}
+              backfillSummary={backfillSummary}
+              previewLimit={previewLimit}
+              onPreviewLimitChange={setPreviewLimit}
+              onPreview={handlePreview}
+              onBackfill={handleBackfill}
+            />
           </div>
         </main>
+
+        <button
+          type="button"
+          className="fixed right-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-3 z-30 flex h-11 items-center justify-between rounded-xl border border-primary/28 bg-accent/92 px-3 text-xs font-semibold text-primary shadow-[0_10px_26px_rgba(35,76,64,0.13)] md:hidden"
+          onClick={handlePreview}
+          disabled={previewLoading}
+        >
+          <span>
+            {previewReady
+              ? `草稿已验证 · ${previewSummary?.total ?? 0} 条命中`
+              : previewStale
+                ? "当前草稿需要重新验证"
+                : "当前草稿待验证"}
+          </span>
+          <span>{previewLoading ? "测试中…" : "运行测试 →"}</span>
+        </button>
       </div>
     </AppShell>
   );

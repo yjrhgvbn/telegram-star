@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   assertValidRegexConditions,
+  describeFilterRule,
+  evaluatePreviewMessage,
   mergePersistableConditions,
   normalizeConditions,
   toDraftConditions,
@@ -92,5 +94,33 @@ describe("filter form utils", () => {
 
     expect(drafts).toMatchObject([{ type: "keyword", values: ["发布", "公告"], input: "" }]);
     expect(source).toEqual([{ type: "keyword", values: ["发布"] }]);
+  });
+
+  it("describes the real AND/OR rule semantics with readable chat titles", () => {
+    expect(
+      describeFilterRule(
+        [
+          { type: "chat", values: ["1001"] },
+          { type: "keyword", values: ["更新", "番外"] },
+        ],
+        [{ id: "1001", title: "将夜" }],
+      ),
+    ).toBe("消息来自「将夜」，并且内容包含「更新」或「番外」");
+  });
+
+  it("explains why a preview message passed every condition", () => {
+    expect(
+      evaluatePreviewMessage(
+        { chatId: "1001", content: "新的番外已经发布" },
+        [
+          { type: "chat", values: ["1001"] },
+          { type: "keyword", values: ["更新", "番外"] },
+        ],
+        [{ id: "1001", title: "将夜" }],
+      ),
+    ).toEqual([
+      { type: "chat", label: "消息来源", detail: "来自「将夜」", matched: true },
+      { type: "keyword", label: "内容条件", detail: "包含「番外」", matched: true },
+    ]);
   });
 });

@@ -1,5 +1,10 @@
 /** 统一导出 telegram/ 子模块的公开 API */
-export type { JoinedChat, LiveChatMessage, HistoricalFilterPreviewMessage } from "./types.js";
+export type {
+  JoinedChat,
+  LiveChatMessage,
+  HistoricalFilterPreviewMessage,
+  HistoricalFilterPreviewSample,
+} from "./types.js";
 export {
   getClient,
   getConnectionStatusWithConfig as getConnectionStatus,

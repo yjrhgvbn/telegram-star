@@ -1,20 +1,33 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, BellRing, CheckCircle2, LoaderCircle, LocateFixed, Plus, Save, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  LoaderCircle,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import type { Filter, ForwardTarget } from "@/types";
-import { ConditionEditor } from "./ConditionEditor";
+import type { Filter, ForwardTarget, JoinedChat } from "@/types";
 import type { DraftCondition } from "../types";
+import { ConditionEditor } from "./ConditionEditor";
+import { RuleSummary } from "./RuleSummary";
 
 interface FilterFormProps {
   selectedFilter: Filter | null;
-  name: string;
-  onNameChange: (name: string) => void;
   autoLocateUnreadNearRead: boolean;
   onAutoLocateChange: (value: boolean) => void;
+  chats: JoinedChat[];
+  chatsLoading: boolean;
   forwardTargets: ForwardTarget[];
   selectedForwardTargetIds: number[];
   forwardTargetsLoading: boolean;
@@ -27,17 +40,15 @@ interface FilterFormProps {
   onRemoveCondition: (id: string) => void;
   onAppendValues: (id: string) => void;
   onAddCondition: () => void;
-  onSave: () => void;
   onDelete: () => void;
-  onToggle: () => void;
 }
 
 export function FilterForm({
   selectedFilter,
-  name,
-  onNameChange,
   autoLocateUnreadNearRead,
   onAutoLocateChange,
+  chats,
+  chatsLoading,
   forwardTargets,
   selectedForwardTargetIds,
   forwardTargetsLoading,
@@ -50,14 +61,12 @@ export function FilterForm({
   onRemoveCondition,
   onAppendValues,
   onAddCondition,
-  onSave,
   onDelete,
-  onToggle,
 }: FilterFormProps) {
   const [deleteConfirming, setDeleteConfirming] = useState(false);
-  const conditionValueCount = conditions.reduce(
-    (count, condition) => count + condition.values.length + (condition.input.trim() ? 1 : 0),
-    0,
+  const actionCount = 1 + (selectedForwardTargetIds.length > 0 ? 1 : 0);
+  const visibleConditions = [...conditions].sort(
+    (a, b) => Number(b.type === "chat") - Number(a.type === "chat"),
   );
 
   useEffect(() => {
@@ -69,209 +78,251 @@ export function FilterForm({
       setDeleteConfirming(true);
       return;
     }
+
     setDeleteConfirming(false);
     onDelete();
   };
 
   return (
-    <Card className="bg-card/88" size="sm">
-      <CardHeader className="border-b px-3 pb-2.5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <CardTitle className="text-base">
-              {selectedFilter ? "规则编辑" : "创建规则"}
-            </CardTitle>
-            <div className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
-              <span>{conditions.length} 个条件</span>
-              <span>·</span>
-              <span>{conditionValueCount} 个取值</span>
-            </div>
+    <div className="flex min-w-0 flex-col bg-card/42">
+      <section id="conditions">
+        <header className="flex min-h-[62px] flex-wrap items-center justify-between gap-3 border-b border-border bg-card/72 px-4 py-2.5">
+          <div>
+            <h2 className="text-sm font-semibold">判断是否命中</h2>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              以下条件需要全部满足
+            </p>
           </div>
-          <Badge
-            variant={selectedFilter?.enabled === false ? "outline" : "secondary"}
-            className={cn(
-              selectedFilter?.enabled === false ? "text-muted-foreground" : "text-success",
-            )}
-          >
-            <CheckCircle2 data-icon="inline-start" />
-            {selectedFilter ? (selectedFilter.enabled ? "已启用" : "已停用") : "草稿"}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3 px-3">
-        {error && (
-          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            <AlertCircle className="size-4 shrink-0" />
-            <span>{error}</span>
+          <div className="rounded-lg border border-input bg-card px-3 py-2 text-[11px] font-semibold text-foreground shadow-xs">
+            全部满足（AND）
           </div>
-        )}
+        </header>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium">过滤器名称</label>
-          <Input
-            placeholder="例如：项目公告 / 值班提醒观察"
-            value={name}
-            onChange={(event) => onNameChange(event.target.value)}
-            className="h-9 bg-background/76 text-base md:text-sm"
+        <div className="px-4 pt-3 pb-4">
+          {error ? (
+            <div
+              role="alert"
+              className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/8 px-3 py-2 text-xs leading-5 text-destructive"
+            >
+              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          ) : null}
+
+          <div className="flex flex-col gap-2">
+            {visibleConditions.map((condition, index) => (
+              <ConditionEditor
+                key={condition.id}
+                condition={condition}
+                index={index}
+                chats={chats}
+                chatsLoading={chatsLoading}
+                onUpdate={onUpdateCondition}
+                onRemove={onRemoveCondition}
+                onAppendValues={onAppendValues}
+              />
+            ))}
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-2 w-full border-dashed bg-card/38 text-xs text-primary shadow-none"
+            onClick={onAddCondition}
+          >
+            <Plus data-icon="inline-start" />
+            添加一个必须同时满足的条件
+          </Button>
+
+          <RuleSummary
+            conditions={conditions}
+            chats={chats}
+            forwardTargets={forwardTargets}
+            selectedForwardTargetIds={selectedForwardTargetIds}
           />
         </div>
+      </section>
 
-        <button
-          type="button"
-          role="switch"
-          aria-checked={autoLocateUnreadNearRead}
-          className={cn(
-            "flex w-full items-center gap-3 rounded-lg bg-muted/42 px-3 py-2.5 text-left transition-colors hover:bg-muted/65",
-            autoLocateUnreadNearRead && "bg-accent/45",
-          )}
-          onClick={() => onAutoLocateChange(!autoLocateUnreadNearRead)}
-        >
-          <span
-            className={cn(
-              "flex size-8 shrink-0 items-center justify-center rounded-md",
-              autoLocateUnreadNearRead ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
-            )}
-          >
-            <LocateFixed className="size-4" />
-          </span>
+      <section
+        id="actions"
+        className="border-t border-border bg-card/58"
+      >
+        <header className="flex min-h-14 items-center gap-3 px-4 py-2.5">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold">命中后执行</h2>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              保存固定开启；选择通知通道即可增加发送动作
+            </p>
+          </div>
+          <Badge variant="secondary" className="rounded-md">
+            已启用 {actionCount} 项
+          </Badge>
+        </header>
+
+        <Separator />
+
+        <div className="grid gap-2 p-4 lg:grid-cols-2">
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>保存消息</CardTitle>
+              <CardDescription>
+                每条命中的消息都会进入消息列表
+              </CardDescription>
+              <CardAction>
+                <Badge variant="secondary">始终开启</Badge>
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              <div className="flex h-9 items-center justify-between gap-2 rounded-md bg-secondary px-3 text-xs">
+                <span className="truncate text-muted-foreground">命中消息</span>
+                <span aria-hidden className="text-primary">→</span>
+                <span className="truncate font-medium text-secondary-foreground">
+                  消息列表
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>发送通知</CardTitle>
+              <CardDescription>
+                {selectedForwardTargetIds.length > 0
+                  ? "命中后同步发送到已选通道"
+                  : "选择至少一个通道后启用"}
+              </CardDescription>
+              <CardAction>
+                {forwardTargets.length === 0 && !forwardTargetsLoading ? (
+                  <Button type="button" variant="outline" size="sm" onClick={onCreateForwardTarget}>
+                    <Plus data-icon="inline-start" />
+                    新建通道
+                  </Button>
+                ) : (
+                  <Badge
+                    variant={selectedForwardTargetIds.length > 0 ? "secondary" : "outline"}
+                  >
+                    {selectedForwardTargetIds.length > 0
+                      ? `已选 ${selectedForwardTargetIds.length} 个`
+                      : "可选"}
+                  </Badge>
+                )}
+              </CardAction>
+            </CardHeader>
+
+            <CardContent>
+              {forwardTargetsLoading ? (
+                <div className="flex h-9 items-center gap-2 text-xs text-muted-foreground">
+                  <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+                  读取通知通道中…
+                </div>
+              ) : forwardTargets.length === 0 ? (
+                <p className="flex h-9 items-center text-xs text-muted-foreground">
+                  暂无通知通道，创建后即可启用
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                    <span>通知通道</span>
+                    <span>点击切换，可多选</span>
+                  </div>
+                  <div className="flex min-h-7 flex-wrap gap-1.5">
+                    {forwardTargets.map((target) => {
+                      const checked = selectedForwardTargetIds.includes(target.id);
+                      return (
+                        <Button
+                          key={target.id}
+                          type="button"
+                          role="checkbox"
+                          aria-checked={checked}
+                          variant={checked ? "secondary" : "outline"}
+                          size="sm"
+                          className={cn(!target.enabled && !checked && "opacity-65")}
+                          onClick={() => onToggleForwardTarget(target.id)}
+                        >
+                          <span aria-hidden>{checked ? "✓" : "+"}</span>
+                          {target.name}
+                          {!target.enabled ? " · 停用" : null}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <section
+        aria-label="阅读偏好与规则管理"
+        className="border-t border-border bg-card/42 px-4 py-1"
+      >
+        <div className="flex items-center gap-3 py-3">
+          <span className="size-2 shrink-0 rounded-full bg-muted-foreground/38" />
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium">自动定位未读</span>
+            <span className="block text-sm font-medium">打开时定位未读</span>
             <span className="mt-0.5 block text-xs text-muted-foreground">
-              {autoLocateUnreadNearRead ? "靠近最近已读消息打开" : "按默认顺序打开"}
+              阅读偏好，只影响打开消息时的位置。
             </span>
           </span>
-          <span
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoLocateUnreadNearRead}
+            aria-label="打开时自动定位未读"
             className={cn(
               "flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition",
               autoLocateUnreadNearRead ? "bg-primary" : "bg-muted-foreground/25",
             )}
+            onClick={() => onAutoLocateChange(!autoLocateUnreadNearRead)}
           >
             <span
               className={cn(
-                "size-5 rounded-full bg-white shadow-sm transition",
+                "size-5 rounded-full bg-card shadow-sm transition",
                 autoLocateUnreadNearRead && "translate-x-5",
               )}
             />
-          </span>
-        </button>
+          </button>
+        </div>
 
-        <div className="flex flex-col gap-3 rounded-lg bg-muted/42 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-secondary text-primary">
-                <BellRing className="size-4" />
-              </span>
-              <div className="min-w-0">
-                <div className="text-sm font-medium">命中后转发到</div>
+        {selectedFilter ? (
+          <>
+            <Separator />
+            <div className="flex flex-wrap items-center gap-2 py-3">
+              <div className="mr-auto min-w-48">
+                <div className="text-sm font-medium">规则管理</div>
                 <div className="text-xs text-muted-foreground">
-                  {selectedForwardTargetIds.length} 个转发通道
+                  当前规则{selectedFilter.enabled ? "正在监听" : "已停止监听"}。
                 </div>
               </div>
-            </div>
-            {forwardTargets.length === 0 && !forwardTargetsLoading && (
-              <Button type="button" variant="outline" size="sm" onClick={onCreateForwardTarget}>
-                <Plus data-icon="inline-start" />
-                新建通道
-              </Button>
-            )}
-          </div>
-
-          {forwardTargetsLoading ? (
-            <div className="flex min-h-10 items-center gap-2 rounded-md bg-background/62 px-3 text-sm text-muted-foreground">
-              <LoaderCircle className="animate-spin" data-icon="inline-start" />
-              读取转发通道中
-            </div>
-          ) : forwardTargets.length === 0 ? (
-            <div className="rounded-md bg-background/62 px-3 py-2.5 text-sm text-muted-foreground">
-              暂无可用转发通道
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {forwardTargets.map((target) => {
-                const checked = selectedForwardTargetIds.includes(target.id);
-                return (
-                  <button
-                    key={target.id}
-                    type="button"
-                    role="checkbox"
-                    aria-checked={checked}
-                    className={cn(
-                      "rounded-md px-2.5 py-1.5 text-xs font-medium transition",
-                      checked
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "bg-muted/55 text-muted-foreground hover:bg-muted hover:text-foreground",
-                      !target.enabled && !checked && "opacity-65",
-                    )}
-                    onClick={() => onToggleForwardTarget(target.id)}
-                  >
-                    {target.name}
-                    {!target.enabled ? " · 停用" : null}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-medium">匹配条件</div>
-              <div className="text-xs text-muted-foreground">会话条件会合并保存</div>
-            </div>
-            <Button type="button" variant="outline" size="sm" onClick={onAddCondition}>
-              <Plus data-icon="inline-start" />
-              添加
-            </Button>
-          </div>
-
-          {conditions.map((condition) => (
-            <ConditionEditor
-              key={condition.id}
-              condition={condition}
-              onUpdate={onUpdateCondition}
-              onRemove={onRemoveCondition}
-              onAppendValues={onAppendValues}
-            />
-          ))}
-        </div>
-
-      </CardContent>
-
-      <CardFooter className="flex flex-wrap items-center gap-1.5">
-          <Button type="button" onClick={onSave} disabled={saving}>
-            {saving ? (
-              <LoaderCircle className="animate-spin" data-icon="inline-start" />
-            ) : (
-              <Save data-icon="inline-start" />
-            )}
-            {selectedFilter ? "保存修改" : "创建过滤器"}
-          </Button>
-          {selectedFilter && (
-            <>
-              <Button type="button" variant="outline" onClick={onToggle}>
-                {selectedFilter.enabled ? "停用过滤器" : "启用过滤器"}
-              </Button>
               <Button
                 type="button"
+                size="sm"
                 variant={deleteConfirming ? "destructive" : "outline"}
                 onClick={handleDeleteClick}
                 disabled={saving}
                 className={cn(
-                  !deleteConfirming && "text-destructive hover:bg-destructive/10 hover:text-destructive",
+                  !deleteConfirming &&
+                    "text-destructive hover:bg-destructive/10 hover:text-destructive",
                 )}
               >
                 <Trash2 data-icon="inline-start" />
                 {deleteConfirming ? "确认删除" : "删除"}
               </Button>
-              {deleteConfirming && (
-                <Button type="button" variant="ghost" onClick={() => setDeleteConfirming(false)}>
+              {deleteConfirming ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDeleteConfirming(false)}
+                >
                   取消
                 </Button>
-              )}
-            </>
-          )}
-      </CardFooter>
-    </Card>
+              ) : null}
+            </div>
+          </>
+        ) : null}
+      </section>
+    </div>
   );
 }

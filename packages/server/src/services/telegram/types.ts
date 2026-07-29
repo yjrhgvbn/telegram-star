@@ -6,5 +6,6 @@ export interface JoinedChat {
 
 export type {
   HistoricalFilterPreviewMessage,
+  HistoricalFilterPreviewSample,
   LiveChatMessage,
 } from "@telegram-star/shared/contracts/filters";

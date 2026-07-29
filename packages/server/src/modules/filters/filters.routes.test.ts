@@ -121,6 +121,7 @@ describe("filter routes", () => {
     const toggled = createFilter(3, { enabled: false });
     const preview: FilterPreviewResponse = {
       messages: [],
+      samples: [],
       scannedChats: 2,
       total: 0,
       nextPage: 2,

@@ -19,7 +19,12 @@ import {
   buildDialogEntityMap,
 } from "./utils.js";
 import { extractMediaInfo, getMessageTextContent, hasMessageContent } from "./media.js";
-import type { JoinedChat, LiveChatMessage, HistoricalFilterPreviewMessage } from "./types.js";
+import type {
+  JoinedChat,
+  LiveChatMessage,
+  HistoricalFilterPreviewMessage,
+  HistoricalFilterPreviewSample,
+} from "./types.js";
 import {
   getDialogPageSlice,
   getNextDialogPage,
@@ -188,21 +193,30 @@ export async function previewHistoricalFilterMessages(options: {
   totalLimit?: number;
   page?: number;
   pageSize?: number;
-}): Promise<{ messages: HistoricalFilterPreviewMessage[]; scannedChats: number; nextPage?: number }> {
+  sampleLimit?: number;
+}): Promise<{
+  messages: HistoricalFilterPreviewMessage[];
+  samples: HistoricalFilterPreviewSample[];
+  scannedChats: number;
+  nextPage?: number;
+}> {
   const client = getClient();
   if (!client || !isClientConnected()) {
     throw new Error("Telegram client is not connected");
   }
 
   if (hasConflictingChatConditions(options.conditions)) {
-    return { messages: [], scannedChats: 0 };
+    return { messages: [], samples: [], scannedChats: 0 };
   }
 
   const { perChatLimit, totalLimit, pageSize, page } = normalizeHistoricalPreviewLimits(options);
+  const sampleLimit = Math.max(0, Math.min(options.sampleLimit ?? 0, 20));
 
   const dialogs = await client.getDialogs({ limit: 300 });
   const scopedChatIds = getScopedChatIds(options.conditions);
   const previews: HistoricalFilterPreviewMessage[] = [];
+  const matchedSamples: HistoricalFilterPreviewSample[] = [];
+  const unmatchedSamples: HistoricalFilterPreviewSample[] = [];
   let scannedChats = 0;
 
   const paginatedDialogs = getDialogPageSlice(dialogs, page, pageSize);
@@ -238,13 +252,17 @@ export async function previewHistoricalFilterMessages(options: {
       for (const item of validMessages) {
         const textContent = getMessageTextContent(item);
         const match = matchFilterConditions({ chatId, content: textContent }, options.conditions);
-        if (!match.matched) continue;
+        const sampleTarget = match.matched ? matchedSamples : unmatchedSamples;
+        const shouldCaptureSample =
+          sampleLimit > 0 && sampleTarget.length < sampleLimit;
+
+        if (!match.matched && !shouldCaptureSample) continue;
 
         const sender = (item as any).sender;
         const { senderName, senderId } = getSenderSummary(sender);
         const mediaInfo = extractMediaInfo(item);
 
-        previews.push({
+        const previewMessage: HistoricalFilterPreviewMessage = {
           id: item.id,
           chatId,
           chatTitle: entity?.title || entity?.username || chatId,
@@ -262,7 +280,16 @@ export async function previewHistoricalFilterMessages(options: {
           mediaDuration: mediaInfo?.mediaDuration ?? null,
           mediaThumbBase64: mediaInfo?.mediaThumbBase64 ?? null,
           mediaExtra: mediaInfo?.mediaExtra ?? null,
-        });
+        };
+
+        // The API keeps the existing match-only list for backfill while also
+        // exposing a small balanced sample set for explainable UI previews.
+        if (shouldCaptureSample) {
+          sampleTarget.push({ ...previewMessage, matched: match.matched });
+        }
+
+        if (!match.matched) continue;
+        previews.push(previewMessage);
 
         if (previews.length >= totalLimit) {
           return;
@@ -273,8 +300,30 @@ export async function previewHistoricalFilterMessages(options: {
   );
 
   const nextPage = getNextDialogPage(dialogs.length, page, pageSize);
+  const preferredMatchedCount = Math.ceil(sampleLimit * (2 / 3));
+  const preferredUnmatchedCount = sampleLimit - preferredMatchedCount;
+  const samples = [
+    ...matchedSamples.slice(0, preferredMatchedCount),
+    ...unmatchedSamples.slice(0, preferredUnmatchedCount),
+  ];
+  const sampleKeys = new Set(samples.map((sample) => `${sample.chatId}-${sample.id}`));
 
-  return { messages: previews, scannedChats, nextPage };
+  for (const sample of [...matchedSamples, ...unmatchedSamples]) {
+    if (samples.length >= sampleLimit) break;
+
+    const key = `${sample.chatId}-${sample.id}`;
+    if (sampleKeys.has(key)) continue;
+    samples.push(sample);
+    sampleKeys.add(key);
+  }
+
+  samples.sort(
+    (a, b) =>
+      Number(b.matched) - Number(a.matched) ||
+      new Date(b.messageDate).getTime() - new Date(a.messageDate).getTime(),
+  );
+
+  return { messages: previews, samples, scannedChats, nextPage };
 }
 
 // --- 历史回填 ---

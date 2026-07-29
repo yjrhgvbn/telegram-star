@@ -60,10 +60,12 @@ export async function previewFilterHistory(input: FilterPreviewInput): Promise<F
     totalLimit: scope.totalLimit,
     page: scope.page,
     pageSize: scope.pageSize,
+    sampleLimit: 3,
   });
 
   return filterPreviewResponseSchema.parse({
     messages: result.messages,
+    samples: result.samples,
     scannedChats: result.scannedChats,
     total: result.messages.length,
     nextPage: result.nextPage,

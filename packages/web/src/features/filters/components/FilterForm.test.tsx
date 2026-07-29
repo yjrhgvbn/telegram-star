@@ -43,30 +43,28 @@ function FilterFormHarness({
   onAutoLocateChange,
   onToggleForwardTarget,
   onAddCondition,
-  onSave,
   onDelete,
-  onToggle,
 }: {
   onAutoLocateChange: (value: boolean) => void;
   onToggleForwardTarget: (id: number) => void;
   onAddCondition: () => void;
-  onSave: () => void;
   onDelete: () => void;
-  onToggle: () => void;
 }) {
-  const [name, setName] = useState("测试标题");
   const [autoLocateUnreadNearRead, setAutoLocateUnreadNearRead] = useState(true);
 
   return (
     <FilterForm
-      selectedFilter={createFilter({ name, autoLocateUnreadNearRead })}
-      name={name}
-      onNameChange={setName}
+      selectedFilter={createFilter({ autoLocateUnreadNearRead })}
       autoLocateUnreadNearRead={autoLocateUnreadNearRead}
       onAutoLocateChange={(value) => {
         setAutoLocateUnreadNearRead(value);
         onAutoLocateChange(value);
       }}
+      chats={[
+        { id: "chat-1", title: "动漫抢先看" },
+        { id: "chat-2", title: "VAM 国漫精品社区" },
+      ]}
+      chatsLoading={false}
       forwardTargets={[
         createForwardTarget(1, { name: "值班群" }),
         createForwardTarget(2, { name: "备份通道", enabled: false }),
@@ -75,16 +73,27 @@ function FilterFormHarness({
       forwardTargetsLoading={false}
       onToggleForwardTarget={onToggleForwardTarget}
       onCreateForwardTarget={vi.fn()}
-      conditions={[]}
+      conditions={[
+        {
+          id: "chat-condition",
+          type: "chat",
+          values: ["chat-1", "chat-2"],
+          input: "",
+        },
+        {
+          id: "keyword-condition",
+          type: "keyword",
+          values: ["将夜"],
+          input: "",
+        },
+      ]}
       error=""
       saving={false}
       onUpdateCondition={vi.fn()}
       onRemoveCondition={vi.fn()}
       onAppendValues={vi.fn()}
       onAddCondition={onAddCondition}
-      onSave={onSave}
       onDelete={onDelete}
-      onToggle={onToggle}
     />
   );
 }
@@ -100,41 +109,36 @@ describe("FilterForm", () => {
     const onAutoLocateChange = vi.fn();
     const onToggleForwardTarget = vi.fn();
     const onAddCondition = vi.fn();
-    const onSave = vi.fn();
     const onDelete = vi.fn();
-    const onToggle = vi.fn();
 
     render(
       <FilterFormHarness
         onAutoLocateChange={onAutoLocateChange}
         onToggleForwardTarget={onToggleForwardTarget}
         onAddCondition={onAddCondition}
-        onSave={onSave}
         onDelete={onDelete}
-        onToggle={onToggle}
       />,
     );
 
-    const nameInput = screen.getByPlaceholderText("例如：项目公告 / 值班提醒观察") as HTMLInputElement;
-    await user.clear(nameInput);
-    await user.type(nameInput, "动漫更新");
-    expect(nameInput.value).toBe("动漫更新");
+    expect(screen.getByText("已启用 2 项")).not.toBeNull();
+    expect(screen.getByText("规则速览")).not.toBeNull();
+    expect(screen.getByText("如果")).not.toBeNull();
+    expect(screen.getByText("那么")).not.toBeNull();
+    expect(screen.getByText("来源：2 个会话")).not.toBeNull();
+    expect(screen.getByText("关键词：将夜")).not.toBeNull();
+    expect(screen.getByText("通知：1 个通道")).not.toBeNull();
+    expect(screen.getByText("始终开启")).not.toBeNull();
 
-    await user.click(screen.getByRole("switch", { name: /自动定位未读/ }));
+    await user.click(screen.getByRole("switch", { name: "打开时自动定位未读" }));
     expect(onAutoLocateChange).toHaveBeenCalledWith(false);
 
-    expect(screen.getByText("1 个转发通道")).not.toBeNull();
     await user.click(screen.getByRole("checkbox", { name: "备份通道 · 停用" }));
     expect(onToggleForwardTarget).toHaveBeenCalledWith(2);
 
-    await user.click(screen.getByRole("button", { name: /添加/ }));
+    await user.click(
+      screen.getByRole("button", { name: "添加一个必须同时满足的条件" }),
+    );
     expect(onAddCondition).toHaveBeenCalledTimes(1);
-
-    await user.click(screen.getByRole("button", { name: /保存修改/ }));
-    expect(onSave).toHaveBeenCalledTimes(1);
-
-    await user.click(screen.getByRole("button", { name: /停用过滤器/ }));
-    expect(onToggle).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByRole("button", { name: /^删除$/ }));
     expect(onDelete).not.toHaveBeenCalled();

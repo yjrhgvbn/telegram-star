@@ -101,8 +101,13 @@ export const historicalFilterPreviewMessageSchema = liveChatMessageSchema.extend
   matchedKeyword: z.string().nullable(),
 });
 
+export const historicalFilterPreviewSampleSchema = historicalFilterPreviewMessageSchema.extend({
+  matched: z.boolean(),
+});
+
 export const filterPreviewResponseSchema = z.object({
   messages: z.array(historicalFilterPreviewMessageSchema),
+  samples: z.array(historicalFilterPreviewSampleSchema),
   scannedChats: z.number().int().nonnegative(),
   total: z.number().int().nonnegative(),
   nextPage: z.number().int().positive().optional(),
@@ -132,5 +137,6 @@ export type FilterHistoryScope = z.infer<typeof filterHistoryScopeSchema>;
 export type FilterPreviewInput = z.infer<typeof filterPreviewInputSchema>;
 export type LiveChatMessage = z.infer<typeof liveChatMessageSchema>;
 export type HistoricalFilterPreviewMessage = z.infer<typeof historicalFilterPreviewMessageSchema>;
+export type HistoricalFilterPreviewSample = z.infer<typeof historicalFilterPreviewSampleSchema>;
 export type FilterPreviewResponse = z.infer<typeof filterPreviewResponseSchema>;
 export type FilterBackfillResponse = z.infer<typeof filterBackfillResponseSchema>;

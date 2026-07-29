@@ -19,6 +19,7 @@ export type {
   FilterPreviewResponse,
   FilterUpdateInput,
   HistoricalFilterPreviewMessage,
+  HistoricalFilterPreviewSample,
   LiveChatMessage,
 } from "@telegram-star/shared/contracts/filters";
 

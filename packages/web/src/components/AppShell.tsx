@@ -84,7 +84,7 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
       {!authStatus.authorized && <TelegramLogin authStatus={authStatus} onLoginSuccess={onLoginSuccess} />}
 
       <div className="relative z-10 flex h-dvh min-h-0 overflow-hidden">
-        <aside className="hidden w-[72px] shrink-0 border-r border-sidebar-border bg-sidebar/92 md:flex md:flex-col">
+        <aside className="hidden w-[72px] shrink-0 border-r border-sidebar-border bg-sidebar/96 md:flex md:flex-col">
           <div className="flex h-13 items-center justify-center border-b border-sidebar-border">
             <img
               src="/icons/icon.svg"
@@ -108,7 +108,7 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
                   className={cn(
                     "group relative flex h-13 w-full flex-col items-center justify-center gap-1 rounded-lg text-sidebar-foreground/64 transition-colors",
                     "hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
-                    active && "bg-card text-sidebar-foreground shadow-sm ring-1 ring-sidebar-border",
+                    active && "bg-card/96 text-sidebar-accent-foreground shadow-[0_4px_12px_rgba(37,70,61,0.06)] ring-1 ring-sidebar-border",
                   )}
                 >
                   <span
@@ -124,23 +124,10 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
               );
             })}
           </nav>
-
-          <div className="mt-auto flex flex-col items-center gap-2 border-t border-sidebar-border px-2 py-3">
-            <div
-              className="flex size-9 items-center justify-center rounded-full bg-card text-[11px] font-semibold text-muted-foreground shadow-sm ring-1 ring-sidebar-border"
-              title={authStatus.authorized ? "Telegram 已连接" : "等待 Telegram 登录"}
-            >
-              TS
-            </div>
-            <span
-              className={cn("size-2 rounded-full", authStatus.authorized ? "bg-success" : "bg-warning")}
-              aria-label={authStatus.authorized ? "Telegram 已连接" : "等待 Telegram 登录"}
-            />
-          </div>
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="hidden h-13 shrink-0 items-center justify-between border-b border-border bg-card/78 px-4 backdrop-blur-md md:flex">
+          <header className="hidden h-13 shrink-0 items-center justify-between border-b border-border bg-card/88 px-4 backdrop-blur-md md:flex">
             <div className="flex min-w-0 items-center gap-2">
               <span className="text-sm font-semibold">Telegram Star</span>
               <span className="text-muted-foreground/45">/</span>
