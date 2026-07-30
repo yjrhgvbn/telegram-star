@@ -71,6 +71,12 @@ export function useSettingsForm({ telegramAuthorized }: UseSettingsFormOptions) 
   const databaseConfigured = status?.databaseConfigured ?? false;
   const hasStatus = Boolean(status);
   const hasMediaStatus = Boolean(mediaStatus);
+  const loadedApiIdValue = loadedApiId ? String(loadedApiId) : "";
+  const telegramDirty =
+    apiId.trim() !== loadedApiIdValue || apiHash.trim().length > 0;
+  const mediaDirty =
+    loadedThumbIndex !== null && thumbIndex !== loadedThumbIndex;
+  const dirty = telegramDirty || mediaDirty;
 
   useEffect(() => {
     if (loadedThumbIndex === null) return;
@@ -85,6 +91,14 @@ export function useSettingsForm({ telegramAuthorized }: UseSettingsFormOptions) 
     setNotice(null);
     void queryClient.invalidateQueries({ queryKey: queryKeys.config.status });
   }, [queryClient]);
+
+  const resetDraft = useCallback(() => {
+    setApiId(loadedApiIdValue);
+    setApiHash("");
+    setThumbIndex(loadedThumbIndex ?? 1);
+    setSubmitError(null);
+    setNotice(null);
+  }, [loadedApiIdValue, loadedThumbIndex]);
 
   const invalidItems = useMemo<SettingsInvalidItem[]>(() => {
     const items: SettingsInvalidItem[] = [];
@@ -174,11 +188,15 @@ export function useSettingsForm({ telegramAuthorized }: UseSettingsFormOptions) 
     thumbIndex,
     loading,
     saving,
+    dirty,
+    telegramDirty,
+    mediaDirty,
     error,
     notice,
     invalidItems,
     statusSummary,
     loadStatus,
+    resetDraft,
     handleSave,
     setApiId,
     setApiHash,

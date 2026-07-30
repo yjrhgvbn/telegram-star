@@ -37,11 +37,15 @@ function SettingsFormHarness({
     thumbIndex,
     loading: false,
     saving: false,
+    dirty: apiId !== "12345" || apiHash.length > 0 || thumbIndex !== 1,
+    telegramDirty: apiId !== "12345" || apiHash.length > 0,
+    mediaDirty: thumbIndex !== 1,
     error: null,
     notice: null,
     invalidItems: [],
     statusSummary: { title: "当前没有失效项", tone: "valid" },
     loadStatus: vi.fn(),
+    resetDraft: vi.fn(),
     handleSave: (event: FormEvent) => {
       event.preventDefault();
       onSubmit({ apiId, apiHash, thumbIndex });
@@ -107,11 +111,11 @@ describe("SettingsForm", () => {
     await user.type(apiHashInput, "new-hash");
 
     await user.click(screen.getByRole("button", { name: /媒体/ }));
-    await user.click(screen.getByRole("button", { name: /清晰/ }));
+    await user.click(screen.getByRole("radio", { name: /清晰/ }));
 
     expect(apiIdInput.value).toBe("67890");
     expect(apiHashInput.value).toBe("new-hash");
-    expect(screen.getByRole("button", { name: /清晰/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("radio", { name: /清晰/ }).getAttribute("aria-pressed")).toBe("true");
 
     fireEvent.submit(document.getElementById(SETTINGS_FORM_ID) as HTMLFormElement);
 

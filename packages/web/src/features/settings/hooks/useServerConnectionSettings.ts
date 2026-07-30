@@ -108,6 +108,15 @@ export function useServerConnectionSettings() {
     void queryClient.invalidateQueries();
   }, [queryClient]);
 
+  const resetConnectionDraft = useCallback(() => {
+    setServerUrlInput(currentServerUrl);
+    setCheckedServerUrl(null);
+    setConnectionState("unknown");
+    setConnectionError(null);
+    setHealth(null);
+    setNotice(null);
+  }, [currentServerUrl]);
+
   const updateServerUrlInput = useCallback((value: string) => {
     setServerUrlInput(value);
     setNotice(null);
@@ -129,6 +138,7 @@ export function useServerConnectionSettings() {
     testConnection,
     saveConnection,
     clearConnection,
+    resetConnectionDraft,
     setServerUrlInput: updateServerUrlInput,
   };
 }

@@ -1,19 +1,36 @@
 import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
   AlertCircle,
   Globe,
   Laptop,
   LoaderCircle,
   MonitorSmartphone,
   RefreshCw,
+  Search,
   Smartphone,
   Trash2,
 } from "lucide-react";
 import type { ClientDevice, ClientRuntimeType } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { SettingsItem } from "./SettingsSection";
 import { useClientDevices } from "../hooks/useClientDevices";
+
+type ClientDevicesState = ReturnType<typeof useClientDevices>;
+type DeviceFilter = "all" | "web" | "mobile" | "tauri";
+
+const deviceFilters: Array<{ value: DeviceFilter; label: string }> = [
+  { value: "all", label: "全部" },
+  { value: "web", label: "Web" },
+  { value: "mobile", label: "手机端" },
+  { value: "tauri", label: "Tauri" },
+];
 
 function getRuntimeLabel(type: ClientRuntimeType): string {
   if (type === "pwa") return "PWA";
@@ -34,11 +51,17 @@ function getDeviceIcon(device: ClientDevice) {
   return Globe;
 }
 
+function matchesDeviceFilter(device: ClientDevice, filter: DeviceFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "mobile") return device.type === "mobile";
+  if (filter === "tauri") return device.platform === "tauri";
+  return device.platform === "browser" && (device.type === "web" || device.type === "pwa");
+}
+
 function formatLastSeenAt(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "未知";
 
-  // 设置页只需要轻量展示“最后在线”，完整 ISO 时间仍由 API 保留给后续高级视图使用。
   return new Intl.DateTimeFormat("zh-CN", {
     month: "2-digit",
     day: "2-digit",
@@ -47,7 +70,11 @@ function formatLastSeenAt(value: string): string {
   }).format(date);
 }
 
-export function ClientDevicesSettings() {
+export function ClientDevicesSettings({
+  state,
+}: {
+  state: ClientDevicesState;
+}) {
   const {
     devices,
     currentClientId,
@@ -57,110 +84,244 @@ export function ClientDevicesSettings() {
     error,
     deleteDevice,
     refresh,
-  } = useClientDevices();
+  } = state;
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query.trim().toLowerCase());
+  const [filter, setFilter] = useState<DeviceFilter>("all");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!confirmDeleteId) return;
+
+    const timer = window.setTimeout(() => {
+      setConfirmDeleteId(null);
+    }, 3200);
+
+    return () => window.clearTimeout(timer);
+  }, [confirmDeleteId]);
+
+  const filterCounts = useMemo(() => {
+    const counts: Record<DeviceFilter, number> = {
+      all: devices.length,
+      web: 0,
+      mobile: 0,
+      tauri: 0,
+    };
+
+    for (const device of devices) {
+      if (matchesDeviceFilter(device, "web")) counts.web += 1;
+      if (matchesDeviceFilter(device, "mobile")) counts.mobile += 1;
+      if (matchesDeviceFilter(device, "tauri")) counts.tauri += 1;
+    }
+
+    return counts;
+  }, [devices]);
+
+  const visibleDevices = useMemo(() => {
+    return devices.filter((device) => {
+      if (!matchesDeviceFilter(device, filter)) return false;
+      if (!deferredQuery) return true;
+
+      const searchable = [
+        device.name,
+        device.type,
+        device.platform,
+        device.os,
+        device.appVersion,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(deferredQuery);
+    });
+  }, [deferredQuery, devices, filter]);
 
   return (
-    <SettingsItem
-      title="已注册设备"
-      description="Web、PWA、桌面端和手机端最近在线记录。"
-      meta={
-        <Badge variant="secondary" className="h-6 px-2">
-          {devices.length}
-        </Badge>
-      }
-    >
-      <div className="flex min-w-0 flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="min-w-0 pt-3">
+      <div className="flex flex-col gap-3 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <label className="relative block w-full sm:max-w-xs">
+          <span className="sr-only">搜索设备</span>
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索名称、平台或版本"
+            aria-label="搜索设备"
+            className="h-10 w-full rounded-lg border border-input bg-card pr-3 pl-9 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:text-sm"
+          />
+        </label>
+
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
+          <span className="text-xs text-muted-foreground">当前设备不可删除</span>
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size="lg"
             onClick={refresh}
             disabled={refreshing}
           >
-            <RefreshCw
-              className={cn(refreshing && "animate-spin")}
-              data-icon="inline-start"
-            />
+            {refreshing ? (
+              <LoaderCircle className="animate-spin" data-icon="inline-start" />
+            ) : (
+              <RefreshCw data-icon="inline-start" />
+            )}
             刷新设备
           </Button>
         </div>
+      </div>
 
-        {error && (
-          <div className="flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            <AlertCircle className="mt-0.5 size-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
+      <div
+        className="flex flex-wrap items-center gap-1 border-b border-border py-2"
+        role="group"
+        aria-label="设备类型筛选"
+      >
+        {deviceFilters.map((item) => (
+          <Button
+            key={item.value}
+            type="button"
+            size="sm"
+            variant={filter === item.value ? "outline" : "ghost"}
+            aria-pressed={filter === item.value}
+            onClick={() => setFilter(item.value)}
+            className="h-8"
+          >
+            {item.label}
+            <span className="text-xs text-muted-foreground">{filterCounts[item.value]}</span>
+          </Button>
+        ))}
+      </div>
 
-        {loading && devices.length === 0 ? (
-          <div className="flex min-h-24 items-center justify-center gap-2 rounded-lg bg-background/58 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            读取设备中
-          </div>
-        ) : devices.length === 0 ? (
-          <div className="flex min-h-24 items-center justify-center rounded-lg bg-background/58 px-3 text-center text-sm text-muted-foreground">
-            暂无设备记录，打开 Web 或 PWA 后会自动注册。
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {devices.map((device) => {
-              const DeviceIcon = getDeviceIcon(device);
-              const current = device.id === currentClientId;
-              const deleting = deletingId === device.id;
-              // 当前设备仍会持续心跳，删除后会很快重新注册，因此只允许清理其他端的记录。
+      {error ? (
+        <div
+          className="my-3 flex items-start gap-2 border border-destructive/20 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+          role="alert"
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      ) : null}
 
-              return (
-                <div
-                  key={device.id}
-                  className="grid gap-3 rounded-lg bg-background/60 px-3 py-2.5 shadow-[0_8px_24px_color-mix(in_oklab,var(--foreground)_5%,transparent)] sm:grid-cols-[minmax(0,1fr)_auto]"
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted/70 text-muted-foreground">
-                      <DeviceIcon className="size-4" />
+      {loading && devices.length === 0 ? (
+        <div className="flex flex-col gap-2 py-3">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton key={index} className="h-14 w-full" />
+          ))}
+        </div>
+      ) : visibleDevices.length === 0 ? (
+        <div className="grid min-h-48 place-items-center border-b border-border px-4 py-10 text-center">
+          <div>
+            <span className="mx-auto flex size-10 items-center justify-center rounded-lg bg-secondary text-primary">
+              <MonitorSmartphone className="size-5" />
+            </span>
+            <p className="mt-3 text-sm font-semibold text-foreground">没有匹配的设备</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              调整搜索词或筛选条件后再试。
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="min-w-0 border-b border-border">
+          <div className="hidden min-h-9 grid-cols-[minmax(220px,1fr)_92px_112px_128px_76px] items-center gap-3 border-b border-border bg-muted/35 px-3 text-xs font-medium text-muted-foreground xl:grid">
+            <span>设备</span>
+            <span>客户端</span>
+            <span>平台</span>
+            <span>最后在线</span>
+            <span className="text-right">操作</span>
+          </div>
+
+          {visibleDevices.map((device) => {
+            const DeviceIcon = getDeviceIcon(device);
+            const current = device.id === currentClientId;
+            const deleting = deletingId === device.id;
+            const confirming = confirmDeleteId === device.id;
+
+            return (
+              <div
+                key={device.id}
+                className={cn(
+                  "grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/80 px-2 py-2.5 last:border-b-0 sm:px-3 xl:grid-cols-[minmax(220px,1fr)_92px_112px_128px_76px]",
+                  current && "bg-secondary/70",
+                )}
+              >
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-primary">
+                    <DeviceIcon className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {device.name || "未命名设备"}
+                      </span>
+                      {current ? (
+                        <Badge variant="outline" className="h-5 px-1.5 text-[11px]">
+                          当前
+                        </Badge>
+                      ) : null}
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="truncate text-sm font-medium">
-                          {device.name || "未命名设备"}
-                        </span>
-                        {current && (
-                          <Badge variant="outline" className="h-5 px-1.5 text-[11px]">
-                            当前
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
-                        <span>{getRuntimeLabel(device.type)}</span>
-                        <span>{getPlatformLabel(device)}</span>
-                        {device.appVersion && <span>v{device.appVersion}</span>}
-                        <span>最后在线 {formatLastSeenAt(device.lastSeenAt)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`删除设备 ${device.name || device.id}`}
-                      onClick={() => void deleteDevice(device.id)}
-                      disabled={deleting || current}
-                    >
-                      {deleting ? (
-                        <LoaderCircle className="animate-spin" />
-                      ) : (
-                        <Trash2 />
-                      )}
-                    </Button>
+                    <p className="mt-1 truncate text-xs text-muted-foreground xl:hidden">
+                      {getRuntimeLabel(device.type)} · {getPlatformLabel(device)}
+                      {device.appVersion ? ` · v${device.appVersion}` : ""}
+                      {" · "}
+                      {formatLastSeenAt(device.lastSeenAt)}
+                    </p>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+
+                <span className="hidden truncate text-xs text-muted-foreground xl:block">
+                  {getRuntimeLabel(device.type)}
+                </span>
+                <span className="hidden truncate text-xs text-muted-foreground xl:block">
+                  {getPlatformLabel(device)}
+                </span>
+                <span className="hidden truncate text-xs text-muted-foreground xl:block">
+                  {formatLastSeenAt(device.lastSeenAt)}
+                </span>
+
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant={confirming ? "destructive" : "ghost"}
+                    size={confirming ? "sm" : "icon-sm"}
+                    aria-label={
+                      confirming
+                        ? `确认删除设备 ${device.name || device.id}`
+                        : `删除设备 ${device.name || device.id}`
+                    }
+                    onClick={() => {
+                      if (!confirming) {
+                        setConfirmDeleteId(device.id);
+                        return;
+                      }
+
+                      setConfirmDeleteId(null);
+                      void deleteDevice(device.id);
+                    }}
+                    disabled={deleting || current}
+                    className={cn(confirming && "h-8")}
+                  >
+                    {deleting ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : confirming ? (
+                      "确认"
+                    ) : (
+                      <Trash2 />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1 py-2.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <span>
+          显示 {visibleDevices.length} / {devices.length} 台
+        </span>
+        <span>删除与刷新会立即生效，无需另行保存。</span>
       </div>
-    </SettingsItem>
+    </div>
   );
 }
