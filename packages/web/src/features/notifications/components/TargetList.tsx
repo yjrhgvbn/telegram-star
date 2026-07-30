@@ -1,11 +1,18 @@
 import { Inbox, LoaderCircle, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import {
   NEW_FORWARD_TARGET_ID,
   type EditableForwardTarget,
 } from "../types";
+
+function getTargetMonogram(target: EditableForwardTarget): string {
+  const label = target.name.trim();
+  if (!label) return "新建";
+  return label.slice(0, 2);
+}
 
 export function TargetList({
   targets,
@@ -22,73 +29,104 @@ export function TargetList({
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-10 shrink-0 items-center justify-between px-1">
+      <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b px-3">
         <span className="text-sm font-semibold">通道列表</span>
-        <Badge variant="outline">{targets.length}</Badge>
+        <div className="flex items-center gap-1.5">
+          <Badge variant="outline" className="rounded-md font-mono">
+            {targets.length}
+          </Badge>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="lg:hidden"
+            onClick={onAdd}
+            aria-label="新建通道"
+          >
+            <Plus />
+          </Button>
+        </div>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
-        {loading && targets.length === 0 ? (
-          <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            读取通道中
-          </div>
-        ) : targets.length === 0 ? (
-          <div className="flex min-h-36 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border px-3 text-center text-sm text-muted-foreground">
-            <Inbox className="size-6 text-muted-foreground/70" />
-            当前没有转发通道
-            <Button type="button" size="sm" onClick={onAdd}>
-              <Plus data-icon="inline-start" />
-              新建
-            </Button>
-          </div>
-        ) : (
-          targets.map((target) => {
-            const active =
-              (target.id === 0 && selectedTargetId === NEW_FORWARD_TARGET_ID) ||
-              String(target.id) === selectedTargetId;
-            const invalid = !target.name.trim() || !target.appriseUrl.trim();
 
-            return (
-              <button
-                key={target.id || NEW_FORWARD_TARGET_ID}
-                type="button"
-                className={cn(
-                  "relative flex w-full flex-col gap-1 rounded-lg px-2.5 py-2 text-left transition-colors",
-                  active
-                    ? "bg-card text-foreground shadow-sm ring-1 ring-border"
-                    : "text-muted-foreground hover:bg-card/72 hover:text-foreground",
-                )}
-                onClick={() => onSelect(target.id === 0 ? NEW_FORWARD_TARGET_ID : String(target.id))}
-              >
-                <span
+      {loading && targets.length === 0 ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+          <LoaderCircle className="size-4 animate-spin" />
+          读取通道中
+        </div>
+      ) : targets.length === 0 ? (
+        <div className="m-3 flex min-h-44 flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-card/45 px-4 text-center text-sm text-muted-foreground">
+          <span className="grid size-11 place-items-center rounded-lg bg-muted">
+            <Inbox className="size-5" />
+          </span>
+          <div>
+            <div className="font-medium text-foreground">还没有转发通道</div>
+            <div className="mt-1 text-xs">创建一个目的地来接收规则消息</div>
+          </div>
+          <Button type="button" size="sm" onClick={onAdd}>
+            <Plus data-icon="inline-start" />
+            新建通道
+          </Button>
+        </div>
+      ) : (
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="flex flex-col gap-1.5 p-2">
+            {targets.map((target) => {
+              const active =
+                (target.id === 0 && selectedTargetId === NEW_FORWARD_TARGET_ID) ||
+                String(target.id) === selectedTargetId;
+              const invalid = !target.name.trim() || !target.appriseUrl.trim();
+
+              return (
+                <button
+                  key={target.id || NEW_FORWARD_TARGET_ID}
+                  type="button"
+                  aria-current={active ? "true" : undefined}
                   className={cn(
-                    "absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-transparent",
-                    active && "bg-primary",
+                    "grid min-h-16 w-full grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors",
+                    active
+                      ? "border-primary/35 bg-card shadow-[inset_3px_0_var(--primary),0_4px_14px_color-mix(in_oklab,var(--foreground)_6%,transparent)]"
+                      : "border-transparent text-muted-foreground hover:border-border hover:bg-card/76 hover:text-foreground",
                   )}
-                />
-                <div className="flex items-center justify-between gap-3">
-                  <span className="min-w-0 truncate text-sm font-medium text-foreground">
-                    {target.name.trim() || "未命名通道"}
+                  onClick={() =>
+                    onSelect(target.id === 0 ? NEW_FORWARD_TARGET_ID : String(target.id))
+                  }
+                >
+                  <span className="grid size-10 place-items-center rounded-lg bg-accent font-semibold text-accent-foreground">
+                    {getTargetMonogram(target)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-foreground">
+                      {target.name.trim() || "未命名通道"}
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-muted-foreground">
+                      {target.id === 0 ? "草稿" : target.enabled ? "已启用" : "已停用"}
+                      <span className="px-1.5 text-muted-foreground/45">·</span>
+                      {target.filterIds.length} 条规则
+                    </span>
                   </span>
                   <span
                     className={cn(
-                      "size-2 shrink-0 rounded-full",
+                      "size-2 rounded-full shadow-[0_0_0_4px_color-mix(in_oklab,currentColor_10%,transparent)]",
                       invalid
-                        ? "bg-destructive"
+                        ? "text-destructive bg-destructive"
                         : target.enabled
-                          ? "bg-success"
-                          : "bg-muted-foreground/35",
+                          ? "text-success bg-success"
+                          : "text-muted-foreground bg-muted-foreground/45",
                     )}
+                    aria-label={invalid ? "配置不完整" : target.enabled ? "已启用" : "已停用"}
                   />
-                </div>
-                <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-                  <span>{target.id === 0 ? "草稿" : target.enabled ? "启用" : "停用"}</span>
-                  <span>{target.filterIds.length} 规则</span>
-                </div>
-              </button>
-            );
-          })
-        )}
+                </button>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      )}
+
+      <div className="shrink-0 border-t p-2.5">
+        <Button type="button" className="w-full" onClick={onAdd}>
+          <Plus data-icon="inline-start" />
+          新建通道
+        </Button>
       </div>
     </div>
   );

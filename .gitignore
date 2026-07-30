@@ -16,4 +16,4 @@ packages/desktop/src-tauri/target
 packages/mobile/src-tauri/gen
 packages/mobile/src-tauri/target
 tsconfig.tsbuildinfo
-ui-redesign
+design

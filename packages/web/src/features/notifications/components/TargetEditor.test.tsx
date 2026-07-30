@@ -79,6 +79,7 @@ describe("TargetEditor", () => {
     const user = userEvent.setup();
     const { onSave } = renderTargetEditor();
 
+    await user.click(screen.getByRole("tab", { name: "连接" }));
     await user.clear(screen.getByPlaceholderText("例如：研发群 / 飞书值班群"));
     await user.type(screen.getByPlaceholderText("例如：研发群 / 飞书值班群"), "  动漫值班  ");
     await user.clear(screen.getByPlaceholderText("dingtalk://Token / discord://ID/Token"));
@@ -87,8 +88,9 @@ describe("TargetEditor", () => {
       "  discord://channel/token  ",
     );
     await user.click(screen.getByRole("switch"));
-    await user.click(screen.getByRole("button", { name: "动漫" }));
-    await user.click(screen.getByRole("button", { name: /保存/ }));
+    await user.click(screen.getByRole("tab", { name: /订阅规则/ }));
+    await user.click(screen.getByRole("button", { name: "订阅 动漫" }));
+    await user.click(screen.getByRole("button", { name: "保存更改" }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledWith(
@@ -109,13 +111,16 @@ describe("TargetEditor", () => {
     const { onSave } = renderTargetEditor();
     const markdownPreset = FORWARD_FORMAT_PRESETS.find((preset) => preset.id === "markdown");
 
-    await user.click(screen.getByRole("radio", { name: "Markdown 模式" }));
+    await user.click(screen.getByRole("tab", { name: "消息模板" }));
+    await user.click(screen.getByRole("radio", { name: /^Markdown 模式/ }));
 
     expect((screen.getByLabelText("标题模板") as HTMLInputElement).value).toBe(markdownPreset?.titleTemplate);
     expect((screen.getByLabelText("正文模板") as HTMLTextAreaElement).value).toBe(markdownPreset?.bodyTemplate);
-    expect(screen.getByText((content) => content.includes("**群组**：追踪频道"))).not.toBeNull();
+    expect(
+      screen.getAllByText((content) => content.includes("**群组**：追踪频道")).length,
+    ).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole("button", { name: /保存/ }));
+    await user.click(screen.getByRole("button", { name: "保存更改" }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave).toHaveBeenCalledWith(
@@ -131,7 +136,7 @@ describe("TargetEditor", () => {
     const user = userEvent.setup();
     const { onTest } = renderTargetEditor();
 
-    await user.click(screen.getByRole("button", { name: "测试" }));
+    await user.click(screen.getByRole("button", { name: "发送测试" }));
 
     await waitFor(() =>
       expect(onTest).toHaveBeenCalledWith({
@@ -152,5 +157,42 @@ describe("TargetEditor", () => {
 
     await user.click(screen.getByRole("button", { name: /确认删除/ }));
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 1 })));
+  });
+
+  it("searches, filters, and bulk-selects a large rule list without leaving the workbench", async () => {
+    const user = userEvent.setup();
+    renderTargetEditor({
+      allFilters: [
+        createFilter(),
+        createFilter({
+          id: 2,
+          name: "动漫",
+          conditions: [{ type: "keyword", values: ["新番", "动画"] }],
+          forwardTargetIds: [],
+        }),
+        createFilter({
+          id: 3,
+          name: "价格提醒",
+          conditions: [{ type: "regex", values: ["BTC.*USD"] }],
+          forwardTargetIds: [],
+        }),
+      ],
+    });
+
+    const search = screen.getByRole("textbox", { name: "搜索订阅规则" });
+    await user.type(search, "动画");
+
+    expect(await screen.findByRole("button", { name: "订阅 动漫" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /价格提醒/ })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "全选当前结果" }));
+    expect(
+      screen.getByRole("button", { name: "取消订阅 动漫" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    await user.clear(search);
+    await user.click(screen.getByRole("button", { name: "未选" }));
+    expect(screen.queryByRole("button", { name: "取消订阅 动漫" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "订阅 价格提醒" })).not.toBeNull();
   });
 });
