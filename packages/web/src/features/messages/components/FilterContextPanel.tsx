@@ -31,7 +31,7 @@ export function FilterContextPanel({
   const chatCount = countConditionValues(selectedFilter, "chat");
 
   return (
-    <aside className="hidden w-[260px] shrink-0 flex-col border-l border-border bg-muted/36 xl:flex">
+    <aside className="hidden w-[260px] shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[var(--workspace-panel-shadow)] xl:flex">
       <div className="flex h-14 items-center justify-between px-4">
         <div>
           <h2 className="text-sm font-semibold">上下文</h2>

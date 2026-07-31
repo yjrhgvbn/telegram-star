@@ -48,7 +48,7 @@ export function NotificationsPage() {
       authLoading={authLoading}
       onLoginSuccess={handleLoginSuccess}
     >
-      <div className="flex min-h-0 flex-1 flex-col bg-background/72">
+      <div className="flex min-h-0 flex-1 flex-col bg-background">
         <WorkspaceHeader
           title="转发通道"
           description={`${forwardTargets.targets.length} 个通道 · ${filters.length} 个可用规则 · ${forwardTargets.subscribedRules} 个已订阅规则`}
@@ -83,10 +83,10 @@ export function NotificationsPage() {
           </div>
         ) : null}
 
-        <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden lg:gap-3 lg:p-3">
           <aside
             className={cn(
-              "min-h-0 shrink-0 flex-col border-r border-border bg-sidebar/48",
+              "min-h-0 shrink-0 flex-col border-r border-border bg-sidebar/48 lg:overflow-hidden lg:rounded-xl lg:border lg:bg-card lg:shadow-[var(--workspace-panel-shadow)]",
               isTargetSelected ? "hidden lg:flex lg:w-[244px]" : "flex w-full lg:w-[244px]",
             )}
           >
@@ -101,7 +101,7 @@ export function NotificationsPage() {
 
           <div
             className={cn(
-              "min-h-0 min-w-0 flex-1 overflow-hidden bg-card",
+              "min-h-0 min-w-0 flex-1 overflow-hidden bg-card lg:rounded-xl lg:border lg:shadow-[var(--workspace-panel-shadow)]",
               isTargetSelected ? "flex" : "hidden lg:flex",
             )}
           >

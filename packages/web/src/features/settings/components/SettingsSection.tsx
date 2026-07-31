@@ -23,7 +23,7 @@ export function SettingsSection({
           <p className="mb-1 text-[11px] font-semibold tracking-[0.12em] text-primary uppercase">
             {eyebrow ?? `系统 / ${title}`}
           </p>
-          <h2 className="text-2xl font-semibold tracking-[-0.035em] text-foreground">
+          <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">
             {title}
           </h2>
           {description ? (

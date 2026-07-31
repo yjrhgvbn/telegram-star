@@ -174,7 +174,7 @@ export function JoinedChatPicker({
             role="dialog"
             aria-modal="true"
             aria-labelledby="joined-chat-picker-title"
-            className="flex h-[min(72vh,620px)] w-[min(92vw,560px)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_24px_70px_rgba(32,50,45,0.16)]"
+            className="flex h-[min(72vh,620px)] w-[min(92vw,560px)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_24px_70px_color-mix(in_oklab,var(--foreground)_16%,transparent)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">

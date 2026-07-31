@@ -84,8 +84,8 @@ export function TargetList({
                   className={cn(
                     "grid min-h-16 w-full grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors",
                     active
-                      ? "border-primary/35 bg-card shadow-[inset_3px_0_var(--primary),0_4px_14px_color-mix(in_oklab,var(--foreground)_6%,transparent)]"
-                      : "border-transparent text-muted-foreground hover:border-border hover:bg-card/76 hover:text-foreground",
+                      ? "border-primary/20 bg-accent shadow-[inset_2px_0_var(--primary)]"
+                      : "border-transparent text-muted-foreground hover:border-border hover:bg-muted/72 hover:text-foreground",
                   )}
                   onClick={() =>
                     onSelect(target.id === 0 ? NEW_FORWARD_TARGET_ID : String(target.id))

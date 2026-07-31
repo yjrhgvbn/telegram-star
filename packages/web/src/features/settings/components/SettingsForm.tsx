@@ -321,12 +321,13 @@ export function SettingsForm({
     <form
       id={SETTINGS_FORM_ID}
       onSubmit={settings.handleSave}
-      className="grid h-full min-h-0 min-w-0 grid-cols-1 grid-rows-[minmax(0,1fr)_64px] bg-card/45 lg:grid-cols-[264px_minmax(0,1fr)]"
+      className="grid h-full min-h-0 min-w-0 grid-cols-1 grid-rows-[minmax(0,1fr)_64px] bg-background lg:grid-cols-[264px_minmax(0,1fr)] lg:gap-x-3 lg:p-3"
     >
       <aside
         className={cn(
-          "row-span-2 min-h-0 min-w-0 flex-col border-r border-border bg-sidebar/72 lg:col-start-1 lg:flex",
+          "row-span-2 min-h-0 min-w-0 flex-col border-r border-border bg-sidebar/72 lg:col-start-1 lg:overflow-hidden lg:rounded-xl lg:border lg:bg-card lg:shadow-[var(--workspace-panel-shadow)]",
           isSectionSelected ? "hidden" : "flex",
+          "lg:flex",
         )}
       >
         <div className="shrink-0 px-4 pt-5 pb-3">
@@ -389,8 +390,8 @@ export function SettingsForm({
                   className={cn(
                     "group grid min-h-16 w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-left transition-[background-color,border-color,box-shadow,color] duration-150",
                     active
-                      ? "border-border bg-card text-foreground shadow-[0_2px_8px_rgba(32,50,45,0.05)]"
-                      : "text-muted-foreground hover:bg-card/65 hover:text-foreground",
+                      ? "border-primary/12 bg-accent text-foreground"
+                      : "text-muted-foreground hover:bg-muted/72 hover:text-foreground",
                   )}
                 >
                   <span
@@ -440,7 +441,7 @@ export function SettingsForm({
 
       <main
         className={cn(
-          "col-start-1 row-start-1 min-h-0 min-w-0 overflow-y-auto bg-card/55 lg:col-start-2 lg:block",
+          "col-start-1 row-start-1 min-h-0 min-w-0 overflow-y-auto bg-card/55 lg:col-start-2 lg:rounded-t-xl lg:border lg:border-b-0 lg:bg-card lg:block",
           isSectionSelected ? "block" : "hidden",
         )}
       >
@@ -765,7 +766,7 @@ export function SettingsForm({
 
       <footer
         className={cn(
-          "col-start-1 row-start-2 min-w-0 items-center justify-between gap-3 border-t border-border bg-card px-3 py-2 shadow-[0_-6px_18px_rgba(32,50,45,0.035)] sm:px-4 lg:col-start-2 lg:flex",
+          "col-start-1 row-start-2 min-w-0 items-center justify-between gap-3 border-t border-border bg-card px-3 py-2 shadow-[0_-6px_18px_color-mix(in_oklab,var(--foreground)_4%,transparent)] sm:px-4 lg:col-start-2 lg:rounded-b-xl lg:border lg:border-t lg:flex lg:shadow-[var(--workspace-panel-shadow)]",
           isSectionSelected ? "flex" : "hidden",
         )}
       >

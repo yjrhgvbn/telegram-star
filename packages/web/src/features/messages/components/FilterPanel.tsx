@@ -88,8 +88,8 @@ export function FilterPanel({
               className={cn(
                 "group relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
                 selectedFilterId === ""
-                  ? "bg-card text-foreground shadow-sm ring-1 ring-border"
-                  : "text-muted-foreground hover:bg-card/72 hover:text-foreground",
+                  ? "bg-accent text-foreground ring-1 ring-primary/12"
+                  : "text-muted-foreground hover:bg-muted/72 hover:text-foreground",
               )}
               onClick={() => onSelectFilter("")}
             >
@@ -144,8 +144,8 @@ export function FilterPanel({
                     className={cn(
                       "group relative flex w-full items-start gap-1 rounded-lg px-2.5 py-2 transition-colors",
                       active
-                        ? "bg-card text-foreground shadow-sm ring-1 ring-border"
-                        : "text-muted-foreground hover:bg-card/72 hover:text-foreground",
+                        ? "bg-accent text-foreground ring-1 ring-primary/12"
+                        : "text-muted-foreground hover:bg-muted/72 hover:text-foreground",
                       !filter.enabled && "opacity-60",
                     )}
                   >

@@ -44,8 +44,8 @@ export function FilterLibrary({
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-3 py-4 sm:px-5 sm:py-6">
-        <section className="flex flex-col gap-3 rounded-xl border border-border bg-card/82 p-4 shadow-sm sm:flex-row sm:items-end sm:justify-between">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-3 py-3 sm:px-5 sm:py-5">
+        <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-[var(--workspace-panel-shadow)] sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-medium tracking-wide text-primary">规则库</p>
             <h2 className="mt-1 text-xl font-semibold tracking-tight">选择一条规则继续编辑</h2>
@@ -66,11 +66,11 @@ export function FilterLibrary({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索规则名称、会话或关键词"
-            className="h-9 bg-card/78 pl-9"
+            className="h-9 bg-card pl-9 shadow-sm"
           />
         </div>
 
-        <section className="overflow-hidden rounded-xl border border-border bg-card/72">
+        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-[var(--workspace-panel-shadow)]">
           <div className="flex h-11 items-center justify-between border-b border-border px-3">
             <span className="text-sm font-semibold">全部规则</span>
             <Badge variant="outline">{visibleFilters.length}</Badge>

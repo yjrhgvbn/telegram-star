@@ -6,42 +6,43 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #f3f7f4;
-  --foreground: #20322d;
+  --background: #edf3f7;
+  --foreground: #192b37;
   --card: #ffffff;
-  --card-foreground: #20322d;
+  --card-foreground: #192b37;
   --popover: #ffffff;
-  --popover-foreground: #20322d;
-  --primary: #2e7b6d;
-  --primary-foreground: #fbfdfb;
-  --secondary: #edf4f0;
-  --secondary-foreground: #235f55;
-  --muted: #eef4f1;
-  --muted-foreground: #5f746d;
-  --accent: #d9ece4;
-  --accent-foreground: #235f55;
-  --destructive: #9a5d57;
-  --border: #d7e3dd;
-  --input: #bfd0c8;
-  --ring: #4c9485;
-  --success: #3e8b67;
-  --success-foreground: #fbfdfb;
-  --warning: #e6b84b;
-  --warning-foreground: #745d1c;
-  --chart-1: #2e7b6d;
-  --chart-2: #4b9b75;
-  --chart-3: #d6a93d;
-  --chart-4: #ba6b61;
-  --chart-5: #7769a8;
-  --radius: 0.625rem;
-  --sidebar: #eaf3ee;
-  --sidebar-foreground: #30463f;
-  --sidebar-primary: #2e7b6d;
-  --sidebar-primary-foreground: #fbfdfb;
-  --sidebar-accent: #dcebe4;
-  --sidebar-accent-foreground: #235f55;
-  --sidebar-border: #cfddd6;
-  --sidebar-ring: #4c9485;
+  --popover-foreground: #192b37;
+  --primary: #246e9f;
+  --primary-foreground: #ffffff;
+  --secondary: #e8f1f6;
+  --secondary-foreground: #2c5067;
+  --muted: #eef3f6;
+  --muted-foreground: #5b6e7a;
+  --accent: #d9ebf4;
+  --accent-foreground: #1e5675;
+  --destructive: #bf3e49;
+  --border: #d5e0e7;
+  --input: #b9cad5;
+  --ring: #3f82ad;
+  --success: #26795e;
+  --success-foreground: #ffffff;
+  --warning: #a5680b;
+  --warning-foreground: #6b4307;
+  --chart-1: #246e9f;
+  --chart-2: #4e91ba;
+  --chart-3: #d39a2f;
+  --chart-4: #c45d67;
+  --chart-5: #6e73b7;
+  --radius: 0.875rem;
+  --sidebar: #e7f0f5;
+  --sidebar-foreground: #304b5b;
+  --sidebar-primary: #246e9f;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #d7e8f1;
+  --sidebar-accent-foreground: #1f526e;
+  --sidebar-border: #d0dde5;
+  --sidebar-ring: #3f82ad;
+  --workspace-panel-shadow: 0 10px 26px rgba(25, 43, 55, 0.065);
 }
 
 @theme inline {
@@ -98,6 +99,8 @@
 
   html {
     @apply font-sans;
+    font-kerning: normal;
+    text-rendering: optimizeLegibility;
   }
 
   body {
@@ -107,6 +110,16 @@
 
   #root {
     @apply min-h-screen;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
   }
 
   mark {
@@ -141,11 +154,9 @@
 
 .app-workspace-surface {
   background-image:
-    linear-gradient(90deg, color-mix(in oklab, var(--primary) 4.5%, transparent) 1px, transparent 1px),
-    linear-gradient(color-mix(in oklab, var(--primary) 4%, transparent) 1px, transparent 1px),
-    radial-gradient(circle at 16% 0%, color-mix(in oklab, var(--accent) 44%, transparent), transparent 31rem);
-  background-size: 24px 24px, 24px 24px, auto;
-  opacity: 0.68;
+    radial-gradient(circle at 10% -8%, color-mix(in oklab, var(--primary) 8%, transparent), transparent 30rem),
+    radial-gradient(circle at 88% 108%, color-mix(in oklab, var(--accent) 48%, transparent), transparent 28rem);
+  opacity: 0.76;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -84,7 +84,7 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
       {!authStatus.authorized && <TelegramLogin authStatus={authStatus} onLoginSuccess={onLoginSuccess} />}
 
       <div className="relative z-10 flex h-dvh min-h-0 overflow-hidden">
-        <aside className="hidden w-[72px] shrink-0 border-r border-sidebar-border bg-sidebar/96 md:flex md:flex-col">
+        <aside className="hidden w-[72px] shrink-0 border-r border-sidebar-border bg-sidebar md:flex md:flex-col">
           <div className="flex h-13 items-center justify-center border-b border-sidebar-border">
             <img
               src="/icons/icon.svg"
@@ -108,7 +108,7 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
                   className={cn(
                     "group relative flex h-13 w-full flex-col items-center justify-center gap-1 rounded-lg text-sidebar-foreground/64 transition-colors",
                     "hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
-                    active && "bg-card/96 text-sidebar-accent-foreground shadow-[0_4px_12px_rgba(37,70,61,0.06)] ring-1 ring-sidebar-border",
+                    active && "bg-card text-sidebar-accent-foreground shadow-[0_4px_14px_color-mix(in_oklab,var(--foreground)_6%,transparent)] ring-1 ring-sidebar-border",
                   )}
                 >
                   <span

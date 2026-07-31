@@ -354,7 +354,7 @@ export function FiltersFeature() {
         authLoading={authLoading}
         onLoginSuccess={handleLoginSuccess}
       >
-        <div className="flex min-h-0 flex-1 flex-col bg-background/72">
+        <div className="flex min-h-0 flex-1 flex-col bg-background">
           <WorkspaceHeader
             title="过滤器"
             description={`${filters.length} 个规则 · ${enabledFilters} 个正在监听`}
@@ -398,7 +398,7 @@ export function FiltersFeature() {
       authLoading={authLoading}
       onLoginSuccess={handleLoginSuccess}
     >
-      <div className="relative flex min-h-0 flex-1 flex-col bg-background/84">
+      <div className="relative flex min-h-0 flex-1 flex-col bg-background">
         <WorkspaceHeader
           className="min-h-16 bg-card/78 px-4 py-2"
           title={
@@ -483,8 +483,8 @@ export function FiltersFeature() {
         />
 
         <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto xl:grid xl:grid-cols-[minmax(460px,1fr)_372px] xl:overflow-hidden">
-            <section className="min-w-0 shrink-0 bg-card/26 pb-20 md:pb-0 xl:min-h-0 xl:overflow-y-auto">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto xl:grid xl:grid-cols-[minmax(460px,1fr)_372px] xl:gap-3 xl:overflow-hidden xl:p-3">
+            <section className="min-w-0 shrink-0 bg-card/26 pb-20 md:pb-0 xl:min-h-0 xl:overflow-y-auto xl:rounded-xl xl:border xl:bg-card xl:shadow-[var(--workspace-panel-shadow)]">
               <FilterForm
                 selectedFilter={selectedFilter}
                 autoLocateUnreadNearRead={autoLocateUnreadNearRead}
@@ -508,7 +508,7 @@ export function FiltersFeature() {
             </section>
 
             <PreviewPanel
-              className="mx-3 mb-4 flex shrink-0 rounded-xl border border-border sm:mx-4 sm:mb-4 xl:m-0 xl:rounded-none xl:border-y-0 xl:border-r-0"
+              className="mx-3 mb-4 flex shrink-0 rounded-xl border border-border shadow-sm sm:mx-4 sm:mb-4 xl:m-0 xl:rounded-xl xl:shadow-[var(--workspace-panel-shadow)]"
               selectedFilter={selectedFilter}
               conditions={conditions}
               chats={chats}
@@ -529,7 +529,7 @@ export function FiltersFeature() {
 
         <button
           type="button"
-          className="fixed right-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-3 z-30 flex h-11 items-center justify-between rounded-xl border border-primary/28 bg-accent/92 px-3 text-xs font-semibold text-primary shadow-[0_10px_26px_rgba(35,76,64,0.13)] md:hidden"
+          className="fixed right-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-3 z-30 flex h-11 items-center justify-between rounded-xl border border-primary/28 bg-accent/92 px-3 text-xs font-semibold text-primary shadow-[0_10px_26px_color-mix(in_oklab,var(--foreground)_13%,transparent)] md:hidden"
           onClick={handlePreview}
           disabled={previewLoading}
         >
