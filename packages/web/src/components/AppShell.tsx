@@ -127,7 +127,10 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-[env(safe-area-inset-top)] md:pt-0">
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
 
-          <nav className="grid h-15 shrink-0 grid-cols-4 border-t border-border bg-card/92 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden" aria-label="主导航">
+          <nav
+            className="grid h-[calc(3.75rem+env(safe-area-inset-bottom))] shrink-0 grid-cols-4 border-t border-border bg-card/92 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+            aria-label="主导航"
+          >
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = item.value === activeTab;
