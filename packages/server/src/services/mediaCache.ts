@@ -7,9 +7,11 @@ import { getClient, isClientConnected } from "./telegram/client.js";
 import { getDialogEntityMap } from "./telegram/dialogEntityCache.js";
 import { appConfig } from "../config.js";
 import {
+  MAX_DOWNLOADABLE_THUMBNAIL_BYTES,
   MediaLruCache,
   buildThumbCacheKey,
   guessThumbnailMimeType,
+  selectDownloadableThumbnails,
 } from "./mediaCachePolicy.js";
 import { AsyncSlotLimiter, PendingRequestRegistry, withTimeout } from "./mediaRuntimePolicy.js";
 
@@ -17,6 +19,7 @@ const MAX_CACHE_SIZE = 80 * 1024 * 1024; // 80MB
 const MAX_TTL_MS = 30 * 60 * 1000; // 30 分钟
 const MAX_ENTRIES = 2000;
 const DOWNLOAD_THUMB_TIMEOUT_MS = 5000;
+const MAX_PENDING_DOWNLOADS = 8;
 
 const cache = new MediaLruCache({
   maxSizeBytes: MAX_CACHE_SIZE,
@@ -25,7 +28,9 @@ const cache = new MediaLruCache({
 });
 
 const MAX_CONCURRENCY = 2;
-const pendingRequests = new PendingRequestRegistry<{ buffer: Buffer; mimeType: string } | null>();
+const pendingRequests = new PendingRequestRegistry<{ buffer: Buffer; mimeType: string } | null>(
+  MAX_PENDING_DOWNLOADS,
+);
 const downloadLimiter = new AsyncSlotLimiter(MAX_CONCURRENCY);
 
 // --- 公开 API ---
@@ -46,8 +51,21 @@ export async function getThumbBuffer(
   const cached = cache.get(key);
   if (cached) return { buffer: cached.buffer, mimeType: cached.mimeType };
 
-  // 2. 请求去重并发起下载
-  return pendingRequests.getOrCreate(key, () => downloadThumb(chatId, messageId, thumbIndex, key));
+  // 2. 请求去重并发起下载。超时只结束当前 HTTP 等待；底层任务仍保留在 registry
+  // 中并占用并发槽，直到真正结束，避免超时后重复启动不可取消的 GramJS 下载。
+  const download = pendingRequests.getOrCreate(key, () =>
+    downloadThumb(chatId, messageId, thumbIndex, key),
+  );
+
+  try {
+    return await withTimeout(download, DOWNLOAD_THUMB_TIMEOUT_MS);
+  } catch (err: any) {
+    const reason = err?.message || String(err);
+    if (reason !== "download_thumb_timeout") {
+      console.warn("[MediaCache] Thumbnail request rejected:", reason);
+    }
+    return null;
+  }
 }
 
 async function downloadThumb(
@@ -83,17 +101,30 @@ async function downloadThumb(
   });
 }
 
-async function downloadWithFallbackThumb(client: any, msg: any, thumbIndex: number): Promise<Buffer | string | undefined> {
-  for (let index = thumbIndex; index >= 0; index--) {
+async function downloadWithFallbackThumb(
+  client: any,
+  msg: any,
+  thumbIndex: number,
+): Promise<Buffer | string | undefined> {
+  const thumbnails = selectDownloadableThumbnails(msg.media, thumbIndex);
+
+  // An empty list is expected for documents without thumbnails. Never pass an invalid numeric
+  // index to GramJS: for documents it silently falls back to downloading the original file.
+  for (const thumbnail of thumbnails) {
     try {
-      const buffer = await withTimeout(
-        client.downloadMedia(msg, { thumb: index }),
-        DOWNLOAD_THUMB_TIMEOUT_MS,
-      );
+      const buffer = await client.downloadMedia(msg, { thumb: thumbnail });
+      if (
+        buffer &&
+        typeof buffer !== "string" &&
+        buffer.byteLength > MAX_DOWNLOADABLE_THUMBNAIL_BYTES
+      ) {
+        console.warn("[MediaCache] Rejected oversized thumbnail:", buffer.byteLength);
+        continue;
+      }
       if (buffer) return buffer;
     } catch (err: any) {
       console.warn(
-        `[MediaCache] thumb ${index} unavailable, trying lower quality:`,
+        "[MediaCache] Thumbnail unavailable, trying lower quality:",
         err?.message || err,
       );
     }
@@ -103,7 +134,8 @@ async function downloadWithFallbackThumb(client: any, msg: any, thumbIndex: numb
 
 export function clearMediaCache(): void {
   cache.clear();
-  pendingRequests.clear();
+  // Do not clear in-flight downloads: GramJS cannot cancel them. Keeping their keys registered
+  // prevents a config change or retry from starting duplicate background transfers.
 }
 
 /** 获取缓存统计信息（用于调试） */
@@ -111,6 +143,14 @@ export function getCacheStats(): {
   entries: number;
   sizeBytes: number;
   maxSizeBytes: number;
+  pendingDownloads: number;
+  activeDownloads: number;
+  queuedDownloads: number;
 } {
-  return cache.stats();
+  return {
+    ...cache.stats(),
+    pendingDownloads: pendingRequests.size,
+    activeDownloads: downloadLimiter.active,
+    queuedDownloads: downloadLimiter.queued,
+  };
 }

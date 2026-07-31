@@ -5,9 +5,19 @@
 export class PendingRequestRegistry<T> {
   private readonly pending = new Map<string, Promise<T>>();
 
+  constructor(private readonly maxEntries = Number.POSITIVE_INFINITY) {
+    if (maxEntries <= 0 || Number.isNaN(maxEntries)) {
+      throw new Error("maxEntries must be a positive number");
+    }
+  }
+
   getOrCreate(key: string, create: () => Promise<T>): Promise<T> {
     const existing = this.pending.get(key);
     if (existing) return existing;
+
+    if (this.pending.size >= this.maxEntries) {
+      return Promise.reject(new Error("too_many_pending_thumbnail_downloads"));
+    }
 
     let sourcePromise: Promise<T>;
     try {
@@ -81,6 +91,8 @@ export class AsyncSlotLimiter {
 }
 
 export async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  // This timeout only bounds how long the caller waits. It intentionally does not pretend to
+  // cancel the source promise; callers must keep the source tracked until it actually settles.
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([

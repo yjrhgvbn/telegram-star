@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_DOWNLOADABLE_THUMBNAIL_BYTES,
   MediaLruCache,
   buildThumbCacheKey,
   guessThumbnailMimeType,
+  selectDownloadableThumbnails,
 } from "./mediaCachePolicy.js";
 
 function makeBuffer(size: number): Buffer {
@@ -12,6 +14,46 @@ function makeBuffer(size: number): Buffer {
 describe("mediaCachePolicy", () => {
   it("builds stable thumbnail cache keys", () => {
     expect(buildThumbCacheKey("-100123", 42, 1)).toBe("-100123:42:thumb:1");
+  });
+
+  it("does not fall back to an original document when thumbnails are missing", () => {
+    const media = {
+      className: "MessageMediaDocument",
+      document: {
+        size: 800 * 1024 * 1024,
+        thumbs: [],
+      },
+    };
+
+    expect(selectDownloadableThumbnails(media, 1)).toEqual([]);
+  });
+
+  it("selects concrete thumbnails from preferred to lower quality", () => {
+    const low = { className: "PhotoStrippedSize", bytes: Buffer.alloc(100) };
+    const medium = { className: "PhotoSize", size: 20_000 };
+    const high = { className: "PhotoSize", size: 80_000 };
+    const media = {
+      className: "MessageMediaDocument",
+      document: { thumbs: [high, low, medium] },
+    };
+
+    expect(selectDownloadableThumbnails(media, 1)).toEqual([medium, low]);
+    expect(selectDownloadableThumbnails(media, 2)).toEqual([high, medium, low]);
+  });
+
+  it("rejects unsupported and oversized thumbnail candidates", () => {
+    const safe = { className: "PhotoSize", size: 64_000 };
+    const oversized = {
+      className: "PhotoSize",
+      size: MAX_DOWNLOADABLE_THUMBNAIL_BYTES + 1,
+    };
+    const progressive = { className: "PhotoSizeProgressive", sizes: [64_000] };
+    const media = {
+      className: "MessageMediaPhoto",
+      photo: { sizes: [safe, oversized, progressive] },
+    };
+
+    expect(selectDownloadableThumbnails(media, 2)).toEqual([safe]);
   });
 
   it("expires entries by ttl", () => {

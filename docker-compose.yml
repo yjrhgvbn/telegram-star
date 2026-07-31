@@ -3,6 +3,10 @@ services:
     build: .
     container_name: telegram-star
     restart: unless-stopped
+    init: true
+    mem_limit: ${TELEGRAM_STAR_MEMORY_LIMIT:-1536m}
+    pids_limit: 256
+    stop_grace_period: 30s
     ports:
       - "3000:3000"
     volumes:
@@ -16,6 +20,7 @@ services:
       - DB_PATH=/app/data/telegram-star.db
       - SESSION_PATH=/app/data/session.txt
       - CORS_ORIGIN=*
+      - NODE_OPTIONS=--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE_MB:-768}
 
 volumes:
   telegram-star-data:

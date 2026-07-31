@@ -68,6 +68,28 @@ describe("mediaRuntimePolicy", () => {
     expect(limiter.active).toBe(0);
   });
 
+  it("keeps timed-out work registered and caps new unique downloads", async () => {
+    const registry = new PendingRequestRegistry<string>(1);
+    const deferred = createDeferred<string>();
+    const source = registry.getOrCreate("thumb:1", () => deferred.promise);
+    let overflowCreateCount = 0;
+
+    await expect(withTimeout(source, 1)).rejects.toThrow("download_thumb_timeout");
+    expect(registry.size).toBe(1);
+    expect(registry.getOrCreate("thumb:1", () => Promise.resolve("duplicate"))).toBe(source);
+    await expect(
+      registry.getOrCreate("thumb:2", () => {
+        overflowCreateCount += 1;
+        return Promise.resolve("overflow");
+      }),
+    ).rejects.toThrow("too_many_pending_thumbnail_downloads");
+    expect(overflowCreateCount).toBe(0);
+
+    deferred.resolve("late-success");
+    await expect(source).resolves.toBe("late-success");
+    expect(registry.size).toBe(0);
+  });
+
   it("resolves fast promises and rejects timed-out promises", async () => {
     await expect(withTimeout(Promise.resolve("fast"), 20)).resolves.toBe("fast");
     await expect(withTimeout(new Promise<string>(() => {}), 1)).rejects.toThrow(

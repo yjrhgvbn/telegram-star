@@ -103,10 +103,14 @@ cp .env.example .env
 
 - `TELEGRAM_API_ID` / `TELEGRAM_API_HASH`：可选；仅在数据库未保存 Telegram 配置时作为兜底
 - `DATABASE_URL` / `DB_PATH`：保留默认即可，Docker 中指向 `/app/data/telegram-star.db`
+- `TELEGRAM_STAR_MEMORY_LIMIT`：容器内存硬上限，默认 `1536m`；异常时只重启容器，避免拖死宿主机
+- `NODE_MAX_OLD_SPACE_SIZE_MB`：Node.js V8 堆上限，默认 `768`；应低于容器内存上限
 
 通知转发配置通过 Web UI 的「通知设置」页面管理，底层采用 Apprise，配置保存在 SQLite 数据库中。每个转发通道可独立设置标题/正文模板，并可使用简洁、详情、Markdown 三种内置格式预设。
 
 其他变量通常保持默认。
+
+生产宿主机建议额外配置 2–4 GiB Swap。Swap 不是内存泄漏的解决方案，但能在瞬时内存压力下为 SSH、Docker 和系统守护进程保留恢复窗口。
 
 ## 3. 首次部署
 

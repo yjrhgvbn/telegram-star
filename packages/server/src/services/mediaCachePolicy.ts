@@ -3,6 +3,17 @@ export interface MediaCacheValue {
   mimeType: string;
 }
 
+/**
+ * Telegram previews should always be small. Keeping this limit below GramJS' full-document
+ * download range prevents a malformed or missing thumbnail from consuming the host memory.
+ */
+export const MAX_DOWNLOADABLE_THUMBNAIL_BYTES = 2 * 1024 * 1024;
+
+interface ThumbnailCandidate {
+  value: unknown;
+  sizeBytes: number;
+}
+
 interface MediaCacheEntry extends MediaCacheValue {
   accessedAt: number;
 }
@@ -21,6 +32,78 @@ export function buildThumbCacheKey(
   thumbIndex: number,
 ): string {
   return `${chatId}:${messageId}:thumb:${thumbIndex}`;
+}
+
+/**
+ * Returns real GramJS thumbnail objects in preferred-to-lowest-quality order.
+ *
+ * Passing a numeric thumbnail index to GramJS is unsafe for documents: when the index does
+ * not exist, GramJS falls back to the original document and downloads it into memory. We
+ * therefore resolve and size-check the thumbnail ourselves, then pass the concrete object.
+ */
+export function selectDownloadableThumbnails(
+  media: any,
+  preferredIndex: number,
+  maxSizeBytes = MAX_DOWNLOADABLE_THUMBNAIL_BYTES,
+): unknown[] {
+  const sizes = getThumbnailSizes(media);
+  if (!sizes) return [];
+
+  const candidates = sizes
+    .map(toThumbnailCandidate)
+    .filter((candidate): candidate is ThumbnailCandidate => {
+      return candidate !== null && candidate.sizeBytes <= maxSizeBytes;
+    })
+    .sort((left, right) => left.sizeBytes - right.sizeBytes);
+
+  if (candidates.length === 0) return [];
+
+  const safePreferredIndex = Number.isInteger(preferredIndex)
+    ? Math.min(Math.max(preferredIndex, 0), candidates.length - 1)
+    : 0;
+
+  return candidates
+    .slice(0, safePreferredIndex + 1)
+    .reverse()
+    .map((candidate) => candidate.value);
+}
+
+function getThumbnailSizes(media: any): unknown[] | null {
+  if (media?.className === "MessageMediaPhoto") {
+    return Array.isArray(media.photo?.sizes) ? media.photo.sizes : null;
+  }
+
+  if (media?.className === "MessageMediaDocument") {
+    return Array.isArray(media.document?.thumbs) ? media.document.thumbs : null;
+  }
+
+  return null;
+}
+
+function toThumbnailCandidate(value: any): ThumbnailCandidate | null {
+  switch (value?.className) {
+    case "PhotoStrippedSize":
+    case "PhotoCachedSize": {
+      const sizeBytes = getByteLength(value.bytes);
+      return sizeBytes > 0 ? { value, sizeBytes } : null;
+    }
+
+    case "PhotoSize": {
+      const sizeBytes = Number(value.size);
+      return Number.isFinite(sizeBytes) && sizeBytes > 0 ? { value, sizeBytes } : null;
+    }
+
+    default:
+      // PhotoSizeEmpty/PhotoPathSize have no payload. PhotoSizeProgressive is deliberately
+      // excluded because GramJS does not accept that concrete object in downloadMedia().
+      return null;
+  }
+}
+
+function getByteLength(value: unknown): number {
+  if (Buffer.isBuffer(value)) return value.byteLength;
+  if (value instanceof Uint8Array) return value.byteLength;
+  return 0;
 }
 
 /**
