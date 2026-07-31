@@ -99,17 +99,18 @@
 
   html {
     @apply font-sans;
+    background-color: var(--card);
     font-kerning: normal;
     text-rendering: optimizeLegibility;
   }
 
   body {
-    @apply min-h-screen bg-background text-foreground antialiased;
+    @apply min-h-screen bg-card text-foreground antialiased;
     color-scheme: light;
   }
 
   #root {
-    @apply min-h-screen;
+    @apply min-h-screen bg-card;
   }
 
   h1,
@@ -166,16 +167,35 @@
  */
 :root {
   --app-mobile-nav-height: 3.75rem;
-  --app-safe-area-max-bottom: env(
-    safe-area-max-inset-bottom,
-    env(safe-area-inset-bottom, 0px)
-  );
+  /*
+   * Keep the fallback static. Falling back to the dynamic inset makes both the
+   * tab bar and the action footer reflow while Chrome retracts its controls.
+   * Older Android Chrome already keeps the OS navigation area outside the
+   * viewport, so reserving 0px is the correct fallback there.
+   */
+  --app-safe-area-max-bottom: env(safe-area-max-inset-bottom, 0px);
 }
 
 .app-mobile-nav {
   bottom: calc(env(safe-area-inset-bottom, 0px) - var(--app-safe-area-max-bottom));
   height: calc(var(--app-mobile-nav-height) + var(--app-safe-area-max-bottom));
   padding-bottom: var(--app-safe-area-max-bottom);
+}
+
+/*
+ * Keep the gesture-navigation strip visually attached to the tab bar. Some
+ * Android Chrome variants expose only the dynamic inset, while others paint
+ * the native strip from the document background outside the layout viewport.
+ */
+.app-mobile-nav::after {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: env(safe-area-inset-bottom, 0px);
+  background: var(--card);
+  content: "";
+  pointer-events: none;
 }
 
 .app-mobile-viewport {
