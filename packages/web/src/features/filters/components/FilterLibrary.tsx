@@ -43,22 +43,8 @@ export function FilterLibrary({
   );
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-3 py-3 sm:px-5 sm:py-5">
-        <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-[var(--workspace-panel-shadow)] sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-medium tracking-wide text-primary">规则库</p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight">选择一条规则继续编辑</h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-              规则列表与编辑工作台分开，复杂条件、动作和测试能力扩展时不会挤压编辑空间。
-            </p>
-          </div>
-          <Button type="button" onClick={onCreate}>
-            <Plus data-icon="inline-start" />
-            新建过滤器
-          </Button>
-        </section>
-
+    <main className="flex min-h-0 flex-1 flex-col">
+      <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-3 px-3 py-3 sm:px-5 sm:py-5">
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -66,11 +52,12 @@ export function FilterLibrary({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索规则名称、会话或关键词"
-            className="h-9 bg-card pl-9 shadow-sm"
+            aria-label="搜索过滤器"
+            className="h-10 bg-card pl-9 shadow-sm"
           />
         </div>
 
-        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-[var(--workspace-panel-shadow)]">
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[var(--workspace-panel-shadow)]">
           <div className="flex h-11 items-center justify-between border-b border-border px-3">
             <span className="text-sm font-semibold">全部规则</span>
             <Badge variant="outline">{visibleFilters.length}</Badge>
@@ -95,15 +82,9 @@ export function FilterLibrary({
                   ? "从消息来源和关键词开始，创建第一条可以直接验证的规则。"
                   : "尝试搜索其他名称、会话或关键词。"}
               </p>
-              {filters.length === 0 ? (
-                <Button type="button" className="mt-3" onClick={onCreate}>
-                  <Plus data-icon="inline-start" />
-                  创建第一条规则
-                </Button>
-              ) : null}
             </div>
           ) : (
-            <div className="divide-y divide-border">
+            <div className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
               {visibleFilters.map((filter) => {
                 const valueCount = filter.conditions.reduce(
                   (count, condition) => count + condition.values.length,
@@ -149,6 +130,13 @@ export function FilterLibrary({
             </div>
           )}
         </section>
+
+        <footer className="flex shrink-0 justify-end">
+          <Button type="button" className="h-11 w-full sm:w-auto sm:min-w-44" onClick={onCreate}>
+            <Plus data-icon="inline-start" />
+            新建过滤器
+          </Button>
+        </footer>
       </div>
     </main>
   );

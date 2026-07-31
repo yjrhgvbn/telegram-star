@@ -18,7 +18,6 @@ import {
   Save,
   Search,
   Server,
-  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -321,37 +320,19 @@ export function SettingsForm({
     <form
       id={SETTINGS_FORM_ID}
       onSubmit={settings.handleSave}
-      className="grid h-full min-h-0 min-w-0 grid-cols-1 grid-rows-[minmax(0,1fr)_64px] bg-background lg:grid-cols-[264px_minmax(0,1fr)] lg:gap-x-3 lg:p-3"
+      className={cn(
+        "grid h-full min-h-0 min-w-0 grid-cols-1 grid-rows-[minmax(0,1fr)_64px] bg-background lg:grid-cols-[264px_minmax(0,1fr)] lg:gap-x-3 lg:p-3",
+        !isSectionSelected && "p-3",
+      )}
     >
       <aside
         className={cn(
-          "row-span-2 min-h-0 min-w-0 flex-col border-r border-border bg-sidebar/72 lg:col-start-1 lg:overflow-hidden lg:rounded-xl lg:border lg:bg-card lg:shadow-[var(--workspace-panel-shadow)]",
+          "row-span-2 min-h-0 min-w-0 flex-col gap-3 lg:col-start-1 lg:gap-0 lg:overflow-hidden lg:rounded-xl lg:border lg:border-border lg:bg-card lg:shadow-[var(--workspace-panel-shadow)]",
           isSectionSelected ? "hidden" : "flex",
           "lg:flex",
         )}
       >
-        <div className="shrink-0 px-4 pt-5 pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="text-xl font-semibold tracking-[-0.03em] text-foreground">
-              设置
-            </h1>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={settings.loadStatus}
-              disabled={settings.loading || settings.dirty}
-              aria-label="刷新设置状态"
-            >
-              <RefreshCw className={cn(settings.loading && "animate-spin")} />
-            </Button>
-          </div>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            管理连接、凭据、客户端与媒体。
-          </p>
-        </div>
-
-        <label className="relative mx-3 mb-3 block shrink-0">
+        <label className="relative block shrink-0 lg:m-3">
           <span className="sr-only">搜索设置</span>
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -361,19 +342,19 @@ export function SettingsForm({
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="搜索设置"
             aria-label="搜索设置"
-            className="h-10 w-full rounded-lg border border-input bg-card pr-10 pl-9 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:text-sm"
+            className="h-10 w-full rounded-lg border border-input bg-card pr-10 pl-9 text-base shadow-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:text-sm lg:shadow-none"
           />
           <kbd className="pointer-events-none absolute top-1/2 right-2.5 flex size-5 -translate-y-1/2 items-center justify-center rounded border border-border bg-muted font-mono text-[11px] text-muted-foreground">
             /
           </kbd>
         </label>
 
-        <div className="shrink-0 px-4 pb-1 text-[11px] font-semibold tracking-[0.11em] text-muted-foreground uppercase">
+        <div className="shrink-0 px-1 text-[11px] font-semibold tracking-[0.11em] text-muted-foreground uppercase lg:px-4 lg:pb-1">
           系统设置
         </div>
 
         <nav
-          className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-3"
+          className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pb-1 lg:gap-1 lg:px-2 lg:pb-3"
           aria-label="设置分类"
         >
           {filteredNavItems.length > 0 ? (
@@ -388,9 +369,9 @@ export function SettingsForm({
                   aria-current={active ? "page" : undefined}
                   onClick={() => handleSectionChange(item.id)}
                   className={cn(
-                    "group grid min-h-16 w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-left transition-[background-color,border-color,box-shadow,color] duration-150",
+                    "group grid min-h-16 w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl border border-border bg-card px-2.5 py-2 text-left shadow-sm transition-[background-color,border-color,box-shadow,color] duration-150 lg:rounded-lg lg:border-transparent lg:bg-transparent lg:shadow-none",
                     active
-                      ? "border-primary/12 bg-accent text-foreground"
+                      ? "text-foreground lg:border-primary/12 lg:bg-accent"
                       : "text-muted-foreground hover:bg-muted/72 hover:text-foreground",
                   )}
                 >
@@ -433,9 +414,17 @@ export function SettingsForm({
           )}
         </nav>
 
-        <div className="mx-3 flex shrink-0 items-start gap-2 border-t border-border py-3 text-xs leading-5 text-muted-foreground">
-          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-          <span>配置更改会明确标记，保存后才会生效。</span>
+        <div className="shrink-0 lg:border-t lg:border-border lg:p-2.5">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 w-full lg:h-9"
+            onClick={settings.loadStatus}
+            disabled={settings.loading || settings.dirty}
+          >
+            <RefreshCw className={cn(settings.loading && "animate-spin")} data-icon="inline-start" />
+            刷新设置状态
+          </Button>
         </div>
       </aside>
 
@@ -463,16 +452,6 @@ export function SettingsForm({
               {activeNavItem.description}
             </p>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-lg"
-            onClick={settings.loadStatus}
-            disabled={settings.loading || settings.dirty}
-            aria-label="刷新设置状态"
-          >
-            <RefreshCw className={cn(settings.loading && "animate-spin")} />
-          </Button>
         </div>
 
         <div className="mx-auto min-h-full w-full max-w-[1060px] px-4 py-5 sm:px-6 sm:py-6 lg:px-9 lg:py-7 xl:px-10">

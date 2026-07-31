@@ -2,11 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  CheckCircle2,
   Database,
-  ListFilter,
   LoaderCircle,
-  Plus,
   Save,
   Trash2,
 } from "lucide-react";
@@ -14,7 +11,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/api/client";
 import { AppShell } from "@/components/AppShell";
 import { WorkspaceHeader } from "@/components/WorkspaceHeader";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
@@ -80,7 +76,6 @@ export function FiltersFeature() {
     routeFilterId && routeFilterId !== "new"
       ? filters.find((filter) => String(filter.id) === routeFilterId) ?? null
       : null;
-  const enabledFilters = filters.filter((filter) => filter.enabled).length;
   const forwardTargets = forwardTargetsQuery.data ?? [];
   const persistedConditions = useMemo(
     () => mergePersistableConditions(normalizeConditions(conditions)),
@@ -414,30 +409,6 @@ export function FiltersFeature() {
         onLoginSuccess={handleLoginSuccess}
       >
         <div className="flex min-h-0 flex-1 flex-col bg-background">
-          <WorkspaceHeader
-            title="过滤器"
-            description={`${filters.length} 个规则 · ${enabledFilters} 个正在监听`}
-            actions={
-              <>
-                <Badge variant="outline" className="hidden sm:inline-flex">
-                  <ListFilter data-icon="inline-start" />
-                  {filters.length}
-                </Badge>
-                <Badge variant="secondary" className="hidden sm:inline-flex">
-                  <CheckCircle2 data-icon="inline-start" />
-                  {enabledFilters} 启用
-                </Badge>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => navigate("/filters/new")}
-                >
-                  <Plus data-icon="inline-start" />
-                  新建
-                </Button>
-              </>
-            }
-          />
           <FilterLibrary
             filters={filters}
             chats={chats}

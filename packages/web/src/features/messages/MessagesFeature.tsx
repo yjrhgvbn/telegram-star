@@ -94,7 +94,12 @@ export function MessagesFeature() {
       authLoading={authLoading}
       onLoginSuccess={handleLoginSuccess}
     >
-      <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background lg:gap-3 lg:p-3">
+      <div
+        className={cn(
+          "relative flex h-full min-h-0 flex-1 overflow-hidden bg-background lg:gap-3",
+          isGroupSelected ? "lg:p-3" : "p-3",
+        )}
+      >
         {/*
           侧边栏（过滤器列表）：
           - 大屏：始终显示
@@ -102,7 +107,7 @@ export function MessagesFeature() {
         */}
         <aside
           className={cn(
-            "border-r border-border bg-sidebar/66 lg:overflow-hidden lg:rounded-xl lg:border lg:bg-card lg:shadow-[var(--workspace-panel-shadow)]",
+            "min-w-0 lg:overflow-hidden lg:rounded-xl lg:border lg:border-border lg:bg-card lg:shadow-[var(--workspace-panel-shadow)]",
             isGroupSelected
               ? "hidden lg:flex lg:w-[264px] lg:flex-col"
               : "flex w-full flex-col lg:w-[264px]"

@@ -75,8 +75,6 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
     );
   }
 
-  const activeItem = navItems.find((item) => item.value === activeTab) ?? navItems[0];
-
   return (
     <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       <div className="app-workspace-surface pointer-events-none absolute inset-0" />
@@ -85,7 +83,7 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
 
       <div className="relative z-10 flex h-dvh min-h-0 overflow-hidden">
         <aside className="hidden w-[72px] shrink-0 border-r border-sidebar-border bg-sidebar md:flex md:flex-col">
-          <div className="flex h-13 items-center justify-center border-b border-sidebar-border">
+          <div className="flex h-13 items-center justify-center">
             <img
               src="/icons/icon.svg"
               alt=""
@@ -126,33 +124,7 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, c
           </nav>
         </aside>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="hidden h-13 shrink-0 items-center justify-between border-b border-border bg-card/88 px-4 backdrop-blur-md md:flex">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="text-sm font-semibold">Telegram Star</span>
-              <span className="text-muted-foreground/45">/</span>
-              <span className="truncate text-sm font-medium text-muted-foreground">{activeItem.label}</span>
-              <span className="hidden text-xs text-muted-foreground/72 lg:inline">
-                {activeItem.description}
-              </span>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-              <span className={cn("size-2 rounded-full", authStatus.authorized ? "bg-success" : "bg-warning")} />
-              {authStatus.authorized ? "Telegram 已连接" : "等待登录"}
-            </div>
-          </header>
-
-          <header className="flex h-13 shrink-0 items-center justify-between border-b border-border bg-card/88 px-3 backdrop-blur-md md:hidden">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <img src="/icons/icon.svg" alt="" className="size-8 rounded-lg shadow-sm" />
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold">{activeItem.label}</div>
-                <div className="truncate text-[11px] text-muted-foreground">{activeItem.description}</div>
-              </div>
-            </div>
-            <span className={cn("size-2 rounded-full", authStatus.authorized ? "bg-success" : "bg-warning")} />
-          </header>
-
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-[env(safe-area-inset-top)] md:pt-0">
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
 
           <nav className="grid h-15 shrink-0 grid-cols-4 border-t border-border bg-card/92 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden" aria-label="主导航">

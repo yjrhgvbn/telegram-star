@@ -1,9 +1,7 @@
 import { useEffect } from "react";
-import { AlertCircle, Inbox, Plus, RefreshCw } from "lucide-react";
+import { AlertCircle, Inbox } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
-import { WorkspaceHeader } from "@/components/WorkspaceHeader";
-import { Button } from "@/components/ui/button";
 import {
   TargetEditor,
   TargetList,
@@ -49,33 +47,6 @@ export function NotificationsPage() {
       onLoginSuccess={handleLoginSuccess}
     >
       <div className="flex min-h-0 flex-1 flex-col bg-background">
-        <WorkspaceHeader
-          title="转发通道"
-          description={`${forwardTargets.targets.length} 个通道 · ${filters.length} 个可用规则 · ${forwardTargets.subscribedRules} 个已订阅规则`}
-          className="hidden md:flex"
-          actions={
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={forwardTargets.refresh}
-                disabled={forwardTargets.loading}
-              >
-                <RefreshCw
-                  data-icon="inline-start"
-                  className={cn(forwardTargets.loading && "animate-spin")}
-                />
-                刷新
-              </Button>
-              <Button type="button" size="sm" onClick={handleAddTarget}>
-                <Plus data-icon="inline-start" />
-                新建通道
-              </Button>
-            </>
-          }
-        />
-
         {forwardTargets.error ? (
           <div className="flex shrink-0 items-center gap-2 border-b border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             <AlertCircle className="size-4 shrink-0" />
@@ -83,10 +54,15 @@ export function NotificationsPage() {
           </div>
         ) : null}
 
-        <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden lg:gap-3 lg:p-3">
+        <main
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 overflow-hidden lg:gap-3",
+            isTargetSelected ? "lg:p-3" : "p-3",
+          )}
+        >
           <aside
             className={cn(
-              "min-h-0 shrink-0 flex-col border-r border-border bg-sidebar/48 lg:overflow-hidden lg:rounded-xl lg:border lg:bg-card lg:shadow-[var(--workspace-panel-shadow)]",
+              "min-h-0 shrink-0 flex-col lg:overflow-hidden lg:rounded-xl lg:border lg:border-border lg:bg-card lg:shadow-[var(--workspace-panel-shadow)]",
               isTargetSelected ? "hidden lg:flex lg:w-[244px]" : "flex w-full lg:w-[244px]",
             )}
           >
@@ -95,6 +71,7 @@ export function NotificationsPage() {
               selectedTargetId={forwardTargets.selectedTargetId}
               loading={forwardTargets.loading}
               onAdd={handleAddTarget}
+              onRefresh={forwardTargets.refresh}
               onSelect={handleSelectTarget}
             />
           </aside>
@@ -132,13 +109,9 @@ export function NotificationsPage() {
                   <div>
                     <h2 className="text-sm font-semibold">选择一个转发通道</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      从左侧打开现有通道，或创建一个新的消息目的地。
+                      从左侧打开现有通道，或在列表底部创建新的消息目的地。
                     </p>
                   </div>
-                  <Button type="button" size="sm" onClick={handleAddTarget}>
-                    <Plus data-icon="inline-start" />
-                    新建通道
-                  </Button>
                 </div>
               </div>
             )}
