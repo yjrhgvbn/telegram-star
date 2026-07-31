@@ -60,7 +60,7 @@ export async function previewFilterHistory(input: FilterPreviewInput): Promise<F
     totalLimit: scope.totalLimit,
     page: scope.page,
     pageSize: scope.pageSize,
-    sampleLimit: 3,
+    sampleLimit: 0,
   });
 
   return filterPreviewResponseSchema.parse({

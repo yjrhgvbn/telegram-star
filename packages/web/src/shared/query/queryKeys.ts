@@ -7,6 +7,7 @@ export const queryKeys = {
   },
   filters: {
     all: ["filters"] as const,
+    preview: ["filters", "preview"] as const,
   },
   chats: {
     joined: ["chats", "joined"] as const,

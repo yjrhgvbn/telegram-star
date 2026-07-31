@@ -22,6 +22,15 @@ export async function request<T>(
       ...options,
     });
   } catch (error) {
+    // React Query 会通过 AbortSignal 取消过期的自动预览；取消不应被改写为后端离线。
+    if (
+      typeof DOMException !== "undefined" &&
+      error instanceof DOMException &&
+      error.name === "AbortError"
+    ) {
+      throw error;
+    }
+
     if (isNetworkError(error)) {
       throw new Error(formatServerUnavailableMessage(serverUrl));
     }

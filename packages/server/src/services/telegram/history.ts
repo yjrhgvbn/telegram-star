@@ -16,7 +16,6 @@ import {
   getScopedChatIds,
   shouldInspectChat,
   getMessageTimestampMs,
-  buildDialogEntityMap,
 } from "./utils.js";
 import { extractMediaInfo, getMessageTextContent, hasMessageContent } from "./media.js";
 import {
@@ -37,7 +36,38 @@ import {
   normalizeSegmentedHistoryLimits,
   normalizeSingleChatMessageLimits,
 } from "./historyScanPolicy.js";
+import { createAsyncTtlCache, type AsyncTtlCache } from "./asyncTtlCache.js";
 import pMap from "p-map";
+
+const PREVIEW_CACHE_TTL_MS = 30_000;
+const PREVIEW_CACHE_MAX_CHATS = 8;
+const PREVIEW_CACHE_MAX_PER_CHAT = 1_000;
+
+interface PreviewClientCache {
+  dialogs: AsyncTtlCache<any[]>;
+  chatMessages: AsyncTtlCache<HistoricalFilterPreviewMessage[]>;
+}
+
+// 按 TelegramClient 实例隔离，退出并切换账号后旧快照不会被新账号复用。
+const previewClientCaches = new WeakMap<object, PreviewClientCache>();
+
+function getPreviewClientCache(client: object): PreviewClientCache {
+  const existing = previewClientCaches.get(client);
+  if (existing) return existing;
+
+  const created: PreviewClientCache = {
+    dialogs: createAsyncTtlCache({
+      ttlMs: PREVIEW_CACHE_TTL_MS,
+      maxEntries: 1,
+    }),
+    chatMessages: createAsyncTtlCache({
+      ttlMs: PREVIEW_CACHE_TTL_MS,
+      maxEntries: PREVIEW_CACHE_MAX_CHATS,
+    }),
+  };
+  previewClientCaches.set(client, created);
+  return created;
+}
 
 // --- 会话列表 ---
 
@@ -188,6 +218,70 @@ async function loadSegmentedHistory(options: {
   return messages;
 }
 
+async function loadPreviewChatSnapshot(options: {
+  client: object;
+  entity: any;
+  chatId: string;
+  chatTitle: string;
+  perChatLimit: number;
+}): Promise<HistoricalFilterPreviewMessage[]> {
+  const loadSnapshot = async () => {
+    const history = await loadSegmentedHistory({
+      entity: options.entity,
+      scanLimit: options.perChatLimit,
+      batchSize: 100,
+    });
+    const validMessages = history.filter((item: any) => hasMessageContent(item));
+    const ids = validMessages.map((item: any) => item.id);
+    const existingRows = ids.length
+      ? await db.message.findMany({
+          where: { chatId: options.chatId, telegramMessageId: { in: ids } },
+          select: { telegramMessageId: true },
+        })
+      : [];
+    const existingIdSet = new Set(existingRows.map((row) => row.telegramMessageId));
+
+    return validMessages.map((item: any): HistoricalFilterPreviewMessage => {
+      const textContent = getMessageTextContent(item);
+      const { senderName, senderId } = getSenderSummary((item as any).sender);
+      const mediaInfo = extractMediaInfo(item);
+
+      return {
+        id: item.id,
+        chatId: options.chatId,
+        chatTitle: options.chatTitle,
+        senderName,
+        senderId,
+        content: textContent,
+        contentLinks: extractMessageContentLinks(item, textContent),
+        messageDate: new Date(getMessageTimestampMs(item)).toISOString(),
+        telegramLink: buildTelegramLink(options.chatId, options.entity, item.id),
+        inDatabase: existingIdSet.has(item.id),
+        matchedKeyword: null,
+        mediaType: mediaInfo?.mediaType ?? null,
+        mediaFileName: mediaInfo?.mediaFileName ?? null,
+        mediaFileSize: mediaInfo?.mediaFileSize ?? null,
+        mediaMimeType: mediaInfo?.mediaMimeType ?? null,
+        mediaDuration: mediaInfo?.mediaDuration ?? null,
+        mediaThumbBase64: mediaInfo?.mediaThumbBase64 ?? null,
+        mediaExtra: mediaInfo?.mediaExtra ?? null,
+      };
+    });
+  };
+
+  // API 仍允许更大的手动扫描范围，但只缓存 UI 支持的 1000 条以内快照，
+  // 防止单个异常请求长期占用过多内存。
+  if (options.perChatLimit > PREVIEW_CACHE_MAX_PER_CHAT) {
+    return loadSnapshot();
+  }
+
+  const cache = getPreviewClientCache(options.client);
+  return cache.chatMessages.get(
+    `${options.chatId}:${options.perChatLimit}`,
+    loadSnapshot,
+  );
+}
+
 // --- 过滤器历史预览 ---
 
 /**
@@ -219,14 +313,24 @@ export async function previewHistoricalFilterMessages(options: {
   const { perChatLimit, totalLimit, pageSize, page } = normalizeHistoricalPreviewLimits(options);
   const sampleLimit = Math.max(0, Math.min(options.sampleLimit ?? 0, 20));
 
-  const dialogs = await client.getDialogs({ limit: 300 });
+  const previewCache = getPreviewClientCache(client);
+  const dialogs = await previewCache.dialogs.get("dialogs:300", () =>
+    client.getDialogs({ limit: 300 }) as Promise<any[]>,
+  );
   const scopedChatIds = getScopedChatIds(options.conditions);
   const previews: HistoricalFilterPreviewMessage[] = [];
   const matchedSamples: HistoricalFilterPreviewSample[] = [];
   const unmatchedSamples: HistoricalFilterPreviewSample[] = [];
   let scannedChats = 0;
 
-  const paginatedDialogs = getDialogPageSlice(dialogs, page, pageSize);
+  const inspectableDialogs = dialogs.filter((dialog: any) => {
+    const entity = (dialog as any).entity;
+    if (!isValidChat(entity)) return false;
+
+    const chatId = entity?.id?.toString?.() || "";
+    return Boolean(chatId) && shouldInspectChat(chatId, scopedChatIds);
+  });
+  const paginatedDialogs = getDialogPageSlice(inspectableDialogs, page, pageSize);
 
   await pMap(
     paginatedDialogs,
@@ -235,59 +339,33 @@ export async function previewHistoricalFilterMessages(options: {
       if (!isValidChat(entity)) return;
 
       const chatId = entity?.id?.toString?.() || "";
-      if (!chatId || !shouldInspectChat(chatId, scopedChatIds)) return;
+      if (!chatId) return;
 
       scannedChats += 1;
 
-      const history = await loadSegmentedHistory({
+      const chatTitle = entity?.title || entity?.username || chatId;
+      const snapshot = await loadPreviewChatSnapshot({
+        client,
         entity,
-        scanLimit: perChatLimit,
-        batchSize: 100,
+        chatId,
+        chatTitle,
+        perChatLimit,
       });
 
-      const validMessages = history.filter((item: any) => hasMessageContent(item));
-
-      const ids = validMessages.map((item: any) => item.id);
-      const existingRows = ids.length
-        ? await db.message.findMany({
-            where: { chatId, telegramMessageId: { in: ids } },
-            select: { telegramMessageId: true },
-          })
-        : [];
-      const existingIdSet = new Set(existingRows.map((r) => r.telegramMessageId));
-
-      for (const item of validMessages) {
-        const textContent = getMessageTextContent(item);
-        const match = matchFilterConditions({ chatId, content: textContent }, options.conditions);
+      for (const baseMessage of snapshot) {
+        const match = matchFilterConditions(
+          { chatId, content: baseMessage.content },
+          options.conditions,
+        );
         const sampleTarget = match.matched ? matchedSamples : unmatchedSamples;
         const shouldCaptureSample =
           sampleLimit > 0 && sampleTarget.length < sampleLimit;
 
         if (!match.matched && !shouldCaptureSample) continue;
 
-        const sender = (item as any).sender;
-        const { senderName, senderId } = getSenderSummary(sender);
-        const mediaInfo = extractMediaInfo(item);
-
         const previewMessage: HistoricalFilterPreviewMessage = {
-          id: item.id,
-          chatId,
-          chatTitle: entity?.title || entity?.username || chatId,
-          senderName,
-          senderId,
-          content: textContent,
-          contentLinks: extractMessageContentLinks(item, textContent),
-          messageDate: new Date(getMessageTimestampMs(item)).toISOString(),
-          telegramLink: buildTelegramLink(chatId, entity, item.id),
-          inDatabase: existingIdSet.has(item.id),
+          ...baseMessage,
           matchedKeyword: match.matchedKeyword,
-          mediaType: mediaInfo?.mediaType ?? null,
-          mediaFileName: mediaInfo?.mediaFileName ?? null,
-          mediaFileSize: mediaInfo?.mediaFileSize ?? null,
-          mediaMimeType: mediaInfo?.mediaMimeType ?? null,
-          mediaDuration: mediaInfo?.mediaDuration ?? null,
-          mediaThumbBase64: mediaInfo?.mediaThumbBase64 ?? null,
-          mediaExtra: mediaInfo?.mediaExtra ?? null,
         };
 
         // The API keeps the existing match-only list for backfill while also
@@ -298,16 +376,12 @@ export async function previewHistoricalFilterMessages(options: {
 
         if (!match.matched) continue;
         previews.push(previewMessage);
-
-        if (previews.length >= totalLimit) {
-          return;
-        }
       }
     },
     { concurrency: 5 },
   );
 
-  const nextPage = getNextDialogPage(dialogs.length, page, pageSize);
+  const nextPage = getNextDialogPage(inspectableDialogs.length, page, pageSize);
   const preferredMatchedCount = Math.ceil(sampleLimit * (2 / 3));
   const preferredUnmatchedCount = sampleLimit - preferredMatchedCount;
   const samples = [
@@ -331,7 +405,14 @@ export async function previewHistoricalFilterMessages(options: {
       new Date(b.messageDate).getTime() - new Date(a.messageDate).getTime(),
   );
 
-  return { messages: previews, samples, scannedChats, nextPage };
+  const messages = previews
+    .sort(
+      (a, b) =>
+        new Date(b.messageDate).getTime() - new Date(a.messageDate).getTime(),
+    )
+    .slice(0, totalLimit);
+
+  return { messages, samples, scannedChats, nextPage };
 }
 
 // --- 历史回填 ---
@@ -397,6 +478,12 @@ export async function backfillFilterHistory(options: {
     },
     { concurrency: batchSize },
   );
+
+  const client = getClient();
+  if (client) {
+    // 本次写入改变了 inDatabase 标记；清掉消息快照，下一次预览可返回准确状态。
+    getPreviewClientCache(client).chatMessages.clear();
+  }
 
   return {
     scannedChats: preview.scannedChats,

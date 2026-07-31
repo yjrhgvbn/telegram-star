@@ -1,28 +1,14 @@
 // @vitest-environment jsdom
 import { useState } from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Filter, ForwardTarget } from "@/types";
+import type { ForwardTarget } from "@/types";
 import {
   DEFAULT_FORWARD_BODY_TEMPLATE,
   DEFAULT_FORWARD_TITLE_TEMPLATE,
 } from "@telegram-star/shared/contracts/forward-targets";
 import { FilterForm } from "./FilterForm";
-
-function createFilter(patch: Partial<Filter> = {}): Filter {
-  return {
-    id: 1,
-    name: "测试标题",
-    conditions: [{ type: "keyword", values: ["测试标题"] }],
-    enabled: true,
-    autoLocateUnreadNearRead: true,
-    forwardTargetIds: [1],
-    createdAt: "2026-06-29T00:00:00.000Z",
-    updatedAt: "2026-06-29T00:00:00.000Z",
-    ...patch,
-  };
-}
 
 function createForwardTarget(id: number, patch: Partial<ForwardTarget> = {}): ForwardTarget {
   return {
@@ -43,18 +29,15 @@ function FilterFormHarness({
   onAutoLocateChange,
   onToggleForwardTarget,
   onAddCondition,
-  onDelete,
 }: {
   onAutoLocateChange: (value: boolean) => void;
   onToggleForwardTarget: (id: number) => void;
   onAddCondition: () => void;
-  onDelete: () => void;
 }) {
   const [autoLocateUnreadNearRead, setAutoLocateUnreadNearRead] = useState(true);
 
   return (
     <FilterForm
-      selectedFilter={createFilter({ autoLocateUnreadNearRead })}
       autoLocateUnreadNearRead={autoLocateUnreadNearRead}
       onAutoLocateChange={(value) => {
         setAutoLocateUnreadNearRead(value);
@@ -88,12 +71,10 @@ function FilterFormHarness({
         },
       ]}
       error=""
-      saving={false}
       onUpdateCondition={vi.fn()}
       onRemoveCondition={vi.fn()}
       onAppendValues={vi.fn()}
       onAddCondition={onAddCondition}
-      onDelete={onDelete}
     />
   );
 }
@@ -104,30 +85,26 @@ describe("FilterForm", () => {
     vi.restoreAllMocks();
   });
 
-  it("handles editing, auto-locate toggling, actions, and delete confirmation", async () => {
+  it("keeps conditions separate and handles the remaining actions", async () => {
     const user = userEvent.setup();
     const onAutoLocateChange = vi.fn();
     const onToggleForwardTarget = vi.fn();
     const onAddCondition = vi.fn();
-    const onDelete = vi.fn();
 
     render(
       <FilterFormHarness
         onAutoLocateChange={onAutoLocateChange}
         onToggleForwardTarget={onToggleForwardTarget}
         onAddCondition={onAddCondition}
-        onDelete={onDelete}
       />,
     );
 
-    expect(screen.getByText("已启用 2 项")).not.toBeNull();
-    expect(screen.getByText("规则速览")).not.toBeNull();
-    expect(screen.getByText("如果")).not.toBeNull();
-    expect(screen.getByText("那么")).not.toBeNull();
-    expect(screen.getByText("来源：2 个会话")).not.toBeNull();
-    expect(screen.getByText("关键词：将夜")).not.toBeNull();
-    expect(screen.getByText("通知：1 个通道")).not.toBeNull();
-    expect(screen.getByText("始终开启")).not.toBeNull();
+    expect(screen.getByRole("region", { name: "命中条件" })).not.toBeNull();
+    expect(screen.getByText("发送通知")).not.toBeNull();
+    expect(screen.getByText("已选 1 个")).not.toBeNull();
+    expect(screen.queryByText("判断是否命中")).toBeNull();
+    expect(screen.queryByText("规则速览")).toBeNull();
+    expect(screen.queryByText("保存消息")).toBeNull();
 
     await user.click(screen.getByRole("switch", { name: "打开时自动定位未读" }));
     expect(onAutoLocateChange).toHaveBeenCalledWith(false);
@@ -139,11 +116,5 @@ describe("FilterForm", () => {
       screen.getByRole("button", { name: "添加一个必须同时满足的条件" }),
     );
     expect(onAddCondition).toHaveBeenCalledTimes(1);
-
-    await user.click(screen.getByRole("button", { name: /^删除$/ }));
-    expect(onDelete).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole("button", { name: /确认删除/ }));
-    await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
   });
 });

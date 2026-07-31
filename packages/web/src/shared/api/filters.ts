@@ -31,12 +31,13 @@ export const filtersApi = {
       },
       filterSchema,
     ),
-  preview: (data: FilterPreviewInput) =>
+  preview: (data: FilterPreviewInput, signal?: AbortSignal) =>
     request(
       "/filters/preview",
       {
         method: "POST",
         body: JSON.stringify(data),
+        signal,
       },
       filterPreviewResponseSchema,
     ),
