@@ -10,6 +10,7 @@ function createMessageRow(overrides: Partial<MessageRow> = {}): MessageRow {
     senderName: "Sender",
     senderId: "sender-1",
     content: "hello",
+    contentLinks: null,
     messageDate: "2026-06-26T00:00:00.000Z",
     telegramLink: "https://t.me/c/1/100",
     isRead: false,
@@ -47,5 +48,17 @@ describe("formatMessageRow", () => {
 
     expect(formatted.filterName).toBeNull();
     expect(formatted.mediaType).toBeNull();
+  });
+
+  it("parses persisted content links and tolerates invalid legacy JSON", () => {
+    const links = [{ offset: 0, length: 5, url: "https://example.com" }];
+
+    expect(
+      formatMessageRow(createMessageRow({ contentLinks: JSON.stringify(links) }), new Set())
+        .contentLinks,
+    ).toEqual(links);
+    expect(
+      formatMessageRow(createMessageRow({ contentLinks: "not-json" }), new Set()).contentLinks,
+    ).toEqual([]);
   });
 });

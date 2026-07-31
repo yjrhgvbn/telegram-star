@@ -1,11 +1,11 @@
 import { CheckCircle2, Clock3, ExternalLink, KeyRound } from "lucide-react";
-import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useClientExternalLink } from "@/shared/runtime/ClientShellBridgeProvider";
 import { MediaPreview } from "./MediaPreview";
+import { MessageContent } from "./MessageContent";
 import type { Message } from "@/types";
 
 interface Props {
@@ -20,7 +20,7 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
   const handleExternalLink = useClientExternalLink();
   const timeAgo = getTimeAgo(message.messageDate);
   const exactTime = new Date(message.messageDate).toLocaleString("zh-CN");
-  const content = message.content.trim();
+  const content = message.content;
   const contentPreview = content.slice(0, 360);
   const hasTruncatedContent = content.length > 360;
   const mediaLabel = getMediaLabel(message.mediaType);
@@ -29,15 +29,15 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
     <Card
       size="sm"
       className={cn(
-        "relative overflow-visible bg-card/82 transition-colors hover:bg-card",
+        "relative min-w-0 overflow-hidden bg-card/82 transition-colors hover:bg-card",
         !message.isRead && "border-primary/28 bg-card",
         message.isRead && "text-foreground/88",
         isAnchor && "border-primary shadow-[0_0_0_2px_color-mix(in_oklab,var(--primary)_12%,transparent)]",
       )}
     >
-      <CardHeader className="px-3 pb-0">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-start gap-2">
+      <CardHeader className="min-w-0 px-3 pb-0">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+          <div className="flex min-w-0 items-start gap-2">
             <span
               className={cn(
                 "mt-1.5 size-2 shrink-0 rounded-full",
@@ -45,18 +45,23 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
               )}
               aria-hidden
             />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <CardTitle className="min-w-0 truncate text-sm leading-tight">{message.chatTitle}</CardTitle>
+                <CardTitle
+                  className="min-w-0 flex-1 truncate text-sm leading-tight"
+                  title={message.chatTitle}
+                >
+                  {message.chatTitle}
+                </CardTitle>
                 {mediaLabel && (
                   <Badge variant="outline">
                     {mediaLabel}
                   </Badge>
                 )}
                 {message.matchedKeyword && (
-                  <Badge variant="secondary">
+                  <Badge className="max-w-full" variant="secondary" title={message.matchedKeyword}>
                     <KeyRound data-icon="inline-start" />
-                    {message.matchedKeyword}
+                    <span className="truncate">{message.matchedKeyword}</span>
                   </Badge>
                 )}
               </div>
@@ -83,10 +88,14 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
         </div>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-2 px-3 pb-3">
-        {content.length > 0 && (
+      <CardContent className="flex min-w-0 flex-col gap-2 px-3 pb-3">
+        {content.trim().length > 0 && (
           <p className="whitespace-pre-wrap break-words text-sm leading-5.5 text-foreground/90">
-            {renderHighlightedContent(contentPreview, searchQuery)}
+            <MessageContent
+              content={contentPreview}
+              links={message.contentLinks ?? []}
+              searchQuery={searchQuery}
+            />
             {hasTruncatedContent && <span className="text-muted-foreground">...</span>}
           </p>
         )}
@@ -122,20 +131,6 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function renderHighlightedContent(content: string, searchQuery?: string): ReactNode {
-  const query = searchQuery?.trim();
-  if (!query) return content;
-
-  const regex = new RegExp(`(${escapeRegex(query)})`, "gi");
-  return content.split(regex).map((part, index) =>
-    part.toLowerCase() === query.toLowerCase() ? <mark key={`${part}-${index}`}>{part}</mark> : part,
   );
 }
 

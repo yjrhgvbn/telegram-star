@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { messageContentLinksSchema } from "./messages.js";
 
 export const filterConditionTypeSchema = z.enum(["keyword", "chat", "regex"]);
 
@@ -85,6 +86,7 @@ export const liveChatMessageSchema = z.object({
   senderName: z.string(),
   senderId: z.string(),
   content: z.string(),
+  contentLinks: messageContentLinksSchema.default([]),
   messageDate: z.string(),
   telegramLink: z.string(),
   inDatabase: z.boolean(),

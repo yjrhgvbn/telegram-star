@@ -16,6 +16,7 @@ import { buildDialogEntityMap, buildTelegramLink, getSenderSummary } from "./uti
 import { emitMessageEvent } from "../messageEvents.js";
 import { writeReadSyncLog } from "../readSyncLog.js";
 import { extractMediaInfo, getMessageTextContent, hasMessageContent } from "./media.js";
+import { extractMessageContentLinks, serializeMessageContentLinks } from "./messageContentLinks.js";
 import { extractReactionMessageRef, hasUserReactionSignal } from "./readReactionSignal.js";
 
 // --- 实时链路：Raw 事件 ---
@@ -166,6 +167,7 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
   const chatId = chat.id.toString();
   const chatTitle = (chat as any).title || (chat as any).firstName || chatId;
   const textContent = getMessageTextContent(message);
+  const contentLinks = extractMessageContentLinks(message, textContent);
   const mediaInfo = extractMediaInfo(message);
 
   for (const filter of activeFilters) {
@@ -193,6 +195,7 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
         senderName,
         senderId,
         content: textContent,
+        contentLinks: serializeMessageContentLinks(contentLinks),
         messageDate: new Date((message.date || 0) * 1000).toISOString(),
         telegramLink,
         isRead: false,

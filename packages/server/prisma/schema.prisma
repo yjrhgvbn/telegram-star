@@ -29,6 +29,7 @@ model Message {
   senderName        String   @default("") @map("sender_name")
   senderId          String   @default("") @map("sender_id")
   content           String   @default("")
+  contentLinks      String?  @map("content_links")       // JSON: Telegram 文本链接实体 [{offset,length,url}]
   messageDate       String   @map("message_date")
   telegramLink      String   @default("") @map("telegram_link")
   isRead            Boolean  @default(false) @map("is_read")

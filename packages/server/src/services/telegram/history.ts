@@ -19,6 +19,10 @@ import {
   buildDialogEntityMap,
 } from "./utils.js";
 import { extractMediaInfo, getMessageTextContent, hasMessageContent } from "./media.js";
+import {
+  extractMessageContentLinks,
+  serializeMessageContentLinks,
+} from "./messageContentLinks.js";
 import type {
   JoinedChat,
   LiveChatMessage,
@@ -112,13 +116,16 @@ export async function listSingleChatMessages(options: {
     const senderId = sender?.id?.toString?.() || "";
     const mediaInfo = extractMediaInfo(item);
 
+    const content = getMessageTextContent(item);
+
     return {
       id: item.id,
       chatId,
       chatTitle,
       senderName,
       senderId,
-      content: getMessageTextContent(item),
+      content,
+      contentLinks: extractMessageContentLinks(item, content),
       messageDate: new Date((item.date || 0) * 1000).toISOString(),
       telegramLink: buildTelegramLink(chatId, entity, item.id),
       inDatabase: storedIdSet.has(item.id),
@@ -269,6 +276,7 @@ export async function previewHistoricalFilterMessages(options: {
           senderName,
           senderId,
           content: textContent,
+          contentLinks: extractMessageContentLinks(item, textContent),
           messageDate: new Date(getMessageTimestampMs(item)).toISOString(),
           telegramLink: buildTelegramLink(chatId, entity, item.id),
           inDatabase: existingIdSet.has(item.id),
@@ -369,6 +377,7 @@ export async function backfillFilterHistory(options: {
           senderName: message.senderName,
           senderId: message.senderId,
           content: message.content,
+          contentLinks: serializeMessageContentLinks(message.contentLinks),
           messageDate: message.messageDate,
           telegramLink: message.telegramLink,
           isRead: false,

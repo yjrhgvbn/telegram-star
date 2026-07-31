@@ -34,6 +34,7 @@ export type {
 export type {
   Message,
   MessageBatchReadResponse,
+  MessageContentLink,
   MessageDirection,
   MessageEventPayload,
   MessageForceSyncReadResponse,

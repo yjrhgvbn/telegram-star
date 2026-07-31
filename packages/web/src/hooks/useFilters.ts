@@ -38,6 +38,8 @@ export function useFilters() {
         (current ?? []).map((filter) => (filter.id === variables.id ? updated : filter)),
       );
       void queryClient.invalidateQueries({ queryKey: queryKeys.forwardTargets.all });
+      // 更新规则会清理不再命中的历史消息，统计数据需要同步刷新。
+      void queryClient.invalidateQueries({ queryKey: queryKeys.messages.stats });
     },
   });
 

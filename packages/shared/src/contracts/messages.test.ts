@@ -61,11 +61,28 @@ describe("messages contract", () => {
         anchorId: 1,
       }),
     ).toEqual({
-      data: [message],
+      data: [{ ...message, contentLinks: [] }],
       hasOlder: true,
       hasNewer: false,
       anchorId: 1,
     });
+  });
+
+  it("accepts structured Telegram text links", () => {
+    const response = messageListResponseSchema.parse({
+      data: [
+        {
+          ...message,
+          contentLinks: [{ offset: 8, length: 2, url: "https://example.com/file" }],
+        },
+      ],
+      hasOlder: false,
+      hasNewer: false,
+    });
+
+    expect(response.data[0]?.contentLinks).toEqual([
+      { offset: 8, length: 2, url: "https://example.com/file" },
+    ]);
   });
 
   it("rejects empty batch ids", () => {

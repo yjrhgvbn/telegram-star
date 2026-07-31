@@ -4,12 +4,23 @@ import type {
   FilterUpdateInput,
 } from "@telegram-star/shared/contracts/filters";
 import { serializeConditions } from "../../services/filter-matching.js";
+import { planFilterMessageReconciliation } from "./filter-message-reconciliation.js";
 
 export type FilterRow = Awaited<ReturnType<typeof findFilterRows>>[number];
 
 const filterForwardTargetsInclude = {
   forwardTargets: { select: { id: true } },
 } as const;
+
+const MESSAGE_WRITE_BATCH_SIZE = 500;
+
+function toMessageIdBatches(messageIds: number[]): number[][] {
+  const batches: number[][] = [];
+  for (let index = 0; index < messageIds.length; index += MESSAGE_WRITE_BATCH_SIZE) {
+    batches.push(messageIds.slice(index, index + MESSAGE_WRITE_BATCH_SIZE));
+  }
+  return batches;
+}
 
 export async function findFilterRows() {
   return db.filter.findMany({
@@ -62,10 +73,54 @@ export function buildFilterUpdateData(input: FilterUpdateInput) {
 }
 
 export async function updateFilterRow(id: number, input: FilterUpdateInput): Promise<FilterRow> {
-  return db.filter.update({
-    where: { id },
-    data: buildFilterUpdateData(input),
-    include: filterForwardTargetsInclude,
+  if (input.conditions === undefined) {
+    return db.filter.update({
+      where: { id },
+      data: buildFilterUpdateData(input),
+      include: filterForwardTargetsInclude,
+    });
+  }
+
+  // 规则与历史归属必须原子更新，避免新规则生效后仍短暂展示旧规则命中的消息。
+  return db.$transaction(async (transaction) => {
+    const updated = await transaction.filter.update({
+      where: { id },
+      data: buildFilterUpdateData(input),
+      include: filterForwardTargetsInclude,
+    });
+    const messages = await transaction.message.findMany({
+      where: { matchedFilterId: id },
+      select: {
+        id: true,
+        chatId: true,
+        content: true,
+        matchedKeyword: true,
+      },
+    });
+    const reconciliation = planFilterMessageReconciliation(messages, input.conditions);
+
+    for (const messageIds of toMessageIdBatches(reconciliation.messageIdsToDelete)) {
+      await transaction.message.deleteMany({
+        where: {
+          id: { in: messageIds },
+          matchedFilterId: id,
+        },
+      });
+    }
+
+    for (const keywordUpdate of reconciliation.keywordUpdates) {
+      for (const messageIds of toMessageIdBatches(keywordUpdate.messageIds)) {
+        await transaction.message.updateMany({
+          where: {
+            id: { in: messageIds },
+            matchedFilterId: id,
+          },
+          data: { matchedKeyword: keywordUpdate.matchedKeyword },
+        });
+      }
+    }
+
+    return updated;
   });
 }
 

@@ -48,6 +48,7 @@ function createMessage(id: number, patch: Partial<Message> = {}): Message {
     senderName: "Sender",
     senderId: "sender-1",
     content: `message-${id}`,
+    contentLinks: [],
     messageDate: `2026-06-29T00:00:0${id}.000Z`,
     telegramLink: `https://t.me/c/1/${1000 + id}`,
     isRead: false,

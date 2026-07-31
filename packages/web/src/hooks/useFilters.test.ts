@@ -58,6 +58,7 @@ describe("useFilters", () => {
     vi.spyOn(api.filters, "delete").mockResolvedValue({ success: true });
 
     const queryClient = createTestQueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     const { result } = renderHook(() => useFilters(), {
       wrapper: createQueryWrapper(queryClient),
     });
@@ -76,6 +77,7 @@ describe("useFilters", () => {
       await result.current.updateFilter(1, { name: "updated" });
     });
     await waitFor(() => expect(result.current.filters).toEqual([createdFilter, updatedFilter]));
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.messages.stats });
 
     await act(async () => {
       await result.current.toggleFilter(2);

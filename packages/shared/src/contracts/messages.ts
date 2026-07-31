@@ -19,6 +19,14 @@ const optionalBooleanQuerySchema = z.preprocess((value) => {
 
 export const messageDirectionSchema = z.enum(["before", "after", "around"]);
 
+export const messageContentLinkSchema = z.object({
+  offset: z.number().int().nonnegative(),
+  length: z.number().int().positive(),
+  url: z.string().min(1),
+});
+
+export const messageContentLinksSchema = z.array(messageContentLinkSchema);
+
 export const messageListParamsSchema = z
   .object({
     cursorId: z.number().int().positive().optional(),
@@ -51,6 +59,7 @@ export const messageSchema = z.object({
   senderName: z.string(),
   senderId: z.string(),
   content: z.string(),
+  contentLinks: messageContentLinksSchema.default([]),
   messageDate: z.string(),
   telegramLink: z.string(),
   isRead: z.boolean(),
@@ -135,6 +144,7 @@ export const messageEventPayloadSchema = z.discriminatedUnion("type", [
 ]);
 
 export type MessageDirection = z.infer<typeof messageDirectionSchema>;
+export type MessageContentLink = z.infer<typeof messageContentLinkSchema>;
 export type MessageListParams = z.infer<typeof messageListParamsSchema>;
 export type MessageListQuery = z.infer<typeof messageListQuerySchema>;
 export type Message = z.infer<typeof messageSchema>;
