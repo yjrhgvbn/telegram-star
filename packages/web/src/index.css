@@ -159,6 +159,38 @@
   opacity: 0.76;
 }
 
+/*
+ * Keep the mobile navigation stable while Android Chrome retracts its toolbars.
+ * The maximum inset reserves layout space once; only `bottom` follows the
+ * dynamic inset, which uses Chrome's compositor fast path instead of relayout.
+ */
+:root {
+  --app-mobile-nav-height: 3.75rem;
+  --app-safe-area-max-bottom: env(
+    safe-area-max-inset-bottom,
+    env(safe-area-inset-bottom, 0px)
+  );
+}
+
+.app-mobile-nav {
+  bottom: calc(env(safe-area-inset-bottom, 0px) - var(--app-safe-area-max-bottom));
+  height: calc(var(--app-mobile-nav-height) + var(--app-safe-area-max-bottom));
+  padding-bottom: var(--app-safe-area-max-bottom);
+}
+
+.app-mobile-viewport {
+  position: fixed;
+  inset: env(safe-area-inset-top, 0px) 0
+    calc(var(--app-mobile-nav-height) + var(--app-safe-area-max-bottom));
+}
+
+@media (min-width: 48rem) {
+  .app-mobile-viewport {
+    position: static;
+    inset: auto;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
