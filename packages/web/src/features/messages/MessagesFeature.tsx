@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Search, X } from "lucide-react";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useMessages, useStats } from "./hooks/useMessages";
 import { useFilters } from "@/hooks/useFilters";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
@@ -9,7 +9,7 @@ import { FilterPanel } from "./components/FilterPanel";
 import { FilterContextPanel } from "./components/FilterContextPanel";
 import { MessageList } from "./components/MessageList";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
@@ -154,28 +154,14 @@ export function MessagesFeature() {
               </div>
 
               <form className="hidden w-[min(32vw,360px)] min-w-48 sm:block" onSubmit={handleSearch}>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    type="search"
-                    className="h-8 bg-background/78 pr-8 pl-8"
-                    placeholder="搜索消息"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                  />
-                  {searchQuery ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      className="absolute top-1/2 right-1 -translate-y-1/2"
-                      onClick={() => setSearchQuery("")}
-                      aria-label="清空搜索"
-                    >
-                      <X />
-                    </Button>
-                  ) : null}
-                </div>
+                <SearchInput
+                  placeholder="搜索消息"
+                  aria-label="搜索消息"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onClear={() => setSearchQuery("")}
+                  clearLabel="清空消息搜索"
+                />
               </form>
 
               <Tabs
@@ -197,28 +183,14 @@ export function MessagesFeature() {
 
             <div className="flex items-center gap-2 px-3 pb-2.5 sm:hidden">
               <form className="min-w-0 flex-1" onSubmit={handleSearch}>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    type="search"
-                    className="h-8 bg-background/78 pr-8 pl-8"
-                    placeholder="搜索消息"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                  />
-                  {searchQuery ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      className="absolute top-1/2 right-1 -translate-y-1/2"
-                      onClick={() => setSearchQuery("")}
-                      aria-label="清空搜索"
-                    >
-                      <X />
-                    </Button>
-                  ) : null}
-                </div>
+                <SearchInput
+                  placeholder="搜索消息"
+                  aria-label="搜索消息"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onClear={() => setSearchQuery("")}
+                  clearLabel="清空消息搜索"
+                />
               </form>
               <Tabs
                 value={readFilter}

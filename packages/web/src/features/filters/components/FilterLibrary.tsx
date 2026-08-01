@@ -5,11 +5,10 @@ import {
   CirclePause,
   Filter,
   Plus,
-  Search,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Filter as FilterModel, JoinedChat } from "@/types";
 import { describeFilterRule } from "../utils";
@@ -45,17 +44,14 @@ export function FilterLibrary({
   return (
     <main className="flex min-h-0 flex-1 flex-col">
       <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-3 px-3 py-3 sm:px-5 sm:py-5">
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索规则名称、会话或关键词"
-            aria-label="搜索过滤器"
-            className="h-10 bg-card pl-9 shadow-sm"
-          />
-        </div>
+        <SearchInput
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onClear={() => setQuery("")}
+          placeholder="搜索规则名称、会话或关键词"
+          aria-label="搜索过滤器"
+          clearLabel="清空过滤器搜索"
+        />
 
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[var(--workspace-panel-shadow)]">
           <div className="flex h-11 items-center justify-between border-b border-border px-3">

@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { selectableItemVariants } from "@/components/ui/selectable-item";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -496,10 +497,12 @@ export function TargetEditor({
                       role="radio"
                       aria-checked={active}
                       className={cn(
-                        "flex min-h-16 flex-col items-start justify-center rounded-lg border px-3 py-2 text-left transition-colors",
-                        active
-                          ? "border-primary/45 bg-secondary text-foreground shadow-sm"
-                          : "bg-card text-muted-foreground hover:bg-muted/45 hover:text-foreground",
+                        "flex min-h-16 flex-col items-start justify-center rounded-lg px-3 py-2 text-left",
+                        selectableItemVariants({
+                          kind: "choice",
+                          selected: active,
+                          surface: "flat",
+                        }),
                       )}
                       onClick={() => handleApplyPreset(preset)}
                     >

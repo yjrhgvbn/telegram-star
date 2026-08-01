@@ -11,13 +11,13 @@ import {
   LoaderCircle,
   MonitorSmartphone,
   RefreshCw,
-  Search,
   Smartphone,
   Trash2,
 } from "lucide-react";
 import type { ClientDevice, ClientRuntimeType } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SearchInput } from "@/components/ui/search-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useClientDevices } from "../hooks/useClientDevices";
@@ -140,18 +140,15 @@ export function ClientDevicesSettings({
   return (
     <div className="min-w-0 pt-3">
       <div className="flex flex-col gap-3 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
-        <label className="relative block w-full sm:max-w-xs">
-          <span className="sr-only">搜索设备</span>
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索名称、平台或版本"
-            aria-label="搜索设备"
-            className="h-10 w-full rounded-lg border border-input bg-card pr-3 pl-9 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:text-sm"
-          />
-        </label>
+        <SearchInput
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onClear={() => setQuery("")}
+          placeholder="搜索名称、平台或版本"
+          aria-label="搜索设备"
+          clearLabel="清空设备搜索"
+          containerClassName="w-full sm:max-w-xs"
+        />
 
         <div className="flex items-center justify-between gap-3 sm:justify-end">
           <span className="text-xs text-muted-foreground">当前设备不可删除</span>
@@ -240,10 +237,7 @@ export function ClientDevicesSettings({
             return (
               <div
                 key={device.id}
-                className={cn(
-                  "grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/80 px-2 py-2.5 last:border-b-0 sm:px-3 xl:grid-cols-[minmax(220px,1fr)_92px_112px_128px_76px]",
-                  current && "bg-secondary/70",
-                )}
+                className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/80 px-2 py-2.5 last:border-b-0 sm:px-3 xl:grid-cols-[minmax(220px,1fr)_92px_112px_128px_76px]"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-primary">

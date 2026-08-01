@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { Inbox, LoaderCircle, Plus, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { selectableItemVariants } from "@/components/ui/selectable-item";
 import { cn } from "@/lib/utils";
 import {
   NEW_FORWARD_TARGET_ID,
@@ -43,17 +44,14 @@ export function TargetList({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 lg:gap-0">
       <div className="shrink-0 lg:border-b lg:border-border lg:p-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索通知通道"
-            aria-label="搜索通知通道"
-            className="h-10 bg-card pl-8 shadow-sm lg:h-9 lg:shadow-none"
-          />
-        </div>
+        <SearchInput
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onClear={() => setQuery("")}
+          placeholder="搜索通知通道"
+          aria-label="搜索通知通道"
+          clearLabel="清空通知通道搜索"
+        />
       </div>
 
       {loading && targets.length === 0 ? (
@@ -96,16 +94,21 @@ export function TargetList({
                   type="button"
                   aria-current={active ? "true" : undefined}
                   className={cn(
-                    "grid min-h-16 w-full grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl border border-border bg-card px-2.5 py-2 text-left shadow-sm transition-colors lg:rounded-lg lg:border-transparent lg:bg-transparent lg:shadow-none",
-                    active
-                      ? "text-foreground lg:border-primary/20 lg:bg-accent lg:shadow-[inset_2px_0_var(--primary)]"
-                      : "text-muted-foreground hover:bg-muted/72 hover:text-foreground",
+                    "grid min-h-16 w-full grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl px-2.5 py-2 text-left lg:rounded-lg",
+                    selectableItemVariants({
+                      kind: "current",
+                      selected: active,
+                      surface: "responsive",
+                    }),
                   )}
                   onClick={() =>
                     onSelect(target.id === 0 ? NEW_FORWARD_TARGET_ID : String(target.id))
                   }
                 >
-                  <span className="grid size-10 place-items-center rounded-lg bg-accent font-semibold text-accent-foreground">
+                  <span
+                    data-slot="selectable-item-icon"
+                    className="grid size-10 place-items-center rounded-lg bg-accent font-semibold text-accent-foreground"
+                  >
                     {getTargetMonogram(target)}
                   </span>
                   <span className="min-w-0">

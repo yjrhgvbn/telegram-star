@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronDown, Search, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Check, ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SearchInput } from "@/components/ui/search-input";
+import { selectableItemVariants } from "@/components/ui/selectable-item";
 import { cn } from "@/lib/utils";
 import type { JoinedChat } from "@/types";
 
@@ -194,18 +195,16 @@ export function JoinedChatPicker({
             </div>
 
             <div className="px-4 pb-3">
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  name="chat-search"
-                  aria-label="搜索会话"
-                  placeholder={searchPlaceholder}
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  autoFocus
-                  className="h-9 bg-background/78 pl-9"
-                />
-              </div>
+              <SearchInput
+                name="chat-search"
+                aria-label="搜索会话"
+                placeholder={searchPlaceholder}
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                onClear={() => setSearchInput("")}
+                clearLabel="清空会话搜索"
+                autoFocus
+              />
             </div>
 
             <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-3">
@@ -220,16 +219,30 @@ export function JoinedChatPicker({
                     <button
                       key={item.id}
                       type="button"
+                      aria-pressed={isSelected}
                       className={cn(
-                        "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition",
-                        isSelected ? "bg-primary/10 text-primary" : "hover:bg-muted/65",
+                        "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm",
+                        selectableItemVariants({
+                          kind: "choice",
+                          selected: isSelected,
+                          surface: "flat",
+                        }),
                       )}
                       onClick={() => handleToggleItem(item.id)}
                     >
                       <span className="truncate">{item.title}</span>
-                      <span className="ml-3 shrink-0 text-xs text-muted-foreground">
-                        {isSelected ? <Check className="size-4 text-primary" /> : item.id}
-                      </span>
+                      {isSelected ? (
+                        <span
+                          className="ml-3 grid size-6 shrink-0 place-items-center rounded-md border border-primary bg-primary text-primary-foreground"
+                          aria-hidden="true"
+                        >
+                          <Check className="size-3.5" strokeWidth={2.5} />
+                        </span>
+                      ) : (
+                        <span className="ml-3 shrink-0 text-xs text-muted-foreground">
+                          {item.id}
+                        </span>
+                      )}
                     </button>
                   );
                 })

@@ -1,7 +1,5 @@
 import {
-  useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import {
@@ -16,7 +14,6 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
-  Search,
   Server,
   type LucideIcon,
 } from "lucide-react";
@@ -24,6 +21,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
+import { selectableItemVariants } from "@/components/ui/selectable-item";
 import { cn } from "@/lib/utils";
 import { ClientDevicesSettings } from "./ClientDevicesSettings";
 import { ClientRuntimeSettings } from "./ClientRuntimeSettings";
@@ -130,7 +129,6 @@ export function SettingsForm({
 }) {
   const { sectionId: routeSectionId } = useParams<{ sectionId?: string }>();
   const navigate = useNavigate();
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const activeSection = SETTINGS_SECTION_IDS.includes(routeSectionId as SettingsSectionId)
     ? (routeSectionId as SettingsSectionId)
@@ -245,22 +243,6 @@ export function SettingsForm({
     );
   }, [navItems, normalizedSearch]);
 
-  useEffect(() => {
-    const focusSearch = (event: KeyboardEvent) => {
-      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
-
-      const target = event.target as HTMLElement | null;
-      if (target?.matches("input, textarea, [contenteditable='true']")) return;
-      if (searchInputRef.current?.offsetParent === null) return;
-
-      event.preventDefault();
-      searchInputRef.current?.focus();
-    };
-
-    window.addEventListener("keydown", focusSearch);
-    return () => window.removeEventListener("keydown", focusSearch);
-  }, []);
-
   const handleSectionChange = (section: SettingsSectionId) => {
     // flushSync keeps the selected row visually in lockstep with the pointer action.
     navigate(`/settings/${section}`, { flushSync: true });
@@ -332,22 +314,15 @@ export function SettingsForm({
           "lg:flex",
         )}
       >
-        <label className="relative block shrink-0 lg:m-3">
-          <span className="sr-only">搜索设置</span>
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            ref={searchInputRef}
-            type="search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="搜索设置"
-            aria-label="搜索设置"
-            className="h-10 w-full rounded-lg border border-input bg-card pr-10 pl-9 text-base shadow-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:text-sm lg:shadow-none"
-          />
-          <kbd className="pointer-events-none absolute top-1/2 right-2.5 flex size-5 -translate-y-1/2 items-center justify-center rounded border border-border bg-muted font-mono text-[11px] text-muted-foreground">
-            /
-          </kbd>
-        </label>
+        <SearchInput
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          onClear={() => setSearchQuery("")}
+          placeholder="搜索设置"
+          aria-label="搜索设置"
+          clearLabel="清空设置搜索"
+          containerClassName="shrink-0 lg:m-3 lg:w-auto"
+        />
 
         <div className="shrink-0 px-1 text-[11px] font-semibold tracking-[0.11em] text-muted-foreground uppercase lg:px-4 lg:pb-1">
           系统设置
@@ -369,17 +344,17 @@ export function SettingsForm({
                   aria-current={active ? "page" : undefined}
                   onClick={() => handleSectionChange(item.id)}
                   className={cn(
-                    "group grid min-h-16 w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl border border-border bg-card px-2.5 py-2 text-left shadow-sm transition-[background-color,border-color,box-shadow,color] duration-150 lg:rounded-lg lg:border-transparent lg:bg-transparent lg:shadow-none",
-                    active
-                      ? "text-foreground lg:border-primary/12 lg:bg-accent"
-                      : "text-muted-foreground hover:bg-muted/72 hover:text-foreground",
+                    "group grid min-h-16 w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl px-2.5 py-2 text-left lg:rounded-lg",
+                    selectableItemVariants({
+                      kind: "current",
+                      selected: active,
+                      surface: "responsive",
+                    }),
                   )}
                 >
                   <span
-                    className={cn(
-                      "flex size-8 items-center justify-center rounded-md bg-muted text-primary transition-colors",
-                      active && "bg-secondary",
-                    )}
+                    data-slot="selectable-item-icon"
+                    className="flex size-8 items-center justify-center rounded-md bg-muted text-primary"
                   >
                     <Icon className="size-4" />
                   </span>
@@ -639,7 +614,7 @@ export function SettingsForm({
                 description="同时影响加载速度、图片清晰度与网络流量。"
               >
                 <div
-                  className="border-y border-border"
+                  className="flex flex-col gap-1"
                   role="radiogroup"
                   aria-label="媒体缩略图质量"
                 >
@@ -657,10 +632,12 @@ export function SettingsForm({
                         aria-pressed={selected}
                         onClick={() => settings.setThumbIndex(option.value)}
                         className={cn(
-                          "grid min-h-17 w-full grid-cols-[20px_72px_minmax(0,1fr)] items-center gap-2 border-b border-border px-2 py-2.5 text-left transition-colors last:border-b-0 sm:grid-cols-[20px_88px_minmax(0,1fr)] sm:gap-3 xl:grid-cols-[20px_88px_minmax(150px,1fr)_70px_70px_70px]",
-                          selected
-                            ? "bg-secondary"
-                            : "hover:bg-muted/55",
+                          "grid min-h-17 w-full grid-cols-[20px_72px_minmax(0,1fr)] items-center gap-2 rounded-lg px-2 py-2.5 text-left sm:grid-cols-[20px_88px_minmax(0,1fr)] sm:gap-3 xl:grid-cols-[20px_88px_minmax(150px,1fr)_70px_70px_70px]",
+                          selectableItemVariants({
+                            kind: "choice",
+                            selected,
+                            surface: "flat",
+                          }),
                         )}
                       >
                         <span

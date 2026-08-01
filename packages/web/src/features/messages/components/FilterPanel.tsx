@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { Inbox, KeyRound, ListFilter, MessageCircle, Plus, Regex, Search, Settings2 } from "lucide-react";
+import { Inbox, KeyRound, ListFilter, MessageCircle, Plus, Regex, Settings2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { selectableItemVariants } from "@/components/ui/selectable-item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { Filter, FilterCondition } from "@/types";
@@ -56,17 +57,14 @@ export function FilterPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 lg:gap-0">
       <div className="shrink-0 lg:border-b lg:border-border lg:p-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索消息分组"
-            aria-label="搜索消息分组"
-            className="h-10 bg-card pl-8 shadow-sm lg:h-9 lg:shadow-none"
-          />
-        </div>
+        <SearchInput
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onClear={() => setQuery("")}
+          placeholder="搜索消息分组"
+          aria-label="搜索消息分组"
+          clearLabel="清空消息分组搜索"
+        />
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
@@ -77,21 +75,21 @@ export function FilterPanel({
             </p>
             <button
               type="button"
+              aria-current={selectedFilterId === "" ? "true" : undefined}
               className={cn(
-                "group relative flex w-full items-center gap-2.5 rounded-xl border border-border bg-card px-2.5 py-2 text-left shadow-sm transition-colors lg:rounded-lg lg:border-transparent lg:bg-transparent lg:shadow-none",
-                selectedFilterId === ""
-                  ? "text-foreground lg:bg-accent lg:ring-1 lg:ring-primary/12"
-                  : "text-muted-foreground hover:bg-muted/72 hover:text-foreground",
+                "group relative flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left lg:rounded-lg",
+                selectableItemVariants({
+                  kind: "current",
+                  selected: selectedFilterId === "",
+                  surface: "responsive",
+                }),
               )}
               onClick={() => onSelectFilter("")}
             >
               <span
-                className={cn(
-                  "absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-transparent",
-                  selectedFilterId === "" && "lg:bg-primary",
-                )}
-              />
-              <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary text-primary">
+                data-slot="selectable-item-icon"
+                className="flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary text-primary"
+              >
                 <Inbox className="size-3.5" />
               </span>
               <span className="min-w-0">
@@ -128,25 +126,25 @@ export function FilterPanel({
                   <div
                     key={filter.id}
                     className={cn(
-                      "group relative flex w-full items-start gap-1 rounded-xl border border-border bg-card px-2.5 py-2 shadow-sm transition-colors lg:rounded-lg lg:border-transparent lg:bg-transparent lg:shadow-none",
-                      active
-                        ? "text-foreground lg:bg-accent lg:ring-1 lg:ring-primary/12"
-                        : "text-muted-foreground hover:bg-muted/72 hover:text-foreground",
+                      "group relative flex w-full items-start gap-1 rounded-xl px-2.5 py-2 lg:rounded-lg",
+                      selectableItemVariants({
+                        kind: "current",
+                        selected: active,
+                        surface: "responsive",
+                      }),
                       !filter.enabled && "opacity-60",
                     )}
                   >
-                    <span
-                      className={cn(
-                        "absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-transparent",
-                        active && "lg:bg-primary",
-                      )}
-                    />
                     <button
                       type="button"
+                      aria-current={active ? "true" : undefined}
                       className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
                       onClick={() => onSelectFilter(String(filter.id))}
                     >
-                      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary text-primary">
+                      <span
+                        data-slot="selectable-item-icon"
+                        className="flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary text-primary"
+                      >
                         <FilterIcon className="size-3.5" />
                       </span>
                       <span className="min-w-0 flex-1">

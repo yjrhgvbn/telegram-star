@@ -4,13 +4,13 @@ import {
   Check,
   Inbox,
   ListChecks,
-  Search,
   SlidersHorizontal,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { selectableItemVariants } from "@/components/ui/selectable-item";
 import type { Filter, FilterConditionType } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -232,16 +232,15 @@ export const RuleSubscriptionWorkbench = memo(function RuleSubscriptionWorkbench
       </div>
 
       <div className="flex shrink-0 flex-col gap-2 border-b px-3 pb-3 sm:flex-row sm:items-center sm:px-4">
-        <label className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索规则或条件"
-            aria-label="搜索订阅规则"
-            className="h-9 bg-background pl-9"
-          />
-        </label>
+        <SearchInput
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onClear={() => setQuery("")}
+          placeholder="搜索规则或条件"
+          aria-label="搜索订阅规则"
+          clearLabel="清空订阅规则搜索"
+          containerClassName="min-w-0 flex-1"
+        />
 
         <div
           className="grid grid-cols-3 rounded-lg border bg-muted p-0.5 sm:flex"
@@ -310,7 +309,7 @@ export const RuleSubscriptionWorkbench = memo(function RuleSubscriptionWorkbench
         </div>
       ) : (
         <ScrollArea className="min-h-0 flex-1">
-          <div className="p-1.5 sm:px-2">
+          <div className="flex flex-col gap-1 p-1.5 sm:px-2">
             {visibleFilters.map((filter) => {
               const checked = selectedIds.has(filter.id);
 
@@ -321,9 +320,12 @@ export const RuleSubscriptionWorkbench = memo(function RuleSubscriptionWorkbench
                   aria-pressed={checked}
                   aria-label={`${checked ? "取消订阅" : "订阅"} ${filter.name}`}
                   className={cn(
-                    "grid min-h-14 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border-b border-transparent px-2.5 py-2 text-left transition-colors sm:grid-cols-[minmax(0,1fr)_auto_auto]",
-                    "hover:bg-muted/55",
-                    checked && "bg-secondary/70 hover:bg-secondary",
+                    "grid min-h-14 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-2.5 py-2 text-left sm:grid-cols-[minmax(0,1fr)_auto_auto]",
+                    selectableItemVariants({
+                      kind: "choice",
+                      selected: checked,
+                      surface: "flat",
+                    }),
                   )}
                   onClick={() => toggleFilter(filter.id)}
                 >

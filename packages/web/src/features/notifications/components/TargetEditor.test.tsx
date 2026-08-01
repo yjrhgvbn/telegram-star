@@ -179,7 +179,7 @@ describe("TargetEditor", () => {
       ],
     });
 
-    const search = screen.getByRole("textbox", { name: "搜索订阅规则" });
+    const search = screen.getByRole("searchbox", { name: "搜索订阅规则" });
     await user.type(search, "动画");
 
     expect(await screen.findByRole("button", { name: "订阅 动漫" })).not.toBeNull();
