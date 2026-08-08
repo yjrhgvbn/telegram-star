@@ -8,16 +8,21 @@
  *    通过拉取原文消息的 reactions 字段补偿可能丢失的实时事件。
  */
 import { NewMessage, type NewMessageEvent, Raw } from "telegram/events/index.js";
+import { UpdateConnectionState } from "telegram/network/index.js";
 import { db } from "../../db/index.js";
-import { forwardMatchedMessage } from "../notifier.js";
-import { matchFilterConditions, parseConditions } from "../filter-matching.js";
-import { getClient, isClientConnected } from "./client.js";
-import { buildDialogEntityMap, buildTelegramLink, getSenderSummary } from "./utils.js";
+import { getClient, isClientConnected, setConnected } from "./client.js";
+import { buildDialogEntityMap } from "./utils.js";
 import { emitMessageEvent } from "../messageEvents.js";
 import { writeReadSyncLog } from "../readSyncLog.js";
-import { extractMediaInfo, getMessageTextContent, hasMessageContent } from "./media.js";
-import { extractMessageContentLinks, serializeMessageContentLinks } from "./messageContentLinks.js";
 import { extractReactionMessageRef, hasUserReactionSignal } from "./readReactionSignal.js";
+import { ingestTelegramMessage } from "./messageIngestion.js";
+import {
+  isMessageCatchUpActive,
+  requestMessageCatchUp,
+} from "./messageCatchUp.js";
+
+const listenerStartedClients = new WeakSet<object>();
+const connectionStateByClient = new WeakMap<object, number>();
 
 // --- 实时链路：Raw 事件 ---
 
@@ -156,83 +161,26 @@ export async function syncReadByTelegramInteractions(
 /** 处理入站新消息：逐一匹配启用的过滤器，首次命中后入库并触发通知推送 */
 async function handleNewMessage(event: NewMessageEvent): Promise<void> {
   const message = event.message;
-  if (!message || !hasMessageContent(message)) return;
+  if (!message) return;
 
-  const activeFilters = await db.filter.findMany({ where: { enabled: true } });
+  const activeFilters = await db.filter.findMany({
+    where: { enabled: true },
+    orderBy: { id: "asc" },
+    select: { id: true, name: true, conditions: true },
+  });
   if (activeFilters.length === 0) return;
 
   const chat = await message.getChat();
   if (!chat) return;
 
-  const chatId = chat.id.toString();
-  const chatTitle = (chat as any).title || (chat as any).firstName || chatId;
-  const textContent = getMessageTextContent(message);
-  const contentLinks = extractMessageContentLinks(message, textContent);
-  const mediaInfo = extractMediaInfo(message);
-
-  for (const filter of activeFilters) {
-    const conditions = parseConditions(filter.conditions);
-    if (conditions.length === 0) continue;
-
-    const match = matchFilterConditions({ chatId, content: textContent }, conditions);
-    if (!match.matched) continue;
-
-    // 防重：同一条 Telegram 消息已入库则跳过
-    const existing = await db.message.findFirst({
-      where: { telegramMessageId: message.id, chatId },
-    });
-    if (existing) continue;
-
-    const telegramLink = buildTelegramLink(chatId, chat as any, message.id);
-    const sender = await message.getSender();
-    const { senderName, senderId } = getSenderSummary(sender as any);
-
-    await db.message.create({
-      data: {
-        telegramMessageId: message.id,
-        chatId,
-        chatTitle,
-        senderName,
-        senderId,
-        content: textContent,
-        contentLinks: serializeMessageContentLinks(contentLinks),
-        messageDate: new Date((message.date || 0) * 1000).toISOString(),
-        telegramLink,
-        isRead: false,
-        matchedFilterId: filter.id,
-        matchedKeyword: match.matchedKeyword,
-        createdAt: new Date().toISOString(),
-        // 媒体元信息
-        ...(mediaInfo && {
-          mediaType: mediaInfo.mediaType,
-          mediaFileName: mediaInfo.mediaFileName,
-          mediaFileSize: mediaInfo.mediaFileSize,
-          mediaMimeType: mediaInfo.mediaMimeType,
-          mediaDuration: mediaInfo.mediaDuration,
-          mediaThumbBase64: mediaInfo.mediaThumbBase64,
-          mediaExtra: mediaInfo.mediaExtra,
-        }),
-      },
-    });
-
-    await forwardMatchedMessage({
-      filterId: filter.id,
-      filterName: filter.name,
-      matchedKeyword: match.matchedKeyword,
-      chatTitle,
-      senderName,
-      senderId,
-      content: textContent || (mediaInfo ? `[${mediaInfo.mediaType}]` : ""),
-      messageDate: new Date((message.date || 0) * 1000).toISOString(),
-      telegramLink,
-    });
-
-    emitMessageEvent({ type: "new" });
-    console.log(`[Telegram] Saved message from "${chatTitle}" matching filter "${filter.name}"${mediaInfo ? ` [${mediaInfo.mediaType}]` : ""}`);
-
-    // 每条消息只入库一次（第一个命中的过滤器），避免重复写入
-    break;
-  }
+  await ingestTelegramMessage({
+    message,
+    chat,
+    activeFilters,
+    source: "live",
+    notify: true,
+    emitEvent: true,
+  });
 }
 
 // --- 监听器启动 ---
@@ -242,11 +190,12 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
  * - NewMessage：实时捕获新消息，匹配过滤器后入库并推送通知。
  * - Raw：订阅所有原始更新，过滤 UpdateMessageReactions 后实时标记已读。
  *
- * 应在客户端成功连接后调用，且仅调用一次。
+ * 可在连接前调用；函数会按 client 实例防止重复注册。
  */
 export function startMessageListener(): void {
   const client = getClient();
-  if (!client) return;
+  if (!client || listenerStartedClients.has(client)) return;
+  listenerStartedClients.add(client);
 
   client.addEventHandler(async (event: NewMessageEvent) => {
     try {
@@ -263,6 +212,22 @@ export function startMessageListener(): void {
       console.error("[Telegram] Error handling interaction update:", err);
     }
   }, new Raw({}));
+
+  client.addEventHandler((update: UpdateConnectionState) => {
+    const previousState = connectionStateByClient.get(client);
+    connectionStateByClient.set(client, update.state);
+
+    const connected = update.state === UpdateConnectionState.connected;
+    setConnected(connected);
+
+    if (
+      connected &&
+      previousState !== UpdateConnectionState.connected &&
+      isMessageCatchUpActive(client)
+    ) {
+      void requestMessageCatchUp("reconnect-catchup");
+    }
+  }, new Raw({ types: [UpdateConnectionState] }));
 
   console.log("[Telegram] Message listener started");
 }
