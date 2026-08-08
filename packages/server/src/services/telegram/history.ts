@@ -22,6 +22,7 @@ import {
   extractMessageContentLinks,
   serializeMessageContentLinks,
 } from "./messageContentLinks.js";
+import { createMessageIfAbsent } from "./messagePersistence.js";
 import type {
   JoinedChat,
   LiveChatMessage,
@@ -450,31 +451,30 @@ export async function backfillFilterHistory(options: {
         return;
       }
 
-      await db.message.create({
-        data: {
-          telegramMessageId: message.id,
-          chatId: message.chatId,
-          chatTitle: message.chatTitle,
-          senderName: message.senderName,
-          senderId: message.senderId,
-          content: message.content,
-          contentLinks: serializeMessageContentLinks(message.contentLinks),
-          messageDate: message.messageDate,
-          telegramLink: message.telegramLink,
-          isRead: false,
-          matchedFilterId: options.filterId,
-          matchedKeyword: message.matchedKeyword,
-          createdAt: new Date().toISOString(),
-          mediaType: message.mediaType ?? undefined,
-          mediaFileName: message.mediaFileName ?? undefined,
-          mediaFileSize: message.mediaFileSize ?? undefined,
-          mediaMimeType: message.mediaMimeType ?? undefined,
-          mediaDuration: message.mediaDuration ?? undefined,
-          mediaThumbBase64: message.mediaThumbBase64 ?? undefined,
-          mediaExtra: message.mediaExtra ?? undefined,
-        },
+      const created = await createMessageIfAbsent({
+        telegramMessageId: message.id,
+        chatId: message.chatId,
+        chatTitle: message.chatTitle,
+        senderName: message.senderName,
+        senderId: message.senderId,
+        content: message.content,
+        contentLinks: serializeMessageContentLinks(message.contentLinks),
+        messageDate: message.messageDate,
+        telegramLink: message.telegramLink,
+        isRead: false,
+        matchedFilterId: options.filterId,
+        matchedKeyword: message.matchedKeyword,
+        createdAt: new Date().toISOString(),
+        mediaType: message.mediaType ?? undefined,
+        mediaFileName: message.mediaFileName ?? undefined,
+        mediaFileSize: message.mediaFileSize ?? undefined,
+        mediaMimeType: message.mediaMimeType ?? undefined,
+        mediaDuration: message.mediaDuration ?? undefined,
+        mediaThumbBase64: message.mediaThumbBase64 ?? undefined,
+        mediaExtra: message.mediaExtra ?? undefined,
       });
-      savedCount += 1;
+      if (created) savedCount += 1;
+      else skippedExistingCount += 1;
     },
     { concurrency: batchSize },
   );

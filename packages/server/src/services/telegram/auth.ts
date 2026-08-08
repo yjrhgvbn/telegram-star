@@ -15,6 +15,7 @@ import {
   saveSession,
 } from "./client.js";
 import { startMessageListener } from "./listener.js";
+import { activateMessageCatchUp, deactivateMessageCatchUp } from "./messageCatchUp.js";
 
 export { getConnectionStatusWithConfig as getConnectionStatus } from "./client.js";
 
@@ -35,6 +36,8 @@ export async function initClient(): Promise<void> {
     getClientConfig(),
   );
   setClient(client);
+  // 先注册事件处理器再连接，避免 connect 与监听器启动之间形成消息空窗。
+  startMessageListener();
 
   if (sessionStr) {
     try {
@@ -43,7 +46,8 @@ export async function initClient(): Promise<void> {
       if (me) {
         setConnected(true);
         console.log(`[Telegram] Reconnected as ${(me as any).firstName || (me as any).username}`);
-        startMessageListener();
+        const accountId = (me as any).id?.toString?.();
+        if (accountId) activateMessageCatchUp(client, accountId);
       }
     } catch {
       console.log("[Telegram] Saved session invalid, need to re-login");
@@ -75,6 +79,7 @@ export async function sendCode(phone: string): Promise<{ status: string }> {
     );
     setClient(client);
   }
+  startMessageListener();
 
   try {
     const connectPromise = client.connect();
@@ -122,6 +127,7 @@ export async function loginWithCode(
   }
 
   try {
+    startMessageListener();
     await client.start({
       phoneNumber: async () => phone,
       phoneCode: async () => code,
@@ -138,7 +144,8 @@ export async function loginWithCode(
     const me = await client.getMe();
     console.log(`[Telegram] Logged in as ${(me as any).firstName || (me as any).username}`);
 
-    startMessageListener();
+    const accountId = (me as any).id?.toString?.();
+    if (accountId) activateMessageCatchUp(client, accountId);
     return { status: "success" };
   } catch (err: any) {
     if (
@@ -157,6 +164,8 @@ export async function loginWithCode(
 export async function logout(): Promise<void> {
   const client = getClient();
   if (!client) return;
+
+  deactivateMessageCatchUp(client);
 
   try {
     await client.invoke(new Api.auth.LogOut());

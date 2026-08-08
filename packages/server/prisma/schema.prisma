@@ -50,6 +50,7 @@ model Message {
   @@index([messageDate, telegramMessageId])
   @@index([matchedFilterId, isRead, messageDate])
   @@index([isRead, messageDate])
+  @@unique([chatId, telegramMessageId], map: "messages_chat_id_telegram_message_id_key")
 
   @@map("messages")
 }
