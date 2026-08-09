@@ -3,6 +3,7 @@ import {
   getDialogPageSlice,
   getNextDialogPage,
   normalizeBackfillBatchSize,
+  normalizeBackfillPerChatLimit,
   normalizeHistoricalPreviewLimits,
   normalizeSegmentedHistoryLimits,
   normalizeSingleChatMessageLimits,
@@ -52,6 +53,12 @@ describe("historyScanPolicy", () => {
     expect(normalizeBackfillBatchSize()).toBe(50);
     expect(normalizeBackfillBatchSize(0)).toBe(1);
     expect(normalizeBackfillBatchSize(800)).toBe(500);
+  });
+
+  it("allows wider per-chat limits for background backfill", () => {
+    expect(normalizeBackfillPerChatLimit()).toBe(200);
+    expect(normalizeBackfillPerChatLimit(5_000)).toBe(5_000);
+    expect(normalizeBackfillPerChatLimit(200_000)).toBe(100_000);
   });
 
   it("calculates dialog page slices and next page", () => {

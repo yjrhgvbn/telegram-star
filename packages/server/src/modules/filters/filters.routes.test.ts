@@ -1,5 +1,6 @@
 import type {
   Filter,
+  FilterBackfillJob,
   FilterBackfillResponse,
   FilterPreviewResponse,
 } from "@telegram-star/shared/contracts/filters";
@@ -7,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRouteTestApp, parseJson } from "../../test/routeTestUtils.js";
 import { filterRoutes } from "./filters.routes.js";
 import * as filtersService from "./filters.service.js";
+import * as backfillJobsService from "./filterBackfillJobs.service.js";
 
 vi.mock("./filters.service.js", () => {
   class FilterNotFoundError extends Error {
@@ -24,6 +26,21 @@ vi.mock("./filters.service.js", () => {
     previewFilterHistory: vi.fn(),
     toggleFilter: vi.fn(),
     updateFilter: vi.fn(),
+  };
+});
+
+vi.mock("./filterBackfillJobs.service.js", () => {
+  class FilterBackfillJobNotFoundError extends Error {
+    constructor(message = "Backfill job not found") {
+      super(message);
+    }
+  }
+
+  return {
+    FilterBackfillJobNotFoundError,
+    createFilterBackfillJob: vi.fn(),
+    getFilterBackfillJob: vi.fn(),
+    getLatestFilterBackfillJob: vi.fn(),
   };
 });
 
@@ -51,6 +68,61 @@ describe("filter routes", () => {
     vi.mocked(filtersService.previewFilterHistory).mockReset();
     vi.mocked(filtersService.toggleFilter).mockReset();
     vi.mocked(filtersService.updateFilter).mockReset();
+    vi.mocked(backfillJobsService.createFilterBackfillJob).mockReset();
+    vi.mocked(backfillJobsService.getFilterBackfillJob).mockReset();
+    vi.mocked(backfillJobsService.getLatestFilterBackfillJob).mockReset();
+  });
+
+  it("starts and reads background backfill jobs", async () => {
+    const job: FilterBackfillJob = {
+      id: "job-3",
+      filterId: 3,
+      mode: "count",
+      status: "running",
+      startAt: null,
+      endAt: null,
+      perChatLimit: 5_000,
+      totalChats: 2,
+      completedChats: 1,
+      scannedMessages: 5_000,
+      matchedCount: 8,
+      savedCount: 7,
+      skippedExistingCount: 1,
+      currentChatTitle: "资源频道",
+      error: null,
+      createdAt: "2026-08-09T00:00:00.000Z",
+      updatedAt: "2026-08-09T00:01:00.000Z",
+      completedAt: null,
+    };
+    vi.mocked(backfillJobsService.createFilterBackfillJob).mockResolvedValue(job);
+    vi.mocked(backfillJobsService.getLatestFilterBackfillJob).mockResolvedValue(job);
+    vi.mocked(backfillJobsService.getFilterBackfillJob).mockResolvedValue(job);
+    const app = await createRouteTestApp(filterRoutes);
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/filters/3/backfill-jobs",
+      payload: { mode: "count", perChatLimit: 5_000 },
+    });
+    const latestResponse = await app.inject({
+      method: "GET",
+      url: "/api/filters/3/backfill-jobs/latest",
+    });
+    const jobResponse = await app.inject({
+      method: "GET",
+      url: "/api/filters/3/backfill-jobs/job-3",
+    });
+    await app.close();
+
+    expect(createResponse.statusCode, createResponse.payload).toBe(200);
+    expect(latestResponse.statusCode, latestResponse.payload).toBe(200);
+    expect(jobResponse.statusCode, jobResponse.payload).toBe(200);
+    expect(backfillJobsService.createFilterBackfillJob).toHaveBeenCalledWith(3, {
+      mode: "count",
+      perChatLimit: 5_000,
+    });
+    expect(backfillJobsService.getLatestFilterBackfillJob).toHaveBeenCalledWith(3);
+    expect(backfillJobsService.getFilterBackfillJob).toHaveBeenCalledWith(3, "job-3");
   });
 
   it("lists filters", async () => {

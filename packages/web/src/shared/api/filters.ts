@@ -1,9 +1,12 @@
 import {
+  filterBackfillJobSchema,
   filterBackfillResponseSchema,
   filterDeleteResponseSchema,
   filterListSchema,
+  nullableFilterBackfillJobSchema,
   filterPreviewResponseSchema,
   filterSchema,
+  type FilterBackfillJobCreateInput,
   type FilterCreateInput,
   type FilterHistoryScope,
   type FilterPreviewInput,
@@ -53,5 +56,20 @@ export const filtersApi = {
         body: JSON.stringify(data ?? {}),
       },
       filterBackfillResponseSchema,
+    ),
+  startBackfillJob: (id: number, data: FilterBackfillJobCreateInput) =>
+    request(
+      `/filters/${id}/backfill-jobs`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+      filterBackfillJobSchema,
+    ),
+  latestBackfillJob: (id: number) =>
+    request(
+      `/filters/${id}/backfill-jobs/latest`,
+      undefined,
+      nullableFilterBackfillJobSchema,
     ),
 };

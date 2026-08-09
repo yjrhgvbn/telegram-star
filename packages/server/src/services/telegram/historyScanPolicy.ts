@@ -55,6 +55,10 @@ export function normalizeBackfillBatchSize(batchSize?: number): number {
   return clampNumber(batchSize, 50, 1, 500);
 }
 
+export function normalizeBackfillPerChatLimit(limit?: number): number {
+  return clampNumber(limit, 200, 1, 100_000);
+}
+
 export function getDialogPageSlice<T>(dialogs: T[], page: number, pageSize: number): T[] {
   return dialogs.slice((page - 1) * pageSize, page * pageSize);
 }

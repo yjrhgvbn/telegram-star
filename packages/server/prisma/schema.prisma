@@ -16,9 +16,36 @@ model Filter {
   createdAt String      @map("created_at")
   updatedAt String      @map("updated_at")
   messages  Message[]
+  backfillJobs FilterBackfillJob[]
   forwardTargets ForwardTarget[] @relation("FilterToForwardTarget")
 
   @@map("filters")
+}
+
+model FilterBackfillJob {
+  id                       String   @id @default(cuid())
+  filterId                 Int      @map("filter_id")
+  mode                     String
+  status                   String
+  startAt                  String?  @map("start_at")
+  endAt                    String?  @map("end_at")
+  perChatLimit             Int?     @map("per_chat_limit")
+  totalChats               Int      @default(0) @map("total_chats")
+  completedChats           Int      @default(0) @map("completed_chats")
+  scannedMessages          Int      @default(0) @map("scanned_messages")
+  matchedCount             Int      @default(0) @map("matched_count")
+  savedCount               Int      @default(0) @map("saved_count")
+  skippedExistingCount     Int      @default(0) @map("skipped_existing_count")
+  currentChatTitle         String?  @map("current_chat_title")
+  error                    String?
+  createdAt                String   @map("created_at")
+  updatedAt                String   @map("updated_at")
+  completedAt              String?  @map("completed_at")
+  filter                   Filter   @relation(fields: [filterId], references: [id], onDelete: Cascade)
+
+  @@index([filterId, createdAt])
+  @@index([status])
+  @@map("filter_backfill_jobs")
 }
 
 model Message {

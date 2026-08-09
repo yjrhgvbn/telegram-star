@@ -12,5 +12,11 @@ export {
   setConnected,
 } from "./client.js";
 export { syncReadByTelegramInteractions } from "./listener.js";
-export { listJoinedChats, listSingleChatMessages, previewHistoricalFilterMessages, backfillFilterHistory } from "./history.js";
+export {
+  listJoinedChats,
+  listSingleChatMessages,
+  previewHistoricalFilterMessages,
+  backfillFilterHistory,
+  type FilterBackfillHistoryProgress,
+} from "./history.js";
 export { initClient, sendCode, loginWithCode, logout } from "./auth.js";

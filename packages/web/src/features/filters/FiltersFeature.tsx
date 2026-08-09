@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  Database,
   LoaderCircle,
   Save,
   Trash2,
@@ -17,9 +16,10 @@ import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useFilters } from "@/hooks/useFilters";
 import { cn } from "@/lib/utils";
 import { queryKeys } from "@/shared/query/queryKeys";
-import type { FilterCondition } from "@/types";
+import type { FilterBackfillJobCreateInput, FilterCondition } from "@/types";
 import { FilterForm } from "./components/FilterForm";
 import { FilterLibrary } from "./components/FilterLibrary";
+import { HistoryBackfillDialog } from "./components/HistoryBackfillDialog";
 import { PreviewPanel } from "./components/PreviewPanel";
 import type { DraftCondition } from "./types";
 import {
@@ -30,13 +30,16 @@ import {
   toDraftConditions,
 } from "./utils";
 
-type CommitMode = "save" | "sync" | "toggle" | "delete";
+type CommitMode = "save" | "backfill" | "toggle" | "delete";
 
 interface DraftPreviewRequest {
   conditions: FilterCondition[];
   signature: string;
   perChatLimit: number;
 }
+
+const PREVIEW_TOTAL_LIMIT = 50;
+const PREVIEW_DIALOG_LIMIT = 20;
 
 export function FiltersFeature() {
   const { filterId: routeFilterId } = useParams<{ filterId?: string }>();
@@ -52,7 +55,7 @@ export function FiltersFeature() {
     updateFilter,
     deleteFilter,
     toggleFilter,
-    backfillFilter,
+    startBackfillJob,
   } = useFilters();
   const forwardTargetsQuery = useQuery({
     queryKey: queryKeys.forwardTargets.all,
@@ -66,8 +69,9 @@ export function FiltersFeature() {
   const [isDirty, setIsDirty] = useState(false);
   const [error, setError] = useState("");
   const [operation, setOperation] = useState<CommitMode | null>(null);
-  const [previewLimit, setPreviewLimit] = useState("200");
   const [operationMessage, setOperationMessage] = useState("");
+  const [previewLimit, setPreviewLimit] = useState("200");
+  const [startedBackfillJobId, setStartedBackfillJobId] = useState<string | null>(null);
   const [debouncedPreviewRequest, setDebouncedPreviewRequest] =
     useState<DraftPreviewRequest | null>(null);
 
@@ -86,6 +90,29 @@ export function FiltersFeature() {
     [persistedConditions],
   );
   const previewPerChatLimit = Number(previewLimit) || 200;
+  const selectedChatCount = useMemo(
+    () => new Set(
+      persistedConditions
+        .filter((condition) => condition.type === "chat")
+        .flatMap((condition) => condition.values),
+    ).size,
+    [persistedConditions],
+  );
+
+  const latestBackfillQuery = useQuery({
+    queryKey: queryKeys.filters.latestBackfill(selectedFilter?.id ?? 0),
+    queryFn: () => {
+      if (!selectedFilter) throw new Error("过滤器尚未保存");
+      return api.filters.latestBackfillJob(selectedFilter.id);
+    },
+    enabled: Boolean(selectedFilter && authStatus.authorized),
+    refetchInterval: (query) => {
+      const job = query.state.data;
+      return job && ["queued", "running"].includes(job.status) ? 1_500 : false;
+    },
+    staleTime: 1_000,
+  });
+  const latestBackfillJob = latestBackfillQuery.data ?? null;
 
   const previewCandidate = useMemo<{
     request: DraftPreviewRequest | null;
@@ -142,7 +169,8 @@ export function FiltersFeature() {
         {
           conditions: debouncedPreviewRequest.conditions,
           perChatLimit: debouncedPreviewRequest.perChatLimit,
-          totalLimit: 1000,
+          totalLimit: PREVIEW_TOTAL_LIMIT,
+          pageSize: PREVIEW_DIALOG_LIMIT,
         },
         signal,
       );
@@ -208,6 +236,23 @@ export function FiltersFeature() {
 
     navigate("/filters", { replace: true });
   }, [loading, navigate, routeFilterId, selectedFilter]);
+
+  useEffect(() => {
+    if (!latestBackfillJob || latestBackfillJob.id !== startedBackfillJobId) return;
+
+    if (latestBackfillJob.status === "completed") {
+      setOperationMessage(
+        `补录完成：命中 ${latestBackfillJob.matchedCount} 条，新增 ${latestBackfillJob.savedCount} 条，跳过 ${latestBackfillJob.skippedExistingCount} 条。`,
+      );
+      setStartedBackfillJobId(null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.filters.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.filters.preview });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.messages.stats });
+    } else if (latestBackfillJob.status === "failed") {
+      setError(`历史补录失败：${latestBackfillJob.error || "未知错误"}`);
+      setStartedBackfillJobId(null);
+    }
+  }, [latestBackfillJob, queryClient, startedBackfillJobId]);
 
   const markDirty = () => {
     setIsDirty(true);
@@ -320,14 +365,33 @@ export function FiltersFeature() {
     return saved;
   };
 
-  const handleCommit = async (mode: "save" | "sync") => {
-    let saved = false;
-
+  const handleSave = async () => {
     try {
-      setOperation(mode);
+      setOperation("save");
       setError("");
       setOperationMessage("");
 
+      const savedFilter = await persistDraft();
+
+      if (!selectedFilter) {
+        navigate(`/filters/${savedFilter.id}`, { replace: true });
+      }
+
+      setOperationMessage("规则已保存");
+    } catch (commitError: unknown) {
+      setError(commitError instanceof Error ? commitError.message : "保存失败");
+    } finally {
+      setOperation(null);
+    }
+  };
+
+  const handleStartBackfill = async (input: FilterBackfillJobCreateInput) => {
+    let saved = false;
+
+    try {
+      setOperation("backfill");
+      setError("");
+      setOperationMessage("");
       const savedFilter = await persistDraft();
       saved = true;
 
@@ -335,26 +399,13 @@ export function FiltersFeature() {
         navigate(`/filters/${savedFilter.id}`, { replace: true });
       }
 
-      if (mode === "save") {
-        setOperationMessage("规则已保存");
-        return;
-      }
-
-      const result = await backfillFilter(savedFilter.id, {
-        perChatLimit: previewPerChatLimit,
-      });
-      setOperationMessage(
-        `同步完成：命中 ${result.matchedCount} 条，新增 ${result.savedCount} 条，跳过 ${result.skippedExistingCount} 条。`,
-      );
-      void queryClient.invalidateQueries({ queryKey: queryKeys.filters.preview });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.messages.stats });
-    } catch (commitError: unknown) {
-      const message = commitError instanceof Error ? commitError.message : "操作失败";
-      setError(
-        saved && mode === "sync"
-          ? `规则已保存，但历史同步失败：${message}`
-          : message,
-      );
+      const job = await startBackfillJob(savedFilter.id, input);
+      setStartedBackfillJobId(job.id);
+      setOperationMessage("历史补录已在后台开始，可以离开当前页面");
+    } catch (backfillError: unknown) {
+      const message = backfillError instanceof Error ? backfillError.message : "操作失败";
+      setError(saved ? `规则已保存，但无法开始历史补录：${message}` : message);
+      throw backfillError;
     } finally {
       setOperation(null);
     }
@@ -557,7 +608,7 @@ export function FiltersFeature() {
                 variant="outline"
                 size="lg"
                 className="w-full sm:w-auto sm:min-w-32 lg:h-[46px] lg:min-w-[152px] lg:px-4"
-                onClick={() => void handleCommit("save")}
+                onClick={() => void handleSave()}
                 disabled={busy}
               >
                 {operation === "save" ? (
@@ -567,23 +618,13 @@ export function FiltersFeature() {
                 )}
                 保存
               </Button>
-              <Button
-                type="button"
-                size="lg"
-                className="w-full sm:w-auto sm:min-w-64 lg:h-[46px] lg:min-w-[300px] lg:px-4"
-                onClick={() => void handleCommit("sync")}
-                disabled={busy}
-              >
-                {operation === "sync" ? (
-                  <LoaderCircle className="animate-spin" data-icon="inline-start" />
-                ) : (
-                  <Database data-icon="inline-start" />
-                )}
-                <span className="sm:hidden">保存并同步 · {previewLimit}</span>
-                <span className="hidden sm:inline">
-                  保存并同步最近 {previewLimit} 条/会话
-                </span>
-              </Button>
+              <HistoryBackfillDialog
+                selectedChatCount={selectedChatCount}
+                latestJob={latestBackfillJob}
+                starting={operation === "backfill"}
+                disabled={busy || !authStatus.authorized}
+                onStart={handleStartBackfill}
+              />
             </div>
           </div>
         </footer>

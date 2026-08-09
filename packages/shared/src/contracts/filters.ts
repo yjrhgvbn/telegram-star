@@ -123,12 +123,88 @@ export const filterBackfillResponseSchema = z.object({
   skippedExistingCount: z.number().int().nonnegative(),
 });
 
+export const filterBackfillModeSchema = z.enum(["time", "count"]);
+export const filterBackfillJobStatusSchema = z.enum([
+  "queued",
+  "running",
+  "completed",
+  "failed",
+]);
+
+const filterBackfillIsoDateSchema = z.iso.datetime();
+
+export const filterBackfillJobCreateInputSchema = z
+  .object({
+    mode: filterBackfillModeSchema,
+    startAt: filterBackfillIsoDateSchema.nullable().optional(),
+    endAt: filterBackfillIsoDateSchema.optional(),
+    perChatLimit: z.number().int().min(100).max(100_000).optional(),
+  })
+  .strict()
+  .superRefine((input, ctx) => {
+    if (input.mode === "count" && input.perChatLimit === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["perChatLimit"],
+        message: "perChatLimit is required for count mode",
+      });
+    }
+
+    if (input.mode === "time" && input.endAt === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["endAt"],
+        message: "endAt is required for time mode",
+      });
+    }
+
+    if (
+      input.mode === "time" &&
+      input.startAt &&
+      input.endAt &&
+      Date.parse(input.startAt) > Date.parse(input.endAt)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["startAt"],
+        message: "startAt must not be later than endAt",
+      });
+    }
+  });
+
+export const filterBackfillJobSchema = z.object({
+  id: z.string().min(1),
+  filterId: z.number().int().positive(),
+  mode: filterBackfillModeSchema,
+  status: filterBackfillJobStatusSchema,
+  startAt: z.string().nullable(),
+  endAt: z.string().nullable(),
+  perChatLimit: z.number().int().positive().nullable(),
+  totalChats: z.number().int().nonnegative(),
+  completedChats: z.number().int().nonnegative(),
+  scannedMessages: z.number().int().nonnegative(),
+  matchedCount: z.number().int().nonnegative(),
+  savedCount: z.number().int().nonnegative(),
+  skippedExistingCount: z.number().int().nonnegative(),
+  currentChatTitle: z.string().nullable(),
+  error: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  completedAt: z.string().nullable(),
+});
+
+export const nullableFilterBackfillJobSchema = filterBackfillJobSchema.nullable();
+
 export const filterDeleteResponseSchema = z.object({
   success: z.boolean(),
 });
 
 export const filterIdParamSchema = z.object({
   id: z.coerce.number().int().positive(),
+});
+
+export const filterBackfillJobIdParamSchema = filterIdParamSchema.extend({
+  jobId: z.string().trim().min(1),
 });
 
 export type FilterConditionType = z.infer<typeof filterConditionTypeSchema>;
@@ -143,3 +219,7 @@ export type HistoricalFilterPreviewMessage = z.infer<typeof historicalFilterPrev
 export type HistoricalFilterPreviewSample = z.infer<typeof historicalFilterPreviewSampleSchema>;
 export type FilterPreviewResponse = z.infer<typeof filterPreviewResponseSchema>;
 export type FilterBackfillResponse = z.infer<typeof filterBackfillResponseSchema>;
+export type FilterBackfillMode = z.infer<typeof filterBackfillModeSchema>;
+export type FilterBackfillJobStatus = z.infer<typeof filterBackfillJobStatusSchema>;
+export type FilterBackfillJobCreateInput = z.infer<typeof filterBackfillJobCreateInputSchema>;
+export type FilterBackfillJob = z.infer<typeof filterBackfillJobSchema>;

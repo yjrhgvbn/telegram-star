@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
+  filterBackfillJobCreateInputSchema,
+  filterBackfillJobIdParamSchema,
   filterCreateInputSchema,
   filterHistoryScopeSchema,
   filterIdParamSchema,
@@ -17,6 +19,12 @@ import {
   toggleFilter,
   updateFilter,
 } from "./filters.service.js";
+import {
+  FilterBackfillJobNotFoundError,
+  createFilterBackfillJob,
+  getFilterBackfillJob,
+  getLatestFilterBackfillJob,
+} from "./filterBackfillJobs.service.js";
 
 function routeErrorMessage(error: unknown, fallback: string): string {
   const validationMessage = formatValidationError(error, fallback);
@@ -26,7 +34,10 @@ function routeErrorMessage(error: unknown, fallback: string): string {
 }
 
 function sendRouteError(reply: any, error: unknown, fallback: string) {
-  if (error instanceof FilterNotFoundError) {
+  if (
+    error instanceof FilterNotFoundError ||
+    error instanceof FilterBackfillJobNotFoundError
+  ) {
     return reply.status(404).send({ error: error.message });
   }
 
@@ -91,6 +102,34 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
       return await backfillFilter(id, scope);
     } catch (error: unknown) {
       return sendRouteError(reply, error, "Failed to backfill filter history");
+    }
+  });
+
+  app.post("/api/filters/:id/backfill-jobs", async (request, reply) => {
+    try {
+      const { id } = filterIdParamSchema.parse(request.params);
+      const input = filterBackfillJobCreateInputSchema.parse(request.body ?? {});
+      return await createFilterBackfillJob(id, input);
+    } catch (error: unknown) {
+      return sendRouteError(reply, error, "Failed to start filter history backfill");
+    }
+  });
+
+  app.get("/api/filters/:id/backfill-jobs/latest", async (request, reply) => {
+    try {
+      const { id } = filterIdParamSchema.parse(request.params);
+      return await getLatestFilterBackfillJob(id);
+    } catch (error: unknown) {
+      return sendRouteError(reply, error, "Failed to load filter history backfill");
+    }
+  });
+
+  app.get("/api/filters/:id/backfill-jobs/:jobId", async (request, reply) => {
+    try {
+      const { id, jobId } = filterBackfillJobIdParamSchema.parse(request.params);
+      return await getFilterBackfillJob(id, jobId);
+    } catch (error: unknown) {
+      return sendRouteError(reply, error, "Failed to load filter history backfill");
     }
   });
 }

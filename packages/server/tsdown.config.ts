@@ -9,4 +9,6 @@ export default defineConfig({
   unbundle: true,
   sourcemap: true,
   clean: true,
+  // SQLite、session 等运行时文件会持续变化，不能触发服务端重新构建。
+  ignoreWatch: ["data"],
 });

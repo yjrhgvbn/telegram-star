@@ -11,6 +11,10 @@ export type {
 
 export type {
   Filter,
+  FilterBackfillJob,
+  FilterBackfillJobCreateInput,
+  FilterBackfillJobStatus,
+  FilterBackfillMode,
   FilterBackfillResponse,
   FilterCondition,
   FilterConditionType,

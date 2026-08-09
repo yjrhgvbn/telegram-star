@@ -32,7 +32,7 @@ import type {
 import {
   getDialogPageSlice,
   getNextDialogPage,
-  normalizeBackfillBatchSize,
+  normalizeBackfillPerChatLimit,
   normalizeHistoricalPreviewLimits,
   normalizeSegmentedHistoryLimits,
   normalizeSingleChatMessageLimits,
@@ -422,72 +422,175 @@ export async function previewHistoricalFilterMessages(options: {
  * 基于过滤器条件扫描历史消息并将命中结果写入数据库（已存在的跳过）。
  * 通常由用户手动触发，用于补录过去未被实时监听到的消息。
  */
+export interface FilterBackfillHistoryProgress {
+  totalChats: number;
+  completedChats: number;
+  scannedMessages: number;
+  matchedCount: number;
+  savedCount: number;
+  skippedExistingCount: number;
+  currentChatTitle: string | null;
+}
+
 export async function backfillFilterHistory(options: {
   filterId: number;
   conditions: FilterCondition[];
-  perChatLimit?: number;
-  batchSize?: number;
+  /** null 表示按时间持续向前扫描，直到越过 startAt 或到达完整历史末尾。 */
+  perChatLimit?: number | null;
+  sinceMs?: number;
+  untilMs?: number;
+  onProgress?: (
+    progress: FilterBackfillHistoryProgress,
+  ) => void | Promise<void>;
 }): Promise<{
   scannedChats: number;
+  scannedMessages: number;
   matchedCount: number;
   savedCount: number;
   skippedExistingCount: number;
 }> {
-  const preview = await previewHistoricalFilterMessages({
-    conditions: options.conditions,
-    perChatLimit: options.perChatLimit,
-    totalLimit: 1000,
-  });
-
-  const batchSize = normalizeBackfillBatchSize(options.batchSize);
-  let savedCount = 0;
-  let skippedExistingCount = 0;
-
-  await pMap(
-    preview.messages,
-    async (message: HistoricalFilterPreviewMessage) => {
-      if (message.inDatabase) {
-        skippedExistingCount += 1;
-        return;
-      }
-
-      const created = await createMessageIfAbsent({
-        telegramMessageId: message.id,
-        chatId: message.chatId,
-        chatTitle: message.chatTitle,
-        senderName: message.senderName,
-        senderId: message.senderId,
-        content: message.content,
-        contentLinks: serializeMessageContentLinks(message.contentLinks),
-        messageDate: message.messageDate,
-        telegramLink: message.telegramLink,
-        isRead: false,
-        matchedFilterId: options.filterId,
-        matchedKeyword: message.matchedKeyword,
-        createdAt: new Date().toISOString(),
-        mediaType: message.mediaType ?? undefined,
-        mediaFileName: message.mediaFileName ?? undefined,
-        mediaFileSize: message.mediaFileSize ?? undefined,
-        mediaMimeType: message.mediaMimeType ?? undefined,
-        mediaDuration: message.mediaDuration ?? undefined,
-        mediaThumbBase64: message.mediaThumbBase64 ?? undefined,
-        mediaExtra: message.mediaExtra ?? undefined,
-      });
-      if (created) savedCount += 1;
-      else skippedExistingCount += 1;
-    },
-    { concurrency: batchSize },
-  );
-
   const client = getClient();
-  if (client) {
-    // 本次写入改变了 inDatabase 标记；清掉消息快照，下一次预览可返回准确状态。
-    getPreviewClientCache(client).chatMessages.clear();
+  if (!client || !isClientConnected()) {
+    throw new Error("Telegram client is not connected");
   }
 
+  if (hasConflictingChatConditions(options.conditions)) {
+    return {
+      scannedChats: 0,
+      scannedMessages: 0,
+      matchedCount: 0,
+      savedCount: 0,
+      skippedExistingCount: 0,
+    };
+  }
+
+  const dialogs = await client.getDialogs({}) as any[];
+  const scopedChatIds = getScopedChatIds(options.conditions);
+  const inspectableDialogs = dialogs.filter((dialog: any) => {
+    const entity = dialog?.entity;
+    if (!isValidChat(entity)) return false;
+
+    const chatId = entity?.id?.toString?.() || "";
+    return Boolean(chatId) && shouldInspectChat(chatId, scopedChatIds);
+  });
+  const perChatLimit = options.perChatLimit === null
+    ? null
+    : normalizeBackfillPerChatLimit(options.perChatLimit);
+  const batchSize = 100;
+  let scannedMessages = 0;
+  let matchedCount = 0;
+  let savedCount = 0;
+  let skippedExistingCount = 0;
+  let completedChats = 0;
+
+  const reportProgress = async (currentChatTitle: string | null) => {
+    await options.onProgress?.({
+      totalChats: inspectableDialogs.length,
+      completedChats,
+      scannedMessages,
+      matchedCount,
+      savedCount,
+      skippedExistingCount,
+      currentChatTitle,
+    });
+  };
+
+  await reportProgress(null);
+
+  for (const dialog of inspectableDialogs) {
+    const entity = dialog.entity;
+    const chatId = entity?.id?.toString?.() || "";
+    const chatTitle = entity?.title || entity?.username || chatId;
+    let offsetId = 0;
+    let scannedInChat = 0;
+
+    await reportProgress(chatTitle);
+
+    while (perChatLimit === null || scannedInChat < perChatLimit) {
+      const take = perChatLimit === null
+        ? batchSize
+        : Math.min(batchSize, perChatLimit - scannedInChat);
+      const history = await client.getMessages(entity, { limit: take, offsetId });
+      if (!history || history.length === 0) break;
+
+      scannedInChat += history.length;
+      scannedMessages += history.length;
+
+      for (const item of history as any[]) {
+        const timestampMs = getMessageTimestampMs(item);
+        if (options.untilMs !== undefined && timestampMs > options.untilMs) continue;
+        if (options.sinceMs !== undefined && timestampMs < options.sinceMs) continue;
+        if (!hasMessageContent(item)) continue;
+
+        const textContent = getMessageTextContent(item);
+        const match = matchFilterConditions(
+          { chatId, content: textContent },
+          options.conditions,
+        );
+        if (!match.matched) continue;
+
+        matchedCount += 1;
+        const { senderName, senderId } = getSenderSummary(item.sender);
+        const mediaInfo = extractMediaInfo(item);
+        const created = await createMessageIfAbsent({
+          telegramMessageId: item.id,
+          chatId,
+          chatTitle,
+          senderName,
+          senderId,
+          content: textContent,
+          contentLinks: serializeMessageContentLinks(
+            extractMessageContentLinks(item, textContent),
+          ),
+          messageDate: new Date(timestampMs).toISOString(),
+          telegramLink: buildTelegramLink(chatId, entity, item.id),
+          isRead: false,
+          matchedFilterId: options.filterId,
+          matchedKeyword: match.matchedKeyword,
+          createdAt: new Date().toISOString(),
+          mediaType: mediaInfo?.mediaType,
+          mediaFileName: mediaInfo?.mediaFileName,
+          mediaFileSize: mediaInfo?.mediaFileSize,
+          mediaMimeType: mediaInfo?.mediaMimeType,
+          mediaDuration: mediaInfo?.mediaDuration,
+          mediaThumbBase64: mediaInfo?.mediaThumbBase64,
+          mediaExtra: mediaInfo?.mediaExtra,
+        });
+        if (created) savedCount += 1;
+        else skippedExistingCount += 1;
+      }
+
+      await reportProgress(chatTitle);
+
+      const oldest = history[history.length - 1] as any;
+      const oldestId = Number(oldest?.id || 0);
+      const oldestTimestampMs = getMessageTimestampMs(oldest);
+      if (
+        options.sinceMs !== undefined &&
+        oldestTimestampMs > 0 &&
+        oldestTimestampMs < options.sinceMs
+      ) {
+        break;
+      }
+      if (history.length < take) break;
+      if (!oldestId || oldestId === offsetId) {
+        throw new Error(`Telegram history pagination stopped advancing in ${chatTitle}`);
+      }
+
+      offsetId = oldestId;
+    }
+
+    completedChats += 1;
+    await reportProgress(null);
+  }
+
+  // 本次写入改变了 inDatabase 标记；清掉消息快照，下一次预览可返回准确状态。
+  getPreviewClientCache(client).chatMessages.clear();
+
   return {
-    scannedChats: preview.scannedChats,
-    matchedCount: preview.messages.length,
+    scannedChats: completedChats,
+    scannedMessages,
+    matchedCount,
     savedCount,
     skippedExistingCount,
   };

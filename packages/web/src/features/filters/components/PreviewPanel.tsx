@@ -36,12 +36,11 @@ interface PreviewPanelProps {
 }
 
 const PAGE_SIZE = 20;
-
 const scopeOptions = [
   { value: "50", label: "最近 50 条 / 会话" },
   { value: "200", label: "最近 200 条 / 会话" },
   { value: "500", label: "最近 500 条 / 会话" },
-  { value: "1000", label: "最近 1000 条 / 会话" },
+  { value: "1000", label: "最近 1,000 条 / 会话" },
 ];
 
 function cleanPreviewContent(content: string): string {
@@ -170,15 +169,16 @@ export function PreviewPanel({
           </div>
 
           <Select
+            items={scopeOptions}
             value={previewLimit}
             onValueChange={(value) => {
               if (value) onPreviewLimitChange(value);
             }}
           >
-            <SelectTrigger size="sm" className="max-w-48 bg-card" aria-label="预览范围">
+            <SelectTrigger size="sm" className="max-w-48" aria-label="预览扫描范围">
               <SelectValue>{selectedScope.label}</SelectValue>
             </SelectTrigger>
-            <SelectContent align="end">
+            <SelectContent align="end" alignItemWithTrigger={false}>
               <SelectGroup>
                 {scopeOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value}>

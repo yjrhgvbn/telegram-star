@@ -2,7 +2,13 @@ import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { queryKeys } from "@/shared/query/queryKeys";
-import type { Filter, FilterCreateInput, FilterHistoryScope, FilterUpdateInput } from "../types";
+import type {
+  Filter,
+  FilterBackfillJobCreateInput,
+  FilterCreateInput,
+  FilterHistoryScope,
+  FilterUpdateInput,
+} from "../types";
 
 export function useFilters() {
   const queryClient = useQueryClient();
@@ -72,6 +78,14 @@ export function useFilters() {
     },
   });
 
+  const { mutateAsync: startBackfillJobAsync } = useMutation({
+    mutationFn: (variables: { id: number; data: FilterBackfillJobCreateInput }) =>
+      api.filters.startBackfillJob(variables.id, variables.data),
+    onSuccess: (job) => {
+      queryClient.setQueryData(queryKeys.filters.latestBackfill(job.filterId), job);
+    },
+  });
+
   const createFilter = useCallback(
     async (data: FilterCreateInput) => {
       return createFilterAsync(data);
@@ -98,6 +112,13 @@ export function useFilters() {
     return backfillFilterAsync({ id, data });
   }, [backfillFilterAsync]);
 
+  const startBackfillJob = useCallback(
+    async (id: number, data: FilterBackfillJobCreateInput) => {
+      return startBackfillJobAsync({ id, data });
+    },
+    [startBackfillJobAsync],
+  );
+
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.filters.all });
   }, [queryClient]);
@@ -118,6 +139,7 @@ export function useFilters() {
     deleteFilter,
     toggleFilter,
     backfillFilter,
+    startBackfillJob,
     refresh,
     refreshChats,
   };

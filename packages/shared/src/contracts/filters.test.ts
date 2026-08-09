@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  filterBackfillJobCreateInputSchema,
+  filterBackfillJobSchema,
   filterCreateInputSchema,
   filterListSchema,
   filterPreviewInputSchema,
@@ -128,5 +130,56 @@ describe("filters contract", () => {
         perChatLimit: 0,
       }),
     ).toThrow();
+  });
+
+  it("validates time and quantity backfill jobs", () => {
+    expect(
+      filterBackfillJobCreateInputSchema.parse({
+        mode: "time",
+        startAt: "2025-08-09T00:00:00.000Z",
+        endAt: "2026-08-09T23:59:59.999Z",
+      }),
+    ).toMatchObject({ mode: "time" });
+    expect(
+      filterBackfillJobCreateInputSchema.parse({
+        mode: "count",
+        perChatLimit: 5_000,
+      }),
+    ).toEqual({ mode: "count", perChatLimit: 5_000 });
+
+    expect(() => filterBackfillJobCreateInputSchema.parse({ mode: "count" })).toThrow();
+    expect(() =>
+      filterBackfillJobCreateInputSchema.parse({
+        mode: "time",
+        startAt: "2026-08-10T00:00:00.000Z",
+        endAt: "2026-08-09T23:59:59.999Z",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts persisted backfill progress", () => {
+    const job = filterBackfillJobSchema.parse({
+      id: "job-1",
+      filterId: 3,
+      mode: "count",
+      status: "running",
+      startAt: null,
+      endAt: null,
+      perChatLimit: 5_000,
+      totalChats: 4,
+      completedChats: 1,
+      scannedMessages: 1_200,
+      matchedCount: 30,
+      savedCount: 28,
+      skippedExistingCount: 2,
+      currentChatTitle: "资源频道",
+      error: null,
+      createdAt: "2026-08-09T00:00:00.000Z",
+      updatedAt: "2026-08-09T00:01:00.000Z",
+      completedAt: null,
+    });
+
+    expect(job.status).toBe("running");
+    expect(job.scannedMessages).toBe(1_200);
   });
 });
