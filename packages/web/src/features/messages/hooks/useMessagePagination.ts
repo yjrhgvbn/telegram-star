@@ -22,6 +22,11 @@ export interface UseMessagePaginationOptions {
   autoLocateEnabled?: boolean;
 }
 
+export interface LoadNewerMessagesOptions {
+  /** SSE 到达新消息时，若用户不在底部则显示提示；滚动分页不需要提示。 */
+  announceWhenAwayFromBottom?: boolean;
+}
+
 export interface UseMessagePaginationReturn {
   messages: Message[];
   hasOlder: boolean;
@@ -32,7 +37,7 @@ export interface UseMessagePaginationReturn {
   anchorId: number | null;
   hasPendingNew: boolean;
   loadOlder: () => void;
-  loadNewer: () => void;
+  loadNewer: (options?: LoadNewerMessagesOptions) => void;
   flushPending: () => void;
   setAtBottom: (v: boolean) => void;
   markAsReadLocal: (ids: number[]) => void;
@@ -146,7 +151,9 @@ export function useMessagePagination(
     }
   }, [hasOlder, buildCommonParams]);
 
-  const loadNewer = useCallback(async () => {
+  const loadNewer = useCallback(async (
+    loadOptions: LoadNewerMessagesOptions = {},
+  ) => {
     if (loadingNewerRef.current) return;
 
     const generation = queryGenerationRef.current;
@@ -163,10 +170,13 @@ export function useMessagePagination(
       if (generation !== queryGenerationRef.current) return;
 
       if (result.data.length > 0) {
+        // 已请求成功的分页数据必须立即合并；否则 hasNewer 变为 false 后，
+        // 这一页会永久丢失。SSE 只负责决定是否提示，不参与是否合并。
+        setMessages((prev) => appendUniqueMessages(prev, result.data));
+
         if (isAtBottomRef.current) {
-          setMessages((prev) => appendUniqueMessages(prev, result.data));
           setHasPendingNew(false);
-        } else {
+        } else if (loadOptions.announceWhenAwayFromBottom) {
           setHasPendingNew(true);
         }
       }
@@ -181,18 +191,17 @@ export function useMessagePagination(
     }
   }, [buildCommonParams]);
 
-  const loadNewerRef = useRef(loadNewer);
-  loadNewerRef.current = loadNewer;
-
   const flushPending = useCallback(() => {
     setHasPendingNew(false);
-    // 用户点击 pending badge 后，下一次新消息请求应直接 append，而不是再次显示 badge。
+    // 数据在请求成功时已经 append；这里只需让列表滚到现有数据末尾。
     isAtBottomRef.current = true;
-    void loadNewerRef.current();
   }, []);
 
   const setAtBottom = useCallback((v: boolean) => {
     isAtBottomRef.current = v;
+    if (v) {
+      setHasPendingNew(false);
+    }
   }, []);
 
   useEffect(() => {

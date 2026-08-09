@@ -1,4 +1,8 @@
-import { measureLineStats, prepareWithSegments } from "@chenglou/pretext";
+import {
+  clearCache as clearPretextCache,
+  measureLineStats,
+  prepareWithSegments,
+} from "@chenglou/pretext";
 import type { Message } from "@/types";
 
 export type MessageHeightEstimateInput = Pick<Message, "content" | "mediaType" | "mediaExtra">;
@@ -11,6 +15,7 @@ export interface MessageHeightEstimateOptions {
 
 const DEFAULT_CONTAINER_WIDTH = 400;
 const DEFAULT_VIEWPORT_WIDTH = 1024;
+const MAX_MESSAGE_LIST_WIDTH = 980;
 const MOBILE_BREAKPOINT = 640;
 const MIN_CONTENT_WIDTH = 100;
 const TEXT_PREVIEW_LIMIT = 360;
@@ -34,7 +39,7 @@ export function estimateMessageItemHeight(
   options: MessageHeightEstimateOptions = {},
 ): number {
   const viewportWidth = options.viewportWidth ?? DEFAULT_VIEWPORT_WIDTH;
-  const containerWidth = options.containerWidth ?? DEFAULT_CONTAINER_WIDTH;
+  const containerWidth = getMessageListEstimateWidth(options.containerWidth);
   const isMobile = viewportWidth < MOBILE_BREAKPOINT;
 
   // Base height includes card chrome, header, action row and sub-pixel spacing.
@@ -58,6 +63,23 @@ export function estimateMessageItemHeight(
   }
 
   return height + variableBlocks * CONTENT_BLOCK_GAP;
+}
+
+/**
+ * The rendered message column is capped at 980px. Keeping the same cap in the
+ * estimator prevents wide desktop layouts from underestimating wrapped text.
+ */
+export function getMessageListEstimateWidth(containerWidth?: number): number {
+  if (containerWidth === undefined || !Number.isFinite(containerWidth) || containerWidth <= 0) {
+    return DEFAULT_CONTAINER_WIDTH;
+  }
+
+  return Math.min(containerWidth, MAX_MESSAGE_LIST_WIDTH);
+}
+
+/** Clear font metrics after the webfont becomes ready. */
+export function clearMessageHeightEstimateCache() {
+  clearPretextCache();
 }
 
 function estimateMediaHeight(message: MessageHeightEstimateInput, availableWidth: number): number {
@@ -87,7 +109,7 @@ function estimateVisualMediaHeight(mediaExtra: string | null, availableWidth: nu
   const height = Number(extra.h);
 
   if (width > 0 && height > 0) {
-    return Math.min(360, (availableWidth * height) / width);
+    return Math.min(360, Math.max(80, (availableWidth * height) / width));
   }
 
   return 240;

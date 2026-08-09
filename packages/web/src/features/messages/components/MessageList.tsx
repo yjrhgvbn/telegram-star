@@ -1,15 +1,34 @@
-import { useRef, useCallback } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, Inbox, ListFilter, Loader2, MessageSquareText } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ArrowDown,
+  ArrowUp,
+  Inbox,
+  ListFilter,
+  Loader2,
+  MessageSquareText,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MessageCard } from "./MessageCard";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import type { Message } from "@/types";
 import { useMessageScrollEdges } from "../hooks/useMessageScrollEdges";
 import { useMessageScrollPositioning } from "../hooks/useMessageScrollPositioning";
 import { useReadSyncOnVisibility } from "../hooks/useReadSyncOnVisibility";
-import { estimateMessageItemHeight } from "../utils/messageHeightEstimator";
+import {
+  clearMessageHeightEstimateCache,
+  estimateMessageItemHeight,
+  getMessageListEstimateWidth,
+} from "../utils/messageHeightEstimator";
+import { MessageCard } from "./MessageCard";
 
 interface Props {
   messages: Message[];         // ASC 顺序（旧→新）
@@ -29,10 +48,137 @@ interface Props {
   searchQuery?: string;
 }
 
-const DEFAULT_ESTIMATE_VIEWPORT_WIDTH = 1024;
+interface MessageEstimateDimensions {
+  containerWidth: number;
+  viewportWidth: number;
+}
 
-function getEstimateViewportWidth() {
-  return typeof window !== "undefined" ? window.innerWidth : DEFAULT_ESTIMATE_VIEWPORT_WIDTH;
+const DEFAULT_ESTIMATE_VIEWPORT_WIDTH = 1024;
+const HISTORY_STATUS_HEIGHT = 40;
+const MESSAGE_SCROLL_END_THRESHOLD = 50;
+
+function useMessageEstimateDimensions(
+  scrollRef: RefObject<HTMLDivElement | null>,
+): MessageEstimateDimensions {
+  const [dimensions, setDimensions] = useState<MessageEstimateDimensions>(() => ({
+    containerWidth: getMessageListEstimateWidth(),
+    viewportWidth: typeof window === "undefined"
+      ? DEFAULT_ESTIMATE_VIEWPORT_WIDTH
+      : window.innerWidth,
+  }));
+
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+
+    const ownerWindow = element.ownerDocument.defaultView;
+    const updateDimensions = () => {
+      const nextDimensions = {
+        containerWidth: getMessageListEstimateWidth(element.clientWidth),
+        viewportWidth: ownerWindow?.innerWidth ?? DEFAULT_ESTIMATE_VIEWPORT_WIDTH,
+      };
+
+      setDimensions((current) =>
+        current.containerWidth === nextDimensions.containerWidth &&
+        current.viewportWidth === nextDimensions.viewportWidth
+          ? current
+          : nextDimensions,
+      );
+    };
+
+    updateDimensions();
+    const ResizeObserverConstructor = ownerWindow?.ResizeObserver;
+    const observer = ResizeObserverConstructor
+      ? new ResizeObserverConstructor(updateDimensions)
+      : null;
+    observer?.observe(element);
+    ownerWindow?.addEventListener("resize", updateDimensions, { passive: true });
+
+    return () => {
+      observer?.disconnect();
+      ownerWindow?.removeEventListener("resize", updateDimensions);
+    };
+  }, [scrollRef]);
+
+  return dimensions;
+}
+
+function MessageListLoadingState() {
+  return (
+    <div
+      className="flex min-h-full items-center justify-center p-4"
+      role="status"
+      aria-live="polite"
+    >
+      <Badge variant="secondary" className="h-8 px-3 shadow-sm">
+        <Loader2 className="animate-spin" data-icon="inline-start" />
+        正在同步消息
+      </Badge>
+    </div>
+  );
+}
+
+function MessageListEmptyState() {
+  return (
+    <div className="flex min-h-full items-center justify-center p-4">
+      <Card className="w-full max-w-lg bg-card/86" size="sm">
+        <CardHeader className="items-center text-center">
+          <div className="mb-1 flex size-9 items-center justify-center rounded-lg bg-secondary text-primary">
+            <Inbox className="size-4" />
+          </div>
+          <CardTitle className="text-base">等待下一条命中消息</CardTitle>
+          <CardDescription>
+            连接与过滤规则都在运行，符合条件的内容会自动进入这里。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 rounded-lg bg-muted/45 px-3 py-2.5 text-center">
+            <span className="flex min-w-0 flex-col items-center gap-1 text-xs font-medium">
+              <MessageSquareText className="size-3.5 text-primary" />
+              Telegram
+            </span>
+            <span className="h-px w-4 bg-border" aria-hidden />
+            <span className="flex min-w-0 flex-col items-center gap-1 text-xs font-medium">
+              <ListFilter className="size-3.5 text-primary" />
+              过滤规则
+            </span>
+            <span className="h-px w-4 bg-border" aria-hidden />
+            <span className="flex min-w-0 flex-col items-center gap-1 text-xs font-medium">
+              <Inbox className="size-3.5 text-primary" />
+              消息箱
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function MessageHistoryStatus({
+  loadingOlder,
+  hasOlder,
+  onLoadOlder,
+}: Pick<Props, "loadingOlder" | "hasOlder" | "onLoadOlder">) {
+  return (
+    <div
+      className="absolute inset-x-0 top-0 flex h-10 items-center justify-center text-xs text-muted-foreground"
+      aria-live="polite"
+    >
+      {loadingOlder ? (
+        <span className="flex items-center gap-2">
+          <Loader2 className="size-4 animate-spin" />
+          加载历史消息
+        </span>
+      ) : hasOlder ? (
+        <Button type="button" variant="ghost" size="xs" onClick={onLoadOlder}>
+          <ArrowUp data-icon="inline-start" />
+          加载更早消息
+        </Button>
+      ) : (
+        <span>已加载全部历史消息</span>
+      )}
+    </div>
+  );
 }
 
 export function MessageList({
@@ -53,33 +199,22 @@ export function MessageList({
   searchQuery,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const estimateDimensions = useMessageEstimateDimensions(scrollRef);
+  const hasRenderableMessages = !loading && messages.length > 0;
 
-  // 使用 ref 引用 messages，让 estimateSize / getItemKey 保持引用稳定
-  const messagesRef = useRef(messages);
-  messagesRef.current = messages;
-
-  // ═══ TanStack Virtual 初始化 ═══════════════════════════════════════════════
-  // estimateSize / getItemKey 使用 ref 而非闭包依赖 messages：
-  // 避免 messages 引用变化时 virtualizer 重建缓存
   const estimateSize = useCallback(
     (index: number) => {
-      const msg = messagesRef.current[index];
-      const containerWidth = scrollRef.current
-        ? scrollRef.current.clientWidth
-        : (typeof window !== "undefined" ? Math.min(640, window.innerWidth) : 400);
-      return msg
-        ? estimateMessageItemHeight(msg, {
-          containerWidth,
-          viewportWidth: getEstimateViewportWidth(),
-        })
+      const message = messages[index];
+      return message
+        ? estimateMessageItemHeight(message, estimateDimensions)
         : 300;
     },
-    [],
+    [estimateDimensions, messages],
   );
 
   const getItemKey = useCallback(
-    (index: number) => messagesRef.current[index]?.id ?? index,
-    [],
+    (index: number) => messages[index]?.id ?? index,
+    [messages],
   );
 
   const virtualizer = useVirtualizer({
@@ -87,12 +222,47 @@ export function MessageList({
     getScrollElement: () => scrollRef.current,
     estimateSize,
     getItemKey,
+    enabled: hasRenderableMessages,
+    anchorTo: "end",
+    followOnAppend: true,
+    scrollEndThreshold: MESSAGE_SCROLL_END_THRESHOLD,
+    paddingStart: HISTORY_STATUS_HEIGHT,
     overscan: 8,
+    directDomUpdates: true,
   });
 
-  const isAtBottomRef = useMessageScrollEdges({
+  // Width changes invalidate estimates for rows that have not reached the DOM.
+  useLayoutEffect(() => {
+    if (hasRenderableMessages) {
+      virtualizer.measure();
+    }
+  }, [
+    estimateDimensions.containerWidth,
+    estimateDimensions.viewportWidth,
+    hasRenderableMessages,
+    virtualizer,
+  ]);
+
+  // Pretext caches canvas font metrics; refresh them once Geist is available.
+  useEffect(() => {
+    const fonts = scrollRef.current?.ownerDocument.fonts;
+    if (!fonts) return;
+
+    let cancelled = false;
+    void fonts.ready.then(() => {
+      if (cancelled) return;
+      clearMessageHeightEstimateCache();
+      virtualizer.measure();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [virtualizer]);
+
+  useMessageScrollEdges({
     scrollRef,
-    enabled: !loading && messages.length > 0,
+    enabled: hasRenderableMessages,
     hasOlder,
     hasNewer,
     loadingOlder,
@@ -102,79 +272,22 @@ export function MessageList({
     onSetAtBottom,
   });
 
-  const estimateCompensationHeight = useCallback(
-    (message: Message) => estimateMessageItemHeight(message, {
-      viewportWidth: getEstimateViewportWidth(),
-    }),
-    [],
-  );
-
   useMessageScrollPositioning({
     messages,
     loading,
     anchorId,
-    scrollRef,
     virtualizer,
-    isAtBottomRef,
-    estimateCompensationHeight,
   });
 
   useReadSyncOnVisibility({ messages, markAsReadLocal });
 
-  // ═══ 骨架屏 ═══════════════════════════════════════════════════════════════
-  if (loading) {
-    return (
-      <div className="flex h-full flex-col p-3 sm:p-4">
-        <div className="mx-auto flex w-full max-w-[980px] flex-col gap-2">
-          <Skeleton className="h-24 w-full rounded-lg" />
-          <Skeleton className="h-24 w-full rounded-lg" />
-          <Skeleton className="h-24 w-full rounded-lg" />
-        </div>
-        <p className="py-3 text-center text-xs text-muted-foreground">正在同步消息</p>
-      </div>
-    );
-  }
+  const handleFlushPending = useCallback(() => {
+    // Move to the current end first so followOnAppend keeps the incoming page pinned.
+    virtualizer.scrollToEnd();
+    onFlushPending();
+  }, [onFlushPending, virtualizer]);
 
-  // ═══ 空状态 ═══════════════════════════════════════════════════════════════
-  if (messages.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center p-4">
-        <Card className="w-full max-w-lg bg-card/86" size="sm">
-          <CardHeader className="items-center text-center">
-            <div className="mb-1 flex size-9 items-center justify-center rounded-lg bg-secondary text-primary">
-              <Inbox className="size-4" />
-            </div>
-            <CardTitle className="text-base">等待下一条命中消息</CardTitle>
-            <CardDescription>
-              连接与过滤规则都在运行，符合条件的内容会自动进入这里。
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 rounded-lg bg-muted/45 px-3 py-2.5 text-center">
-              <span className="flex min-w-0 flex-col items-center gap-1 text-xs font-medium">
-                <MessageSquareText className="size-3.5 text-primary" />
-                Telegram
-              </span>
-              <span className="h-px w-4 bg-border" aria-hidden />
-              <span className="flex min-w-0 flex-col items-center gap-1 text-xs font-medium">
-                <ListFilter className="size-3.5 text-primary" />
-                过滤规则
-              </span>
-              <span className="h-px w-4 bg-border" aria-hidden />
-              <span className="flex min-w-0 flex-col items-center gap-1 text-xs font-medium">
-                <Inbox className="size-3.5 text-primary" />
-                消息箱
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // ═══ 主体：TanStack Virtual 虚拟列表 ═══════════════════════════════════════
-  const virtualItems = virtualizer.getVirtualItems();
-  // Height diagnostics are useful during tuning, but should never cover message content by default.
+  const virtualItems = hasRenderableMessages ? virtualizer.getVirtualItems() : [];
   const showHeightDebug =
     import.meta.env.DEV &&
     typeof window !== "undefined" &&
@@ -184,106 +297,104 @@ export function MessageList({
     <div className="relative h-full w-full">
       <div
         ref={scrollRef}
-        className="h-full overflow-y-auto px-0 pt-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="h-full overflow-y-auto overscroll-y-contain [overflow-anchor:none] [scrollbar-gutter:stable]"
         data-message-scroll
+        aria-busy={loading || loadingOlder || loadingNewer}
       >
-        {/* ── 顶部指示器 ── */}
-        {loadingOlder ? (
-          <div className="mx-auto flex max-w-[980px] items-center justify-center gap-2 py-3 text-xs text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            加载历史消息
-          </div>
-        ) : !hasOlder ? (
-          <p className="mx-auto max-w-[980px] py-3 text-center text-xs text-muted-foreground">
-            已加载全部历史消息
-          </p>
+        {loading ? (
+          <MessageListLoadingState />
+        ) : messages.length === 0 ? (
+          <MessageListEmptyState />
         ) : (
-          <div className="py-3" aria-hidden />
-        )}
+          <div
+            ref={virtualizer.containerRef}
+            style={{
+              width: "100%",
+              position: "relative",
+            }}
+          >
+            <MessageHistoryStatus
+              loadingOlder={loadingOlder}
+              hasOlder={hasOlder}
+              onLoadOlder={onLoadOlder}
+            />
 
-        {/* ── 虚拟列表容器 ── */}
-        <div
-          style={{
-            height: virtualizer.getTotalSize(),
-            width: "100%",
-            position: "relative",
-          }}
-        >
-          {virtualItems.map((vItem) => {
-            const msg = messages[vItem.index];
-            let diffElement = null;
-            if (showHeightDebug) {
-              const containerWidth = scrollRef.current?.clientWidth || 400;
-              const estHeight = estimateMessageItemHeight(msg, {
-                containerWidth,
-                viewportWidth: getEstimateViewportWidth(),
-              });
-              const realHeight = vItem.size;
-              const diff = realHeight - estHeight;
+            {virtualItems.map((virtualItem) => {
+              const message = messages[virtualItem.index];
+              let diffElement = null;
+              if (showHeightDebug) {
+                const estimatedHeight = estimateMessageItemHeight(message, estimateDimensions);
+                const diff = virtualItem.size - estimatedHeight;
 
-              diffElement = (
-                <div className="pointer-events-none absolute top-1 right-[max(1.5rem,calc((100%-980px)/2+1.5rem))] z-20 rounded-md bg-foreground/65 px-2 py-1 font-mono text-[10px] text-background/90 shadow-sm backdrop-blur-sm">
-                  <span className={Math.abs(diff) > 20 ? "font-bold text-destructive" : "text-success"}>
-                    Diff: {diff > 0 ? "+" : ""}{diff.toFixed(2)}px
-                  </span>
-                  <span className="ml-2 opacity-70">
-                    Est {estHeight.toFixed(0)} / Real {realHeight.toFixed(0)}
-                  </span>
+                diffElement = (
+                  <div className="pointer-events-none absolute top-1 right-[max(1.5rem,calc((100%-980px)/2+1.5rem))] z-20 rounded-md bg-foreground/65 px-2 py-1 font-mono text-[10px] text-background/90 shadow-sm backdrop-blur-sm">
+                    <span className={Math.abs(diff) > 20 ? "font-bold text-destructive" : "text-success"}>
+                      Diff: {diff > 0 ? "+" : ""}{diff.toFixed(2)}px
+                    </span>
+                    <span className="ml-2 opacity-70">
+                      Est {estimatedHeight.toFixed(0)} / Real {virtualItem.size.toFixed(0)}
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={virtualItem.key}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                  }}
+                >
+                  {diffElement}
+
+                  <div className="mx-auto w-full max-w-[980px] px-3 pb-2 sm:px-4">
+                    <MessageCard
+                      message={message}
+                      onToggleRead={onToggleRead}
+                      searchQuery={searchQuery}
+                      isAnchor={message.id === anchorId}
+                    />
+                  </div>
                 </div>
               );
-            }
-
-            return (
-              <div
-                key={msg.id}
-                data-index={vItem.index}
-                ref={virtualizer.measureElement}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${vItem.start}px)`,
-                }}
-              >
-                {diffElement}
-
-                <div className="mx-auto w-full max-w-[980px] px-3 pb-2 sm:px-4">
-                  <MessageCard
-                    message={msg}
-                    onToggleRead={onToggleRead}
-                    searchQuery={searchQuery}
-                    isAnchor={msg.id === anchorId}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* ── 底部加载指示器 ── */}
-        {loadingNewer && (
-          <div className="mx-auto flex max-w-[980px] items-center justify-center gap-2 py-3 text-xs text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            加载新消息
+            })}
           </div>
         )}
       </div>
 
-      {/* ── 新消息 badge ── */}
-      {hasPendingNew && (
+      {hasRenderableMessages && loadingNewer ? (
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-x-0 z-10 flex justify-center",
+            hasPendingNew ? "bottom-14" : "bottom-4",
+          )}
+          role="status"
+        >
+          <Badge variant="secondary" className="h-7 px-3 shadow-sm">
+            <Loader2 className="animate-spin" data-icon="inline-start" />
+            加载新消息
+          </Badge>
+        </div>
+      ) : null}
+
+      {hasPendingNew ? (
         <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
           <Button
             size="sm"
             variant="default"
             className="rounded-full px-4 shadow-md"
-            onClick={onFlushPending}
+            onClick={handleFlushPending}
           >
             <ArrowDown data-icon="inline-start" />
             有新消息
           </Button>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

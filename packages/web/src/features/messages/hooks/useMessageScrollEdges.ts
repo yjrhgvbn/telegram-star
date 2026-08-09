@@ -1,6 +1,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 
-const EDGE_THRESHOLD = 300;
+const MIN_EDGE_THRESHOLD = 300;
+const VIEWPORT_PREFETCH_RATIO = 0.75;
 const AT_BOTTOM_THRESHOLD = 50;
 
 export interface MessageScrollMetrics {
@@ -29,7 +30,7 @@ export interface UseMessageScrollEdgesOptions {
 
 export function getMessageScrollEdgeState(
   metrics: MessageScrollMetrics,
-  edgeThreshold = EDGE_THRESHOLD,
+  edgeThreshold = Math.max(MIN_EDGE_THRESHOLD, metrics.clientHeight * VIEWPORT_PREFETCH_RATIO),
   atBottomThreshold = AT_BOTTOM_THRESHOLD,
 ): MessageScrollEdgeState {
   const gap = metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight;

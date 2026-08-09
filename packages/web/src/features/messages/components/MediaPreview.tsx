@@ -82,7 +82,11 @@ function PhotoPreview({ message }: Props) {
     : null;
 
   const extra = parseExtra(message.mediaExtra);
-  const aspectStyle = extra.w && extra.h ? { aspectRatio: `${extra.w}/${extra.h}` } : undefined;
+  // Reserve the estimator's fallback height when metadata is unavailable so
+  // the row does not grow after the thumbnail finishes loading.
+  const aspectStyle = extra.w && extra.h
+    ? { aspectRatio: `${extra.w}/${extra.h}` }
+    : { height: 240 };
 
   return (
     <div ref={containerRef} className="media-preview media-preview--photo" style={aspectStyle}>
@@ -127,7 +131,9 @@ function VideoPreview({ message }: Props) {
     : null;
 
   const extra = parseExtra(message.mediaExtra);
-  const aspectStyle = extra.w && extra.h ? { aspectRatio: `${extra.w}/${extra.h}` } : undefined;
+  const aspectStyle = extra.w && extra.h
+    ? { aspectRatio: `${extra.w}/${extra.h}` }
+    : { height: 240 };
 
   return (
     <div className="media-preview media-preview--video" style={aspectStyle}>

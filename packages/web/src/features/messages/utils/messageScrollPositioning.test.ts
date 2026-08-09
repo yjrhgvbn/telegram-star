@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  getInitialMessageScrollTarget,
-  getPrependCompensationHeight,
-} from "./messageScrollPositioning";
+import { getInitialMessageScrollTarget } from "./messageScrollPositioning";
 
 const messages = [
   { id: 1, height: 120 },
@@ -25,25 +22,14 @@ describe("messageScrollPositioning", () => {
     });
   });
 
+  it("targets the newest message when automatic locating is disabled", () => {
+    expect(getInitialMessageScrollTarget(messages, null)).toEqual({
+      index: 2,
+      align: "end",
+    });
+  });
+
   it("does not produce an initial target for an empty list", () => {
     expect(getInitialMessageScrollTarget([], null)).toBeNull();
-  });
-
-  it("sums only prepended message heights before the previous first message", () => {
-    const nextMessages = [
-      { id: 10, height: 90 },
-      { id: 11, height: 110 },
-      ...messages,
-    ];
-
-    expect(
-      getPrependCompensationHeight(nextMessages, 1, (message) => message.height),
-    ).toBe(200);
-  });
-
-  it("skips compensation when the previous first message is unchanged", () => {
-    expect(
-      getPrependCompensationHeight(messages, 1, (message) => message.height),
-    ).toBe(0);
   });
 });

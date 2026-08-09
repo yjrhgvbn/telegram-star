@@ -53,7 +53,7 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
   loadNewerRef.current = loadNewer;
 
   const handleNewMessageEvent = useCallback(() => {
-    void loadNewerRef.current();
+    void loadNewerRef.current({ announceWhenAwayFromBottom: true });
   }, []);
 
   useMessageEvents({

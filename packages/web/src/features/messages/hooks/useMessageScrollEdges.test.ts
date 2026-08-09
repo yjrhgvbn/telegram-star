@@ -16,6 +16,20 @@ describe("getMessageScrollEdgeState", () => {
     });
   });
 
+  it("prefetches history before a fast upward scroll reaches the top", () => {
+    expect(
+      getMessageScrollEdgeState({
+        scrollTop: 420,
+        scrollHeight: 2400,
+        clientHeight: 600,
+      }),
+    ).toEqual({
+      nearTop: true,
+      nearBottom: false,
+      atBottom: false,
+    });
+  });
+
   it("distinguishes near-bottom loading from exact at-bottom state", () => {
     expect(
       getMessageScrollEdgeState({
