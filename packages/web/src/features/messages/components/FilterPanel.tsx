@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Inbox, KeyRound, ListFilter, MessageCircle, Plus, Regex, Settings2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
@@ -9,24 +9,13 @@ import { selectableItemVariants } from "@/components/ui/selectable-item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { Filter, FilterCondition } from "@/types";
+import { getFilterActivityPresentation } from "../utils/filterActivity";
 
 interface Props {
   filters: Filter[];
   loading: boolean;
   selectedFilterId: string;
   onSelectFilter: (id: string) => void;
-}
-
-function getConditionSummary(conditions: FilterCondition[]) {
-  if (!conditions.length) return "无有效条件";
-
-  return conditions
-    .map((condition) => {
-      if (condition.type === "keyword") return `关键词 ${condition.values.length}`;
-      if (condition.type === "regex") return `正则 ${condition.values.length}`;
-      return `会话 ${condition.values.length}`;
-    })
-    .join(" · ");
 }
 
 function getFilterIcon(conditions: FilterCondition[]) {
@@ -44,6 +33,13 @@ export function FilterPanel({
 }: Props) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const visibleFilters = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     if (!normalizedQuery) return filters;
@@ -121,6 +117,7 @@ export function FilterPanel({
               visibleFilters.map((filter) => {
                 const FilterIcon = getFilterIcon(filter.conditions);
                 const active = selectedFilterId === String(filter.id);
+                const activity = getFilterActivityPresentation(filter.latestMessageAt, nowMs);
 
                 return (
                   <div
@@ -148,12 +145,21 @@ export function FilterPanel({
                         <FilterIcon className="size-3.5" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-1.5">
-                          <span className="truncate text-sm font-medium text-foreground">{filter.name}</span>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                            {filter.name}
+                          </span>
                           {!filter.enabled ? <Badge variant="outline">停用</Badge> : null}
                         </span>
-                        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                          {getConditionSummary(filter.conditions)}
+                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                          {activity.dateTime ? (
+                            <>
+                              最近消息 ·{" "}
+                              <time dateTime={activity.dateTime} title={activity.exactTime ?? undefined}>
+                                {activity.label}
+                              </time>
+                            </>
+                          ) : activity.label}
                         </span>
                       </span>
                     </button>

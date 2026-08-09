@@ -65,6 +65,11 @@ export function useFilters() {
   const { mutateAsync: backfillFilterAsync } = useMutation({
     mutationFn: (variables: { id: number; data?: FilterHistoryScope }) =>
       api.filters.backfill(variables.id, variables.data),
+    onSuccess: () => {
+      // 历史回填会新增命中消息，侧栏活动时间需要重新聚合。
+      void queryClient.invalidateQueries({ queryKey: queryKeys.filters.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.messages.stats });
+    },
   });
 
   const createFilter = useCallback(

@@ -42,6 +42,7 @@ export const filterSchema = z.object({
   enabled: z.boolean(),
   autoLocateUnreadNearRead: z.boolean(),
   forwardTargetIds: filterForwardTargetIdsSchema,
+  latestMessageAt: z.string().nullable().default(null),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

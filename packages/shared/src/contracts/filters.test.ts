@@ -19,6 +19,7 @@ describe("filters contract", () => {
         enabled: true,
         autoLocateUnreadNearRead: true,
         forwardTargetIds: [2],
+        latestMessageAt: "2026-06-25T02:00:00.000Z",
         createdAt: "2026-06-25T00:00:00.000Z",
         updatedAt: "2026-06-25T00:00:00.000Z",
       },
@@ -27,6 +28,24 @@ describe("filters contract", () => {
     expect(filters[0]?.conditions[0]?.values).toEqual(["更新"]);
     expect(filters[0]?.conditions[1]).toEqual({ type: "regex", values: ["v\\d+\\.\\d+"] });
     expect(filters[0]?.forwardTargetIds).toEqual([2]);
+    expect(filters[0]?.latestMessageAt).toBe("2026-06-25T02:00:00.000Z");
+  });
+
+  it("defaults activity fields for responses from an older server", () => {
+    const filters = filterListSchema.parse([
+      {
+        id: 1,
+        name: "兼容分组",
+        conditions: [{ type: "keyword", values: ["更新"] }],
+        enabled: true,
+        autoLocateUnreadNearRead: true,
+        forwardTargetIds: [],
+        createdAt: "2026-06-25T00:00:00.000Z",
+        updatedAt: "2026-06-25T00:00:00.000Z",
+      },
+    ]);
+
+    expect(filters[0]?.latestMessageAt).toBeNull();
   });
 
   it("accepts regex conditions and rejects invalid regex patterns", () => {

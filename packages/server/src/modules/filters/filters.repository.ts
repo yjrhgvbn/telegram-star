@@ -8,8 +8,16 @@ import { planFilterMessageReconciliation } from "./filter-message-reconciliation
 
 export type FilterRow = Awaited<ReturnType<typeof findFilterRows>>[number];
 
-const filterForwardTargetsInclude = {
+const filterApiInclude = {
   forwardTargets: { select: { id: true } },
+  messages: {
+    orderBy: [
+      { messageDate: "desc" },
+      { telegramMessageId: "desc" },
+    ],
+    take: 1,
+    select: { messageDate: true },
+  },
 } as const;
 
 const MESSAGE_WRITE_BATCH_SIZE = 500;
@@ -24,7 +32,7 @@ function toMessageIdBatches(messageIds: number[]): number[][] {
 
 export async function findFilterRows() {
   return db.filter.findMany({
-    include: filterForwardTargetsInclude,
+    include: filterApiInclude,
     orderBy: { createdAt: "desc" },
   });
 }
@@ -46,7 +54,7 @@ export async function createFilterRow(input: FilterCreateInput): Promise<FilterR
       createdAt: now,
       updatedAt: now,
     },
-    include: filterForwardTargetsInclude,
+    include: filterApiInclude,
   });
 }
 
@@ -77,16 +85,15 @@ export async function updateFilterRow(id: number, input: FilterUpdateInput): Pro
     return db.filter.update({
       where: { id },
       data: buildFilterUpdateData(input),
-      include: filterForwardTargetsInclude,
+      include: filterApiInclude,
     });
   }
 
   // 规则与历史归属必须原子更新，避免新规则生效后仍短暂展示旧规则命中的消息。
   return db.$transaction(async (transaction) => {
-    const updated = await transaction.filter.update({
+    await transaction.filter.update({
       where: { id },
       data: buildFilterUpdateData(input),
-      include: filterForwardTargetsInclude,
     });
     const messages = await transaction.message.findMany({
       where: { matchedFilterId: id },
@@ -120,7 +127,11 @@ export async function updateFilterRow(id: number, input: FilterUpdateInput): Pro
       }
     }
 
-    return updated;
+    // 规则变更可能删除历史命中，必须在清理完成后再读取活动摘要。
+    return transaction.filter.findUniqueOrThrow({
+      where: { id },
+      include: filterApiInclude,
+    });
   });
 }
 
@@ -131,7 +142,7 @@ export async function toggleFilterRow(id: number, enabled: boolean): Promise<Fil
       enabled,
       updatedAt: new Date().toISOString(),
     },
-    include: filterForwardTargetsInclude,
+    include: filterApiInclude,
   });
 }
 

@@ -52,9 +52,14 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
   const loadNewerRef = useRef(loadNewer);
   loadNewerRef.current = loadNewer;
 
+  const invalidateFilterActivity = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.filters.all });
+  }, [queryClient]);
+
   const handleNewMessageEvent = useCallback(() => {
     void loadNewerRef.current({ announceWhenAwayFromBottom: true });
-  }, []);
+    invalidateFilterActivity();
+  }, [invalidateFilterActivity]);
 
   useMessageEvents({
     onNewMessage: handleNewMessageEvent,
@@ -70,7 +75,8 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
   const refreshMessages = useCallback(() => {
     refresh();
     void queryClient.invalidateQueries({ queryKey: queryKeys.messages.stats });
-  }, [queryClient, refresh]);
+    invalidateFilterActivity();
+  }, [invalidateFilterActivity, queryClient, refresh]);
 
   return {
     messages,

@@ -35,6 +35,7 @@ function createFilter(id: number, patch: Partial<Filter> = {}): Filter {
     enabled: true,
     autoLocateUnreadNearRead: true,
     forwardTargetIds: [],
+    latestMessageAt: null,
     createdAt: `2026-06-29T00:00:0${id}.000Z`,
     updatedAt: `2026-06-29T00:00:0${id}.000Z`,
     ...patch,

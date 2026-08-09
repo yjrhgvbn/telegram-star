@@ -14,6 +14,7 @@ describe("filters.service", () => {
       enabled: true,
       autoLocateUnreadNearRead: false,
       forwardTargets: [{ id: 2 }, { id: 5 }],
+      messages: [{ messageDate: "2026-06-29T00:30:00.000Z" }],
       createdAt: "2026-06-29T00:00:00.000Z",
       updatedAt: "2026-06-29T01:00:00.000Z",
     });
@@ -24,6 +25,7 @@ describe("filters.service", () => {
     ]);
     expect(filter.autoLocateUnreadNearRead).toBe(false);
     expect(filter.forwardTargetIds).toEqual([2, 5]);
+    expect(filter.latestMessageAt).toBe("2026-06-29T00:30:00.000Z");
   });
 
   it("normalizes history scope without inventing defaults", () => {

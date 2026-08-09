@@ -43,10 +43,13 @@ export function normalizeHistoryScope(scope?: FilterHistoryScope): FilterHistory
 }
 
 export function toApiFilter(row: FilterRow): Filter {
+  const { messages, forwardTargets, ...filter } = row;
+
   return filterSchema.parse({
-    ...row,
-    conditions: parseConditions(row.conditions),
-    forwardTargetIds: row.forwardTargets.map((target) => target.id),
+    ...filter,
+    conditions: parseConditions(filter.conditions),
+    forwardTargetIds: forwardTargets.map((target) => target.id),
+    latestMessageAt: messages[0]?.messageDate ?? null,
   });
 }
 
