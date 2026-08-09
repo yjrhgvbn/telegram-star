@@ -30,11 +30,12 @@ import {
   markMessagesRead,
   setMessageReadState,
 } from "./messages.repository.js";
-import { runInteractionSync } from "./readSyncFallback.js";
+import { runInteractionSyncInBackground } from "./readSyncFallback.js";
 
 interface MessageServiceLogger {
   debug: (payload: unknown, message: string) => void;
   info: (payload: unknown, message: string) => void;
+  error: (payload: unknown, message: string) => void;
 }
 
 export class CursorMessageNotFoundError extends Error {
@@ -70,8 +71,8 @@ export async function listMessages(
   });
 
   // 列表查询会顺手触发低频 Telegram Reaction 兜底同步。
-  // 这里只覆盖当前窗口，避免每次打开消息页都全表扫描 Telegram 历史。
-  const interactedReadIds = await runInteractionSync(
+  // 这里只覆盖当前窗口，并放到后台执行，避免 Telegram 网络延迟阻塞列表响应。
+  runInteractionSyncInBackground(
     window.rows.map((row) => ({
       id: row.id,
       chatId: row.chatId,
@@ -80,6 +81,7 @@ export async function listMessages(
     })),
     log,
   );
+  const interactedReadIds = new Set<number>();
 
   return {
     data: window.rows.map((row) => formatMessageRow(row, interactedReadIds)),

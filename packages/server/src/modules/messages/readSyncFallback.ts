@@ -14,6 +14,7 @@ export interface ReadSyncFallbackMessage {
 interface ReadSyncFallbackLogger {
   debug: (payload: unknown, message: string) => void;
   info: (payload: unknown, message: string) => void;
+  error: (payload: unknown, message: string) => void;
 }
 
 interface RunInteractionSyncOptions {
@@ -61,4 +62,18 @@ export async function runInteractionSync(
     "[ReadSync][fallback] sync completed",
   );
   return markedIds;
+}
+
+/**
+ * 在后台执行 Telegram 拉取式兜底同步，避免外部网络延迟阻塞消息列表响应。
+ * 同步产生的已读变化会通过 message event stream 主动通知前端。
+ */
+export function runInteractionSyncInBackground(
+  data: ReadSyncFallbackMessage[],
+  log: ReadSyncFallbackLogger,
+  options: RunInteractionSyncOptions = {},
+): void {
+  void runInteractionSync(data, log, options).catch((error) => {
+    log.error({ err: error }, "[ReadSync][fallback] background sync failed");
+  });
 }

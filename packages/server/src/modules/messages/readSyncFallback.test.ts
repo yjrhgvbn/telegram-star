@@ -3,6 +3,7 @@ import {
   INTERACTION_SYNC_INTERVAL_MS,
   resetInteractionSyncThrottleForTests,
   runInteractionSync,
+  runInteractionSyncInBackground,
   shouldRunInteractionSync,
   type ReadSyncFallbackMessage,
 } from "./readSyncFallback.js";
@@ -14,6 +15,7 @@ const messages: ReadSyncFallbackMessage[] = [
 const log = {
   debug: vi.fn(),
   info: vi.fn(),
+  error: vi.fn(),
 };
 
 describe("readSyncFallback", () => {
@@ -46,5 +48,38 @@ describe("readSyncFallback", () => {
     expect(second.size).toBe(0);
     expect(syncReadAgain).not.toHaveBeenCalled();
     expect(log.debug).toHaveBeenCalled();
+  });
+
+  it("starts the fallback sync without waiting for Telegram", async () => {
+    let resolveSync: ((value: Set<number>) => void) | undefined;
+    const pendingSync = new Promise<Set<number>>((resolve) => {
+      resolveSync = resolve;
+    });
+    const syncRead = vi.fn(() => pendingSync);
+
+    expect(
+      runInteractionSyncInBackground(messages, log, {
+        nowMs: INTERACTION_SYNC_INTERVAL_MS,
+        syncRead,
+      }),
+    ).toBeUndefined();
+    expect(syncRead).toHaveBeenCalledOnce();
+
+    resolveSync?.(new Set([1]));
+    await pendingSync;
+  });
+
+  it("logs background sync failures instead of creating an unhandled rejection", async () => {
+    runInteractionSyncInBackground(messages, log, {
+      nowMs: INTERACTION_SYNC_INTERVAL_MS,
+      syncRead: vi.fn().mockRejectedValue(new Error("Telegram timeout")),
+    });
+
+    await vi.waitFor(() => {
+      expect(log.error).toHaveBeenCalledWith(
+        { err: expect.any(Error) },
+        "[ReadSync][fallback] background sync failed",
+      );
+    });
   });
 });
