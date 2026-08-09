@@ -73,6 +73,10 @@ pnpm test:web
 # 仅运行后端与 shared 测试
 pnpm test:server
 
+# 查询或管理前端 shadcn 组件（参数会传给项目内已安装的 CLI）
+pnpm shadcn info --json
+pnpm shadcn docs button
+
 # 仅启动桌面本地壳开发页
 pnpm dev:desktop
 
@@ -218,3 +222,15 @@ pnpm test
 ### 7.5 重构恢复入口
 
 跨多轮继续重构时，先阅读 [docs/code-refactor-roadmap.md](code-refactor-roadmap.md)。该文档记录每个阶段的目标、决策、完成记录、验证命令与当前架构快照，避免上下文压缩后丢失目标。
+
+### 7.6 shadcn CLI 依赖解析错误
+
+项目已经在 `packages/web` 中安装并锁定了兼容的 `shadcn` 与 Zod 依赖。请从仓库根目录通过项目入口运行 CLI：
+
+```bash
+pnpm shadcn info --json
+pnpm shadcn docs skeleton
+pnpm shadcn add <component>
+```
+
+不要在本项目中使用 `pnpm dlx shadcn@latest`。`dlx` 会创建独立的临时依赖树，某些 shadcn / MCP SDK 版本组合可能将 SDK 连接到不兼容的 Zod 版本，并触发 `ERR_PACKAGE_PATH_NOT_EXPORTED: zod/v3`。项目入口直接复用 `packages/web` 已安装的 CLI，不受该临时解析问题影响。

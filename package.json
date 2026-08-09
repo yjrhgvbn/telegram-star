@@ -7,6 +7,7 @@
     "dev": "concurrently \"pnpm run dev:server\" \"pnpm run dev:web\"",
     "dev:server": "pnpm --filter @telegram-star/shared build && pnpm --filter @telegram-star/server build && pnpm --filter @telegram-star/server db:deploy && pnpm --filter @telegram-star/server dev",
     "dev:web": "pnpm --filter @telegram-star/shared build && pnpm --filter @telegram-star/web dev",
+    "shadcn": "pnpm --filter @telegram-star/web exec shadcn",
     "build": "pnpm --filter @telegram-star/shared build && pnpm --filter @telegram-star/web build && pnpm --filter @telegram-star/desktop build && pnpm --filter @telegram-star/mobile build && pnpm --filter @telegram-star/server build",
     "dev:desktop": "pnpm --filter @telegram-star/desktop dev",
     "build:desktop": "pnpm --filter @telegram-star/desktop build",

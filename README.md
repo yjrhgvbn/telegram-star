@@ -58,6 +58,10 @@ pnpm test
 pnpm test:web
 pnpm test:server
 
+# 可选：查询或管理前端 shadcn 组件
+pnpm shadcn info --json
+pnpm shadcn docs button
+
 # 可选：启动桌面本地壳开发页
 pnpm dev:desktop
 
