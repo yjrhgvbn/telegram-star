@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   LoaderCircle,
+  Pencil,
   Save,
   Trash2,
 } from "lucide-react";
@@ -25,6 +26,8 @@ import type { DraftCondition } from "./types";
 import {
   assertValidRegexConditions,
   createDraftCondition,
+  createInitialDraftConditions,
+  deriveFilterName,
   mergePersistableConditions,
   normalizeConditions,
   toDraftConditions,
@@ -63,9 +66,12 @@ export function FiltersFeature() {
   });
 
   const [name, setName] = useState("");
+  const [isNameEditing, setIsNameEditing] = useState(false);
   const [autoLocateUnreadNearRead, setAutoLocateUnreadNearRead] = useState(true);
   const [forwardTargetIds, setForwardTargetIds] = useState<number[]>([]);
-  const [conditions, setConditions] = useState<DraftCondition[]>([createDraftCondition()]);
+  const [conditions, setConditions] = useState<DraftCondition[]>(
+    createInitialDraftConditions,
+  );
   const [isDirty, setIsDirty] = useState(false);
   const [error, setError] = useState("");
   const [operation, setOperation] = useState<CommitMode | null>(null);
@@ -84,6 +90,10 @@ export function FiltersFeature() {
   const persistedConditions = useMemo(
     () => mergePersistableConditions(normalizeConditions(conditions)),
     [conditions],
+  );
+  const suggestedName = useMemo(
+    () => deriveFilterName(persistedConditions, chats),
+    [chats, persistedConditions],
   );
   const currentConditionSignature = useMemo(
     () => JSON.stringify(persistedConditions),
@@ -209,11 +219,13 @@ export function FiltersFeature() {
 
     if (routeFilterId === "new") {
       setName("");
+      setIsNameEditing(false);
       setAutoLocateUnreadNearRead(true);
       setForwardTargetIds([]);
-      setConditions([createDraftCondition()]);
+      setConditions(createInitialDraftConditions());
     } else if (selectedFilter) {
       setName(selectedFilter.name);
+      setIsNameEditing(false);
       setAutoLocateUnreadNearRead(selectedFilter.autoLocateUnreadNearRead);
       setForwardTargetIds(selectedFilter.forwardTargetIds);
       setConditions(toDraftConditions(selectedFilter.conditions));
@@ -271,10 +283,9 @@ export function FiltersFeature() {
 
   const buildPayload = () => {
     const nextConditions = buildConditions();
-    if (!name.trim()) throw new Error("请为规则填写名称");
 
     return {
-      name: name.trim(),
+      name: name.trim() || deriveFilterName(nextConditions, chats),
       conditions: nextConditions,
       autoLocateUnreadNearRead,
       forwardTargetIds,
@@ -361,6 +372,7 @@ export function FiltersFeature() {
       ? await updateFilter(selectedFilter.id, payload)
       : await createFilter(payload);
 
+    setName(saved.name);
     setIsDirty(false);
     return saved;
   };
@@ -480,6 +492,12 @@ export function FiltersFeature() {
       : previewSummary
         ? `自动预览已更新 · ${previewSummary.total} 条命中`
         : "填写条件后自动预览";
+  const displayedName = selectedFilter
+    ? name.trim() || suggestedName
+    : name.trim() || "新建过滤器";
+  const automaticNameDescription = persistedConditions.length > 0
+    ? `将自动命名为「${suggestedName}」`
+    : "名称将自动使用首个关键词或正则";
 
   return (
     <AppShell
@@ -492,20 +510,44 @@ export function FiltersFeature() {
         <WorkspaceHeader
           className="min-h-16 bg-card/78 px-3 py-2 sm:px-4"
           title={
-            <Input
-              id="filter-name"
-              name="filter-name"
-              aria-label="过滤器名称"
-              placeholder="未命名规则"
-              value={name}
-              onChange={(event) => handleNameChange(event.target.value)}
-              className="h-7 w-auto min-w-20 max-w-44 border-transparent bg-transparent px-0 text-base font-semibold shadow-none [field-sizing:content] focus-visible:border-input focus-visible:bg-card focus-visible:px-2 sm:max-w-64"
-            />
+            isNameEditing ? (
+              <Input
+                id="filter-name"
+                name="filter-name"
+                aria-label="自定义过滤器名称"
+                placeholder={suggestedName}
+                value={name}
+                autoFocus
+                onChange={(event) => handleNameChange(event.target.value)}
+                onBlur={() => setIsNameEditing(false)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === "Escape") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                }}
+                className="h-7 w-auto min-w-24 max-w-48 rounded-none border-x-0 border-t-0 border-b-input bg-transparent px-0 text-base font-semibold shadow-none [field-sizing:content] focus-visible:border-b-primary focus-visible:ring-0 sm:max-w-72"
+              />
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="-ml-1 max-w-full justify-start px-1 font-semibold"
+                aria-label="编辑过滤器名称"
+                title="点击编辑名称"
+                onClick={() => setIsNameEditing(true)}
+              >
+                <span className="truncate">{displayedName}</span>
+              </Button>
+            )
           }
           description={
             selectedFilter
               ? `${selectedFilter.enabled ? "正在监听" : "已停用"} · ${persistedConditions.length} 个条件`
-              : "尚未保存 · 修改条件后自动预览"
+              : name.trim()
+                ? "使用自定义名称 · 修改条件后自动预览"
+                : `${automaticNameDescription}，也可自定义`
           }
           leading={
             <Button
@@ -519,37 +561,50 @@ export function FiltersFeature() {
             </Button>
           }
           actions={
-            selectedFilter ? (
-              <>
+            <>
+              {!isNameEditing ? (
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  onClick={handleToggle}
-                  disabled={busy}
+                  onClick={() => setIsNameEditing(true)}
                 >
-                  {operation === "toggle" ? (
-                    <LoaderCircle className="animate-spin" data-icon="inline-start" />
-                  ) : null}
-                  {selectedFilter.enabled ? "停用监听" : "启用监听"}
+                  <Pencil data-icon="inline-start" />
+                  {name.trim() ? "修改名称" : "自定义名称"}
                 </Button>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon-sm"
-                  onClick={handleDelete}
-                  disabled={busy}
-                  aria-label="删除规则"
-                  title="删除规则"
-                >
-                  {operation === "delete" ? (
-                    <LoaderCircle className="animate-spin" />
-                  ) : (
-                    <Trash2 />
-                  )}
-                </Button>
-              </>
-            ) : null
+              ) : null}
+              {selectedFilter ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleToggle}
+                    disabled={busy}
+                  >
+                    {operation === "toggle" ? (
+                      <LoaderCircle className="animate-spin" data-icon="inline-start" />
+                    ) : null}
+                    {selectedFilter.enabled ? "停用监听" : "启用监听"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon-sm"
+                    onClick={handleDelete}
+                    disabled={busy}
+                    aria-label="删除规则"
+                    title="删除规则"
+                  >
+                    {operation === "delete" ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <Trash2 />
+                    )}
+                  </Button>
+                </>
+              ) : null}
+            </>
           }
         />
 

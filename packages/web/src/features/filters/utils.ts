@@ -24,17 +24,29 @@ export function createDraftCondition(type: FilterConditionType = "keyword"): Dra
   };
 }
 
+/**
+ * 新建规则默认把会话范围展示出来。空的 chat 条件只表示“全部会话”，
+ * normalizeConditions 会在保存前忽略它，因此不会给现有 API 增加特殊值。
+ */
+export function createInitialDraftConditions(): DraftCondition[] {
+  return [createDraftCondition("chat"), createDraftCondition("keyword")];
+}
+
 export function toDraftConditions(conditions: FilterCondition[]): DraftCondition[] {
   if (conditions.length === 0) {
-    return [createDraftCondition()];
+    return createInitialDraftConditions();
   }
 
-  return conditions.map((condition, index) => ({
+  const drafts = conditions.map((condition, index) => ({
     id: `${condition.type}-${index}-${Math.random().toString(36).slice(2, 10)}`,
     type: condition.type,
     values: [...condition.values],
     input: "",
   }));
+
+  return conditions.some((condition) => condition.type === "chat")
+    ? drafts
+    : [createDraftCondition("chat"), ...drafts];
 }
 
 export function normalizeConditions(conditions: DraftCondition[]): FilterCondition[] {
@@ -104,6 +116,41 @@ function formatQuotedList(values: string[], fallback: string): string {
 function resolveChatNames(values: string[], chats: JoinedChat[]): string[] {
   const chatTitleById = new Map(chats.map((chat) => [chat.id, chat.title]));
   return values.map((value) => chatTitleById.get(value) ?? value);
+}
+
+function truncateFilterName(value: string, maxLength = 32): string {
+  const characters = Array.from(value.trim());
+  return characters.length > maxLength
+    ? `${characters.slice(0, maxLength).join("")}…`
+    : characters.join("");
+}
+
+/**
+ * 自定义名称为空时，从第一条内容条件生成稳定、可读的名称；
+ * 仅有会话条件时再退回到第一个会话名称。
+ */
+export function deriveFilterName(
+  conditions: FilterCondition[],
+  chats: JoinedChat[] = [],
+): string {
+  const contentCondition = conditions.find(
+    (condition) => condition.type === "keyword" || condition.type === "regex",
+  );
+  const contentValue = contentCondition?.values[0]?.trim();
+
+  if (contentCondition && contentValue) {
+    return truncateFilterName(
+      contentCondition.type === "regex" ? `正则：${contentValue}` : contentValue,
+    );
+  }
+
+  const firstChatId = conditions.find((condition) => condition.type === "chat")
+    ?.values[0];
+  if (firstChatId) {
+    return truncateFilterName(resolveChatNames([firstChatId], chats)[0] ?? firstChatId);
+  }
+
+  return "新过滤器";
 }
 
 export function describeFilterCondition(

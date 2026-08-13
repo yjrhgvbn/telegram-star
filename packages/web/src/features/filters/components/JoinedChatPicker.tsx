@@ -18,7 +18,7 @@ interface JoinedChatPickerProps {
   loading: boolean;
 
   /**
-   * 标签文本，用于显示在触发按钮上
+   * 未选择会话时显示在触发按钮上的范围文本
    */
   label?: string;
 
@@ -130,7 +130,7 @@ export function JoinedChatPicker({
         aria-expanded={resolvedOpen}
         aria-label={
           selected.length > 0
-            ? `${label ? `${label}，` : ""}已选 ${selected.length} 个会话：${selectedTitles}`
+            ? `已选 ${selected.length} 个会话：${selectedTitles}`
             : label || "选择会话"
         }
         className={cn(
@@ -142,7 +142,9 @@ export function JoinedChatPicker({
         onClick={() => handleOpenChange(!resolvedOpen)}
       >
         {selectedItems.length === 0 ? (
-          <span className="px-1.5 text-xs text-muted-foreground">选择会话</span>
+          <span className="px-1.5 text-xs text-muted-foreground">
+            {label || "选择会话"}
+          </span>
         ) : (
           selectedItems.slice(0, 2).map((item) => (
             <span
@@ -181,17 +183,33 @@ export function JoinedChatPicker({
             <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
               <div>
                 <div id="joined-chat-picker-title" className="text-base font-semibold">选择会话</div>
-                <div className="text-xs text-muted-foreground">已选 {selected.length} 个</div>
+                <div className="text-xs text-muted-foreground">
+                  {selected.length > 0
+                    ? `已选 ${selected.length} 个`
+                    : "当前匹配全部会话"}
+                </div>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="关闭会话选择"
-                onClick={() => handleOpenChange(false)}
-              >
-                <X />
-              </Button>
+              <div className="flex items-center gap-1">
+                {selected.length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => onSelectionChange([])}
+                  >
+                    改为全部会话
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="关闭会话选择"
+                  onClick={() => handleOpenChange(false)}
+                >
+                  <X />
+                </Button>
+              </div>
             </div>
 
             <div className="px-4 pb-3">

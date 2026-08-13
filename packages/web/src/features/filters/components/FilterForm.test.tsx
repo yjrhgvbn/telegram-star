@@ -8,6 +8,7 @@ import {
   DEFAULT_FORWARD_BODY_TEMPLATE,
   DEFAULT_FORWARD_TITLE_TEMPLATE,
 } from "@telegram-star/shared/contracts/forward-targets";
+import type { DraftCondition } from "../types";
 import { FilterForm } from "./FilterForm";
 
 function createForwardTarget(id: number, patch: Partial<ForwardTarget> = {}): ForwardTarget {
@@ -29,10 +30,17 @@ function FilterFormHarness({
   onAutoLocateChange,
   onToggleForwardTarget,
   onAddCondition,
+  conditions,
+  onUpdateCondition = vi.fn(),
 }: {
   onAutoLocateChange: (value: boolean) => void;
   onToggleForwardTarget: (id: number) => void;
   onAddCondition: () => void;
+  conditions?: DraftCondition[];
+  onUpdateCondition?: (
+    id: string,
+    updater: (condition: DraftCondition) => DraftCondition,
+  ) => void;
 }) {
   const [autoLocateUnreadNearRead, setAutoLocateUnreadNearRead] = useState(true);
 
@@ -56,7 +64,7 @@ function FilterFormHarness({
       forwardTargetsLoading={false}
       onToggleForwardTarget={onToggleForwardTarget}
       onCreateForwardTarget={vi.fn()}
-      conditions={[
+      conditions={conditions ?? [
         {
           id: "chat-condition",
           type: "chat",
@@ -71,7 +79,7 @@ function FilterFormHarness({
         },
       ]}
       error=""
-      onUpdateCondition={vi.fn()}
+      onUpdateCondition={onUpdateCondition}
       onRemoveCondition={vi.fn()}
       onAppendValues={vi.fn()}
       onAddCondition={onAddCondition}
@@ -116,5 +124,76 @@ describe("FilterForm", () => {
       screen.getByRole("button", { name: "添加一个必须同时满足的条件" }),
     );
     expect(onAddCondition).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an empty chat scope as all chats and keeps the primary scope row", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <FilterFormHarness
+        onAutoLocateChange={vi.fn()}
+        onToggleForwardTarget={vi.fn()}
+        onAddCondition={vi.fn()}
+        conditions={[
+          { id: "chat-condition", type: "chat", values: [], input: "" },
+          { id: "keyword-condition", type: "keyword", values: [], input: "" },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "全部会话" })).not.toBeNull();
+    expect(screen.getByText("来自任一会话")).not.toBeNull();
+    expect(screen.getByText("未指定会话时，匹配全部会话")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "删除消息来源条件" })).toBeNull();
+    expect(screen.getByRole("button", { name: "删除关键词条件" })).not.toBeNull();
+    expect(screen.queryByRole("combobox", { name: /消息来源/ })).toBeNull();
+
+    await user.click(
+      screen.getByRole("combobox", { name: "消息内容匹配方式" }),
+    );
+    expect(
+      await screen.findByRole("option", { name: "包含任一关键词" }),
+    ).not.toBeNull();
+    expect(
+      await screen.findByRole("option", { name: "匹配任一表达式" }),
+    ).not.toBeNull();
+    expect(screen.queryByRole("option", { name: "来自任一会话" })).toBeNull();
+    await user.keyboard("{Escape}");
+
+    await user.click(screen.getByRole("button", { name: "全部会话" }));
+    expect(screen.getByText("当前匹配全部会话")).not.toBeNull();
+  });
+
+  it("can clear selected chats back to the implicit all-chat scope", async () => {
+    const user = userEvent.setup();
+    const onUpdateCondition = vi.fn();
+
+    render(
+      <FilterFormHarness
+        onAutoLocateChange={vi.fn()}
+        onToggleForwardTarget={vi.fn()}
+        onAddCondition={vi.fn()}
+        onUpdateCondition={onUpdateCondition}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /已选 2 个会话/ }),
+    );
+    await user.click(screen.getByRole("button", { name: "改为全部会话" }));
+
+    const [conditionId, updater] = onUpdateCondition.mock.calls[0] as [
+      string,
+      (condition: DraftCondition) => DraftCondition,
+    ];
+    expect(conditionId).toBe("chat-condition");
+    expect(
+      updater({
+        id: "chat-condition",
+        type: "chat",
+        values: ["chat-1", "chat-2"],
+        input: "",
+      }).values,
+    ).toEqual([]);
   });
 });

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   assertValidRegexConditions,
+  createInitialDraftConditions,
+  deriveFilterName,
   describeFilterRule,
   evaluatePreviewMessage,
   mergePersistableConditions,
@@ -10,6 +12,13 @@ import {
 import type { DraftCondition } from "./types";
 
 describe("filter form utils", () => {
+  it("starts a new rule with an implicit all-chat scope and a keyword condition", () => {
+    expect(createInitialDraftConditions()).toMatchObject([
+      { type: "chat", values: [], input: "" },
+      { type: "keyword", values: [], input: "" },
+    ]);
+  });
+
   it("normalizes keyword draft values and unsaved input together", () => {
     const conditions: DraftCondition[] = [
       {
@@ -90,10 +99,40 @@ describe("filter form utils", () => {
     const source = [{ type: "keyword" as const, values: ["发布"] }];
     const drafts = toDraftConditions(source);
 
-    drafts[0]?.values.push("公告");
+    drafts[1]?.values.push("公告");
 
-    expect(drafts).toMatchObject([{ type: "keyword", values: ["发布", "公告"], input: "" }]);
+    expect(drafts).toMatchObject([
+      { type: "chat", values: [], input: "" },
+      { type: "keyword", values: ["发布", "公告"], input: "" },
+    ]);
     expect(source).toEqual([{ type: "keyword", values: ["发布"] }]);
+  });
+
+  it("does not duplicate an existing persisted chat scope", () => {
+    expect(
+      toDraftConditions([
+        { type: "chat", values: ["1001"] },
+        { type: "keyword", values: ["发布"] },
+      ]).map((condition) => condition.type),
+    ).toEqual(["chat", "keyword"]);
+  });
+
+  it("derives an optional name from content first and chat scope as a fallback", () => {
+    expect(
+      deriveFilterName([
+        { type: "keyword", values: [" 将夜 "] },
+        { type: "chat", values: ["1001"] },
+      ], [{ id: "1001", title: "动漫抢先看" }]),
+    ).toBe("将夜");
+    expect(deriveFilterName([{ type: "regex", values: ["v\\d+"] }])).toBe(
+      "正则：v\\d+",
+    );
+    expect(
+      deriveFilterName(
+        [{ type: "chat", values: ["1001"] }],
+        [{ id: "1001", title: "动漫抢先看" }],
+      ),
+    ).toBe("动漫抢先看");
   });
 
   it("describes the real AND/OR rule semantics with readable chat titles", () => {

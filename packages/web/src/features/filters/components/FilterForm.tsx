@@ -54,6 +54,9 @@ export function FilterForm({
   const visibleConditions = [...conditions].sort(
     (a, b) => Number(b.type === "chat") - Number(a.type === "chat"),
   );
+  const primaryChatConditionId = visibleConditions.find(
+    (condition) => condition.type === "chat",
+  )?.id;
 
   return (
     <div className="flex min-w-0 flex-col gap-3 p-3 sm:p-4">
@@ -86,6 +89,7 @@ export function FilterForm({
                 index={index}
                 chats={chats}
                 chatsLoading={chatsLoading}
+                removable={condition.id !== primaryChatConditionId}
                 onUpdate={onUpdateCondition}
                 onRemove={onRemoveCondition}
                 onAppendValues={onAppendValues}
