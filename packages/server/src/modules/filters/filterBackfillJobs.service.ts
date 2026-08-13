@@ -10,6 +10,7 @@ import {
   backfillFilterHistory,
   type FilterBackfillHistoryProgress,
 } from "../../services/telegram.js";
+import { appLogger } from "../../shared/logging.js";
 
 const runningJobIds = new Set<string>();
 const PROGRESS_WRITE_INTERVAL_MS = 750;
@@ -30,7 +31,10 @@ function scheduleBackfillJob(jobId: string): void {
   runningJobIds.add(jobId);
   void runBackfillJob(jobId)
     .catch((error: unknown) => {
-      console.error(`[FilterBackfill] Job ${jobId} stopped unexpectedly`, error);
+      appLogger.error(
+        { err: error, event: "filter_backfill.stopped_unexpectedly", jobId },
+        "Filter backfill job stopped unexpectedly",
+      );
     })
     .finally(() => {
       runningJobIds.delete(jobId);
@@ -43,6 +47,8 @@ async function runBackfillJob(jobId: string): Promise<void> {
     include: { filter: { select: { conditions: true } } },
   });
   if (!job || ["completed", "failed"].includes(job.status)) return;
+
+  const startedAtMs = Date.now();
 
   const startedAt = new Date().toISOString();
   await db.filterBackfillJob.updateMany({
@@ -61,6 +67,15 @@ async function runBackfillJob(jobId: string): Promise<void> {
       updatedAt: startedAt,
     },
   });
+  appLogger.info(
+    {
+      event: "filter_backfill.started",
+      jobId,
+      filterId: job.filterId,
+      mode: job.mode,
+    },
+    "Filter backfill job started",
+  );
 
   let lastProgressWriteAt = 0;
   let lastCompletedChats = -1;
@@ -112,6 +127,16 @@ async function runBackfillJob(jobId: string): Promise<void> {
         updatedAt: completedAt,
       },
     });
+    appLogger.info(
+      {
+        event: "filter_backfill.completed",
+        jobId,
+        filterId: job.filterId,
+        durationMs: Date.now() - startedAtMs,
+        ...result,
+      },
+      "Filter backfill job completed",
+    );
   } catch (error: unknown) {
     const failedAt = new Date().toISOString();
     const message = error instanceof Error && error.message
@@ -128,6 +153,16 @@ async function runBackfillJob(jobId: string): Promise<void> {
         updatedAt: failedAt,
       },
     });
+    appLogger.error(
+      {
+        err: error,
+        event: "filter_backfill.failed",
+        jobId,
+        filterId: job.filterId,
+        durationMs: Date.now() - startedAtMs,
+      },
+      "Filter backfill job failed",
+    );
   }
 }
 

@@ -12,8 +12,9 @@ import {
   type MessageIngestionSource,
 } from "./messageIngestion.js";
 import { getMessageTimestampMs } from "./utils.js";
+import { appLogger } from "../../shared/logging.js";
 
-export type MessageCatchUpReason = Exclude<MessageIngestionSource, "live">;
+export type MessageCatchUpReason = Exclude<MessageIngestionSource, "live" | "live-edit">;
 
 export const MESSAGE_CATCH_UP_OVERLAP_MS = 2 * 60 * 1000;
 export const MESSAGE_CATCH_UP_INITIAL_LOOKBACK_MS = 24 * 60 * 60 * 1000;
@@ -71,6 +72,7 @@ interface RunMessageCatchUpInput {
   client: TelegramClient;
   accountId: string;
   reason: MessageCatchUpReason;
+  runId?: string;
 }
 
 interface ActiveCatchUpContext {
@@ -288,6 +290,7 @@ export async function runMessageCatchUpOnce(
             // 首次部署没有水位时不推送一天内的旧消息，避免通知风暴。
             notify: window.hadCheckpoint,
             emitEvent: false,
+            runId: input.runId,
           });
 
           if (result === "created") savedCount += 1;
@@ -342,16 +345,39 @@ async function drainCatchUpQueue(): Promise<void> {
     const reason = pendingReason;
     pendingReason = null;
     const context = activeContext;
+    const runId = `${reason}:${Date.now().toString(36)}`;
+    const startedAtMs = Date.now();
 
     try {
       const result = await runMessageCatchUpOnce(
-        { client: context.client, accountId: context.accountId, reason },
+        { client: context.client, accountId: context.accountId, reason, runId },
         defaultRunDependencies(context),
       );
-      console.info("[Telegram][catch-up] completed", result);
+      appLogger.info(
+        {
+          event: "telegram.catch_up.completed",
+          runId,
+          accountId: context.accountId,
+          durationMs: Date.now() - startedAtMs,
+          ...result,
+          since: new Date(result.sinceMs).toISOString(),
+          until: new Date(result.untilMs).toISOString(),
+        },
+        "Telegram message catch-up completed",
+      );
     } catch (error) {
       if (error instanceof MessageCatchUpCancelledError) continue;
-      console.error(`[Telegram][catch-up] ${reason} failed:`, error);
+      appLogger.error(
+        {
+          err: error,
+          event: "telegram.catch_up.failed",
+          runId,
+          accountId: context.accountId,
+          reason,
+          durationMs: Date.now() - startedAtMs,
+        },
+        "Telegram message catch-up failed",
+      );
     }
   }
 }

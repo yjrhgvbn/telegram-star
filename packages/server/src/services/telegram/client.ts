@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { dirname } from "path";
 import { appConfig } from "../../config.js";
 import { getTelegramConfigStatus } from "../appConfig.js";
+import { StructuredGramJsLogger } from "./gramJsLogger.js";
 
 // --- 单例状态（模块内私有）---
 
@@ -43,6 +44,7 @@ export function getClientConfig() {
     connectionRetries: 5,
     requestTimeout: 30000,
     autoReconnect: true,
+    baseLogger: new StructuredGramJsLogger(),
   };
 }
 

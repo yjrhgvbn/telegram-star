@@ -7,6 +7,12 @@ services:
     mem_limit: ${TELEGRAM_STAR_MEMORY_LIMIT:-1536m}
     pids_limit: 256
     stop_grace_period: 30s
+    # 每个容器最多保留约 200MB 原始日志；local 驱动会自动轮转并压缩旧文件。
+    logging:
+      driver: local
+      options:
+        max-size: "20m"
+        max-file: "10"
     ports:
       - "3000:3000"
     volumes:
@@ -20,6 +26,8 @@ services:
       - DB_PATH=/app/data/telegram-star.db
       - SESSION_PATH=/app/data/session.txt
       - CORS_ORIGIN=*
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - GRAMJS_LOG_LEVEL=${GRAMJS_LOG_LEVEL:-warn}
       - NODE_OPTIONS=--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE_MB:-768}
 
 volumes:

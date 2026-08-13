@@ -5,6 +5,7 @@ import { existsSync } from "fs";
 import type { ServerResponse } from "http";
 import { resolve } from "path";
 import { appConfig } from "./config.js";
+import { setAppLogger } from "./shared/logging.js";
 import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chats.js";
 import { clientsRoutes } from "./modules/clients/clients.routes.js";
@@ -18,6 +19,54 @@ import { healthRoutes } from "./modules/health/health.routes.js";
 interface CreateAppOptions {
   logger?: FastifyServerOptions["logger"];
   serveStatic?: boolean;
+}
+
+type QuietRequestKind = "client-heartbeat" | "media-thumb" | "message-events";
+
+const SLOW_QUIET_REQUEST_MS = 2_000;
+
+export function sanitizeRequestUrl(url: string): string {
+  const queryIndex = url.indexOf("?");
+  return queryIndex === -1 ? url : `${url.slice(0, queryIndex)}?<redacted>`;
+}
+
+export function getQuietRequestKind(url: string): QuietRequestKind | null {
+  const path = url.split("?", 1)[0];
+  if (/^\/api\/clients\/[^/]+\/heartbeat$/.test(path)) return "client-heartbeat";
+  if (/^\/api\/media\/[^/]+\/[^/]+\/thumb$/.test(path)) return "media-thumb";
+  if (path === "/api/messages/events") return "message-events";
+  return null;
+}
+
+function defaultLoggerOptions(): Exclude<FastifyServerOptions["logger"], boolean | undefined> {
+  return {
+    level: process.env.LOG_LEVEL || "info",
+    redact: {
+      paths: [
+        "req.headers.authorization",
+        "req.headers.cookie",
+        "req.headers.x-api-key",
+        "apiHash",
+        "session",
+        "password",
+        "phone",
+        "code",
+        "appriseUrl",
+      ],
+      censor: "[REDACTED]",
+    },
+    serializers: {
+      req(request) {
+        return {
+          method: request.method,
+          url: sanitizeRequestUrl(request.url),
+          host: request.host,
+          remoteAddress: request.ip,
+          remotePort: request.socket.remotePort,
+        };
+      },
+    },
+  };
 }
 
 export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
@@ -72,7 +121,39 @@ async function registerStaticFrontend(app: FastifyInstance): Promise<void> {
 }
 
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
-  const app = Fastify({ logger: options.logger ?? true });
+  const app = Fastify({
+    logger: options.logger ?? defaultLoggerOptions(),
+    // 高频、低价值请求改由下方 onResponse 按异常或慢请求采样记录。
+    disableRequestLogging: (request) => getQuietRequestKind(request.url) !== null,
+  });
+  setAppLogger(app.log);
+
+  app.addHook("onResponse", async (request, reply) => {
+    const requestKind = getQuietRequestKind(request.url);
+    if (!requestKind || requestKind === "message-events") return;
+
+    const responseTimeMs = Math.round(reply.elapsedTime);
+    const payload = {
+      event: "http.quiet_request.completed",
+      requestKind,
+      method: request.method,
+      url: sanitizeRequestUrl(request.url),
+      statusCode: reply.statusCode,
+      responseTimeMs,
+    };
+
+    if (reply.statusCode >= 500) {
+      request.log.error(payload, "Quiet request failed");
+      return;
+    }
+    if (responseTimeMs >= SLOW_QUIET_REQUEST_MS) {
+      request.log.warn(payload, "Quiet request was slow");
+      return;
+    }
+    if (reply.statusCode >= 400 && !(requestKind === "media-thumb" && reply.statusCode === 404)) {
+      request.log.warn(payload, "Quiet request was rejected");
+    }
+  });
 
   await app.register(cors, {
     origin: appConfig.cors.origin === "*" ? true : appConfig.cors.origin,

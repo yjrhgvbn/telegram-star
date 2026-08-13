@@ -28,6 +28,7 @@ docker compose logs --tail=200 telegram-star
 
 - 容器状态为 running。
 - 日志中无 migration 或启动错误。
+- `docker inspect` 显示日志驱动为 `local`，配置包含 `max-size=20m`、`max-file=10`。
 - `http://localhost:3000` 可访问 Web UI。
 
 ## 3. Web / PWA 验证

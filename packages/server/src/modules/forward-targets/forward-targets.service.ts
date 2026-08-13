@@ -79,6 +79,11 @@ export async function deleteForwardTarget(id: number): Promise<ForwardTargetActi
 
 export async function testForwardTarget(input: ForwardTargetTestInput): Promise<ForwardTargetActionResponse> {
   const notification = buildForwardTargetTestNotification(input);
-  await sendAppriseNotification([input.appriseUrl], notification.title, notification.body);
+  await sendAppriseNotification(
+    [input.appriseUrl],
+    notification.title,
+    notification.body,
+    { source: "target-test" },
+  );
   return forwardTargetActionResponseSchema.parse({ success: true });
 }

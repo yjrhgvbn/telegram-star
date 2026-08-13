@@ -6,6 +6,7 @@
 import { getClient, isClientConnected } from "./telegram/client.js";
 import { getDialogEntityMap } from "./telegram/dialogEntityCache.js";
 import { appConfig } from "../config.js";
+import { appLogger } from "../shared/logging.js";
 import {
   MAX_DOWNLOADABLE_THUMBNAIL_BYTES,
   MediaLruCache,
@@ -62,7 +63,10 @@ export async function getThumbBuffer(
   } catch (err: any) {
     const reason = err?.message || String(err);
     if (reason !== "download_thumb_timeout") {
-      console.warn("[MediaCache] Thumbnail request rejected:", reason);
+      appLogger.warn(
+        { event: "media.thumbnail.request_rejected", chatId, messageId, reason },
+        "Thumbnail request rejected",
+      );
     }
     return null;
   }
@@ -95,7 +99,15 @@ async function downloadThumb(
       return { buffer, mimeType };
     } catch (err: any) {
       // FLOOD_WAIT 等 Telegram 错误不应导致服务崩溃。
-      console.warn("[MediaCache] Failed to download thumb:", err?.message || err);
+      appLogger.warn(
+        {
+          event: "media.thumbnail.download_failed",
+          chatId,
+          messageId,
+          reason: err?.message || String(err),
+        },
+        "Failed to download thumbnail",
+      );
       return null;
     }
   });
@@ -118,14 +130,24 @@ async function downloadWithFallbackThumb(
         typeof buffer !== "string" &&
         buffer.byteLength > MAX_DOWNLOADABLE_THUMBNAIL_BYTES
       ) {
-        console.warn("[MediaCache] Rejected oversized thumbnail:", buffer.byteLength);
+        appLogger.warn(
+          {
+            event: "media.thumbnail.oversized",
+            sizeBytes: buffer.byteLength,
+            maxSizeBytes: MAX_DOWNLOADABLE_THUMBNAIL_BYTES,
+          },
+          "Rejected oversized thumbnail",
+        );
         continue;
       }
       if (buffer) return buffer;
     } catch (err: any) {
-      console.warn(
-        "[MediaCache] Thumbnail unavailable, trying lower quality:",
-        err?.message || err,
+      appLogger.warn(
+        {
+          event: "media.thumbnail.variant_unavailable",
+          reason: err?.message || String(err),
+        },
+        "Thumbnail variant unavailable; trying lower quality",
       );
     }
   }

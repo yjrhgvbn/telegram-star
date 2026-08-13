@@ -17,12 +17,12 @@ export function isDuplicateMessageError(error: unknown): boolean {
  */
 export async function createMessageIfAbsent(
   data: Prisma.MessageCreateArgs["data"],
-): Promise<boolean> {
+): Promise<number | null> {
   try {
-    await db.message.create({ data });
-    return true;
+    const created = await db.message.create({ data, select: { id: true } });
+    return created.id;
   } catch (error) {
-    if (isDuplicateMessageError(error)) return false;
+    if (isDuplicateMessageError(error)) return null;
     throw error;
   }
 }

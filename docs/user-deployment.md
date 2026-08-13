@@ -105,6 +105,8 @@ cp .env.example .env
 - `DATABASE_URL` / `DB_PATH`：保留默认即可，Docker 中指向 `/app/data/telegram-star.db`
 - `TELEGRAM_STAR_MEMORY_LIMIT`：容器内存硬上限，默认 `1536m`；异常时只重启容器，避免拖死宿主机
 - `NODE_MAX_OLD_SPACE_SIZE_MB`：Node.js V8 堆上限，默认 `768`；应低于容器内存上限
+- `LOG_LEVEL`：应用结构化日志等级，生产默认 `info`
+- `GRAMJS_LOG_LEVEL`：Telegram 底层库日志等级，默认 `warn`；临时诊断连接问题时可改为 `info`
 
 通知转发配置通过 Web UI 的「通知设置」页面管理，底层采用 Apprise，配置保存在 SQLite 数据库中。每个转发通道可独立设置标题/正文模板，并可使用简洁、详情、Markdown 三种内置格式预设。
 
@@ -170,6 +172,33 @@ docker compose up -d --build
 - SQLite 中包含 Web UI 保存的 Telegram API 配置，请按敏感数据处理
 
 可在维护窗口执行卷级备份。
+
+### 6.1 日志保留与排查
+
+应用日志统一输出为单行 JSON，并由 Docker Compose 的 `local` 驱动保存。每个容器配置为 `20m × 10`，最多保留约 200 MB 原始日志，旧文件自动轮转和压缩。保留时间取决于请求量；按当前单机流量并降低心跳、缩略图成功日志后，通常可覆盖 30–60 天。
+
+注意：日志按容量而不是按天数保留；重新创建容器时，旧容器日志不会继续挂载到新容器。需要跨部署长期保存时，应接入集中式日志平台。
+
+常用命令：
+
+```bash
+# 持续查看 warn/error
+docker compose logs -f telegram-star | grep -E '"level":(40|50)|"level":"(warn|error)"'
+
+# 按数据库消息行 ID 排查，例如 /messages/12
+docker compose logs telegram-star | grep '"rowId":12'
+
+# 已知 Telegram 会话和消息 ID 时，按稳定关联键排查
+docker compose logs telegram-star | grep '"messageKey":"1308315775:17377"'
+
+# 查看回补任务和消息延迟
+docker compose logs telegram-star | grep -E 'telegram\.catch_up|"lagMs"'
+
+# 确认容器实际使用了轮转日志驱动
+docker inspect --format '{{.HostConfig.LogConfig.Type}} {{json .HostConfig.LogConfig.Config}}' telegram-star
+```
+
+消息入库事件 `telegram.message.saved` 包含 `messageKey`、`rowId`、`chatId`、`telegramMessageId`、`source`、`telegramDate`、`editDate` 和 `lagMs`。`lagMs` 超过 60 秒记录为 `warn`，超过 5 分钟记录为 `error`。日志不会记录消息正文、Apprise URL、Telegram Session、验证码或请求查询参数。
 
 ## 7. 安全建议
 

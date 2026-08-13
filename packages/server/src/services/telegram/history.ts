@@ -532,7 +532,7 @@ export async function backfillFilterHistory(options: {
         matchedCount += 1;
         const { senderName, senderId } = getSenderSummary(item.sender);
         const mediaInfo = extractMediaInfo(item);
-        const created = await createMessageIfAbsent({
+        const rowId = await createMessageIfAbsent({
           telegramMessageId: item.id,
           chatId,
           chatTitle,
@@ -556,7 +556,7 @@ export async function backfillFilterHistory(options: {
           mediaThumbBase64: mediaInfo?.mediaThumbBase64,
           mediaExtra: mediaInfo?.mediaExtra,
         });
-        if (created) savedCount += 1;
+        if (rowId !== null) savedCount += 1;
         else skippedExistingCount += 1;
       }
 

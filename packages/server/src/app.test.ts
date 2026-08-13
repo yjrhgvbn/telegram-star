@@ -1,6 +1,11 @@
 import type { HealthStatus } from "@telegram-star/shared/contracts/health";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createApp, getStaticCacheControl } from "./app.js";
+import {
+  createApp,
+  getQuietRequestKind,
+  getStaticCacheControl,
+  sanitizeRequestUrl,
+} from "./app.js";
 import * as healthService from "./modules/health/health.service.js";
 
 vi.mock("./modules/health/health.service.js", () => ({
@@ -46,5 +51,15 @@ describe("app", () => {
       "public, max-age=31536000, immutable",
     );
     expect(getStaticCacheControl("/app/packages/web/dist/favicon.ico")).toBe("no-cache");
+  });
+
+  it("classifies noisy request paths and removes query values from logs", () => {
+    expect(getQuietRequestKind("/api/clients/device-1/heartbeat")).toBe("client-heartbeat");
+    expect(getQuietRequestKind("/api/media/chat-1/42/thumb?quality=2")).toBe("media-thumb");
+    expect(getQuietRequestKind("/api/messages/events")).toBe("message-events");
+    expect(getQuietRequestKind("/api/messages?search=secret")).toBeNull();
+    expect(sanitizeRequestUrl("/api/messages?search=secret&filterId=1")).toBe(
+      "/api/messages?<redacted>",
+    );
   });
 });

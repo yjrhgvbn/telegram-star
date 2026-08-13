@@ -15,6 +15,7 @@ export function openMessageEventStream(
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
+  const connectedAtMs = Date.now();
   const origin = request.headers.origin || appConfig.cors.origin;
   reply.raw.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -34,6 +35,11 @@ export function openMessageEventStream(
 
   const unsubscribe = subscribeToMessageEvents(send);
 
+  request.log.info(
+    { event: "sse.message_events.connected" },
+    "Message event stream connected",
+  );
+
   const keepAlive = setInterval(() => {
     if (!reply.raw.writableEnded) {
       reply.raw.write(": keep-alive\n\n");
@@ -45,6 +51,13 @@ export function openMessageEventStream(
   reply.raw.on("close", () => {
     clearInterval(keepAlive);
     unsubscribe();
+    request.log.info(
+      {
+        event: "sse.message_events.disconnected",
+        durationMs: Date.now() - connectedAtMs,
+      },
+      "Message event stream disconnected",
+    );
   });
 
   // Fastify 需要一个不结束的 Promise 来维持 SSE 连接。

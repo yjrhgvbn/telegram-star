@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildForwardNotification } from "./notifier.js";
+import { buildForwardNotification, getSafeProcessError } from "./notifier.js";
 
 const payload = {
   filterId: 1,
@@ -34,5 +34,25 @@ describe("notifier templates", () => {
     expect(notification.title).toContain("命中规则: 规则");
     expect(notification.body).toContain("【群组】: 频道");
     expect(notification.body).toContain("链接: https://t.me/c/1/2");
+  });
+
+  it("keeps child-process command arguments out of log metadata", () => {
+    const error = Object.assign(
+      new Error("Command failed: apprise -t secret test://token"),
+      {
+        code: 1,
+        cmd: "apprise -t secret test://token",
+        stderr: "test://token",
+      },
+    );
+
+    expect(getSafeProcessError(error)).toEqual({
+      name: "Error",
+      code: 1,
+      signal: undefined,
+      killed: undefined,
+    });
+    expect(JSON.stringify(getSafeProcessError(error))).not.toContain("secret");
+    expect(JSON.stringify(getSafeProcessError(error))).not.toContain("token");
   });
 });

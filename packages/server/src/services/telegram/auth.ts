@@ -16,6 +16,7 @@ import {
 } from "./client.js";
 import { startMessageListener } from "./listener.js";
 import { activateMessageCatchUp, deactivateMessageCatchUp } from "./messageCatchUp.js";
+import { appLogger } from "../../shared/logging.js";
 
 export { getConnectionStatusWithConfig as getConnectionStatus } from "./client.js";
 
@@ -45,12 +46,18 @@ export async function initClient(): Promise<void> {
       const me = await client.getMe();
       if (me) {
         setConnected(true);
-        console.log(`[Telegram] Reconnected as ${(me as any).firstName || (me as any).username}`);
+        appLogger.info(
+          { event: "telegram.client.reconnected", accountId: (me as any).id?.toString?.() },
+          "Telegram client reconnected",
+        );
         const accountId = (me as any).id?.toString?.();
         if (accountId) activateMessageCatchUp(client, accountId);
       }
-    } catch {
-      console.log("[Telegram] Saved session invalid, need to re-login");
+    } catch (error) {
+      appLogger.warn(
+        { err: error, event: "telegram.session.invalid" },
+        "Saved Telegram session is invalid; login is required",
+      );
       setConnected(false);
     }
   }
@@ -133,7 +140,10 @@ export async function loginWithCode(
       phoneCode: async () => code,
       password: async () => password || "",
       onError: (err: Error) => {
-        console.error("[Telegram] Login error:", err.message);
+        appLogger.error(
+          { err, event: "telegram.login.failed" },
+          "Telegram login failed",
+        );
       },
     });
 
@@ -142,7 +152,10 @@ export async function loginWithCode(
     setConnected(true);
 
     const me = await client.getMe();
-    console.log(`[Telegram] Logged in as ${(me as any).firstName || (me as any).username}`);
+    appLogger.info(
+      { event: "telegram.login.succeeded", accountId: (me as any).id?.toString?.() },
+      "Telegram login succeeded",
+    );
 
     const accountId = (me as any).id?.toString?.();
     if (accountId) activateMessageCatchUp(client, accountId);

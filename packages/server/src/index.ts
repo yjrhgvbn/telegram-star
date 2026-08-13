@@ -9,9 +9,17 @@ async function start() {
   // Start server
   try {
     await app.listen({ port: appConfig.port, host: appConfig.host });
-    console.log(`[Server] Running at http://${appConfig.host}:${appConfig.port}`);
+    app.log.info(
+      {
+        event: "server.started",
+        host: appConfig.host,
+        port: appConfig.port,
+        environment: process.env.NODE_ENV || "development",
+      },
+      "Server started",
+    );
   } catch (err) {
-    app.log.error(err);
+    app.log.error({ err, event: "server.start_failed" }, "Server failed to start");
     process.exit(1);
   }
 
@@ -23,10 +31,16 @@ async function start() {
     try {
       await initClient();
     } catch (err) {
-      console.log("[Telegram] Failed to initialize client, will wait for login via UI");
+      app.log.warn(
+        { err, event: "telegram.client.initialize_failed" },
+        "Telegram client initialization failed; waiting for UI login",
+      );
     }
   } else {
-    console.log("[Telegram] API credentials not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH.");
+    app.log.info(
+      { event: "telegram.credentials.missing" },
+      "Telegram API credentials are not configured",
+    );
   }
 }
 

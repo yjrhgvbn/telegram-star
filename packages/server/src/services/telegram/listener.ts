@@ -8,12 +8,17 @@
  *    通过拉取原文消息的 reactions 字段补偿可能丢失的实时事件。
  */
 import { NewMessage, type NewMessageEvent, Raw } from "telegram/events/index.js";
+import {
+  EditedMessage,
+  type EditedMessageEvent,
+} from "telegram/events/EditedMessage.js";
 import { UpdateConnectionState } from "telegram/network/index.js";
 import { db } from "../../db/index.js";
 import { getClient, isClientConnected, setConnected } from "./client.js";
 import { buildDialogEntityMap } from "./utils.js";
 import { emitMessageEvent } from "../messageEvents.js";
 import { writeReadSyncLog } from "../readSyncLog.js";
+import { appLogger } from "../../shared/logging.js";
 import { extractReactionMessageRef, hasUserReactionSignal } from "./readReactionSignal.js";
 import { ingestTelegramMessage } from "./messageIngestion.js";
 import {
@@ -23,6 +28,14 @@ import {
 
 const listenerStartedClients = new WeakSet<object>();
 const connectionStateByClient = new WeakMap<object, number>();
+const prolongedDisconnectTimers = new WeakMap<object, NodeJS.Timeout>();
+
+function connectionStateName(state: number | undefined): string {
+  if (state === UpdateConnectionState.connected) return "connected";
+  if (state === UpdateConnectionState.disconnected) return "disconnected";
+  if (state === UpdateConnectionState.broken) return "broken";
+  return "unknown";
+}
 
 // --- 实时链路：Raw 事件 ---
 
@@ -50,12 +63,17 @@ async function handleInteractionUpdate(update: any): Promise<void> {
   await db.message.update({ where: { id: row.id }, data: { isRead: true } });
   emitMessageEvent({ type: "read", messageIds: [row.id] });
 
-  console.info("[ReadSync][realtime] marked as read", {
-    rowId: row.id,
-    chatId: ref.chatId,
-    telegramMessageId: ref.telegramMessageId,
-    reason: "reaction",
-  });
+  appLogger.info(
+    {
+      event: "read_sync.realtime.marked",
+      messageKey: `${ref.chatId}:${ref.telegramMessageId}`,
+      rowId: row.id,
+      chatId: ref.chatId,
+      telegramMessageId: ref.telegramMessageId,
+      reason: "reaction",
+    },
+    "Message marked as read from a realtime reaction",
+  );
   await writeReadSyncLog({
     level: "info",
     source: "实时同步",
@@ -130,14 +148,18 @@ export async function syncReadByTelegramInteractions(
 
   emitMessageEvent({ type: "read", messageIds: Array.from(shouldMarkReadIds) });
 
-  console.info("[ReadSync][fallback] marked rows as read", {
-    inputCount: messages.length,
-    unreadCount: unread.length,
-    scannedCount,
-    markedCount: shouldMarkReadIds.size,
-    markedIds: Array.from(shouldMarkReadIds),
-    reason: "reaction-signal",
-  });
+  appLogger.info(
+    {
+      event: "read_sync.fallback.marked",
+      inputCount: messages.length,
+      unreadCount: unread.length,
+      scannedCount,
+      markedCount: shouldMarkReadIds.size,
+      markedIds: Array.from(shouldMarkReadIds),
+      reason: "reaction-signal",
+    },
+    "Messages marked as read by fallback sync",
+  );
   await writeReadSyncLog({
     level: "info",
     source: "兜底同步",
@@ -156,10 +178,18 @@ export async function syncReadByTelegramInteractions(
   return shouldMarkReadIds;
 }
 
-// --- 新消息处理 ---
+// --- 新消息与编辑消息处理 ---
 
-/** 处理入站新消息：逐一匹配启用的过滤器，首次命中后入库并触发通知推送 */
-async function handleNewMessage(event: NewMessageEvent): Promise<void> {
+/**
+ * 统一处理新消息和编辑消息。
+ *
+ * 部分频道会先发布占位内容，再通过编辑补齐最终 caption。编辑事件必须重新执行
+ * 过滤匹配；数据库组合唯一键负责避免与新消息或回补链路并发时重复入库和通知。
+ */
+async function handleIncomingMessage(
+  event: NewMessageEvent | EditedMessageEvent,
+  source: "live" | "live-edit",
+): Promise<void> {
   const message = event.message;
   if (!message) return;
 
@@ -177,7 +207,7 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
     message,
     chat,
     activeFilters,
-    source: "live",
+    source,
     notify: true,
     emitEvent: true,
   });
@@ -186,8 +216,9 @@ async function handleNewMessage(event: NewMessageEvent): Promise<void> {
 // --- 监听器启动 ---
 
 /**
- * 启动两个持久事件处理器：
+ * 启动持久事件处理器：
  * - NewMessage：实时捕获新消息，匹配过滤器后入库并推送通知。
+ * - EditedMessage：重新匹配编辑后的最终内容，覆盖先发占位内容的频道。
  * - Raw：订阅所有原始更新，过滤 UpdateMessageReactions 后实时标记已读。
  *
  * 可在连接前调用；函数会按 client 实例防止重复注册。
@@ -199,17 +230,34 @@ export function startMessageListener(): void {
 
   client.addEventHandler(async (event: NewMessageEvent) => {
     try {
-      await handleNewMessage(event);
+      await handleIncomingMessage(event, "live");
     } catch (err) {
-      console.error("[Telegram] Error handling message:", err);
+      appLogger.error(
+        { err, event: "telegram.message.handle_failed", source: "live" },
+        "Failed to handle Telegram message",
+      );
     }
   }, new NewMessage({}));
+
+  client.addEventHandler(async (event: EditedMessageEvent) => {
+    try {
+      await handleIncomingMessage(event, "live-edit");
+    } catch (err) {
+      appLogger.error(
+        { err, event: "telegram.message.handle_failed", source: "live-edit" },
+        "Failed to handle edited Telegram message",
+      );
+    }
+  }, new EditedMessage({}));
 
   client.addEventHandler(async (update: any) => {
     try {
       await handleInteractionUpdate(update);
     } catch (err) {
-      console.error("[Telegram] Error handling interaction update:", err);
+      appLogger.error(
+        { err, event: "telegram.interaction.handle_failed" },
+        "Failed to handle Telegram interaction update",
+      );
     }
   }, new Raw({}));
 
@@ -220,6 +268,45 @@ export function startMessageListener(): void {
     const connected = update.state === UpdateConnectionState.connected;
     setConnected(connected);
 
+    if (previousState !== update.state) {
+      const payload = {
+        event: "telegram.connection.state_changed",
+        previousState: connectionStateName(previousState),
+        state: connectionStateName(update.state),
+      };
+      if (connected) {
+        appLogger.info(payload, "Telegram connection established");
+      } else {
+        appLogger.warn(payload, "Telegram connection lost");
+      }
+    }
+
+    const existingTimer = prolongedDisconnectTimers.get(client);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      prolongedDisconnectTimers.delete(client);
+    }
+    if (!connected) {
+      const timer = setTimeout(() => {
+        prolongedDisconnectTimers.delete(client);
+        if (
+          getClient() === client &&
+          connectionStateByClient.get(client) !== UpdateConnectionState.connected
+        ) {
+          appLogger.error(
+            {
+              event: "telegram.connection.prolonged_disconnect",
+              state: connectionStateName(connectionStateByClient.get(client)),
+              disconnectedForMs: 30_000,
+            },
+            "Telegram connection has been unavailable for 30 seconds",
+          );
+        }
+      }, 30_000);
+      timer.unref?.();
+      prolongedDisconnectTimers.set(client, timer);
+    }
+
     if (
       connected &&
       previousState !== UpdateConnectionState.connected &&
@@ -229,5 +316,8 @@ export function startMessageListener(): void {
     }
   }, new Raw({ types: [UpdateConnectionState] }));
 
-  console.log("[Telegram] Message listener started");
+  appLogger.info(
+    { event: "telegram.listener.started", handlers: ["new-message", "edited-message", "raw"] },
+    "Telegram message listener started",
+  );
 }

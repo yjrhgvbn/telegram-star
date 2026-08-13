@@ -1,5 +1,6 @@
 import { db } from "../db/index.js";
 import type { ReadSyncLogLevel } from "@telegram-star/shared/contracts/messages";
+import { appLogger } from "../shared/logging.js";
 
 const READ_SYNC_LOG_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
@@ -50,7 +51,10 @@ export async function writeReadSyncLog(input: ReadSyncLogInput): Promise<void> {
     });
   } catch (error) {
     // 记录失败不能影响主业务链路
-    console.error("[ReadSync][log] failed to write db log", error);
+    appLogger.error(
+      { err: error, event: "read_sync.audit_log.write_failed" },
+      "Failed to write read-sync audit log",
+    );
   }
 }
 
