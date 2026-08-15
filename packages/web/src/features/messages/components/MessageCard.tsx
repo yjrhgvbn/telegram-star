@@ -7,6 +7,7 @@ import { useClientExternalLink } from "@/shared/runtime/ClientShellBridgeProvide
 import { MediaPreview } from "./MediaPreview";
 import { MessageContent } from "./MessageContent";
 import type { Message } from "@/types";
+import "./MessageCard.css";
 
 interface Props {
   message: Message;
@@ -28,12 +29,9 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
   return (
     <Card
       size="sm"
-      className={cn(
-        "relative min-w-0 overflow-hidden bg-card/82 transition-colors hover:bg-card",
-        !message.isRead && "border-primary/28 bg-card",
-        message.isRead && "text-foreground/88",
-        isAnchor && "border-primary shadow-[0_0_0_2px_color-mix(in_oklab,var(--primary)_12%,transparent)]",
-      )}
+      data-read-state={message.isRead ? "read" : "unread"}
+      data-anchor={isAnchor ? "true" : undefined}
+      className="message-card relative min-w-0 overflow-hidden"
     >
       <CardHeader className="min-w-0 px-3 pb-0">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
@@ -48,7 +46,7 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <CardTitle
-                  className="min-w-0 flex-1 truncate text-sm leading-tight"
+                  className="message-card__title min-w-0 flex-1 truncate text-sm leading-tight"
                   title={message.chatTitle}
                 >
                   {message.chatTitle}
@@ -66,7 +64,7 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
                 )}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                <span className="max-w-48 truncate font-medium text-foreground/72">{message.senderName}</span>
+                <span className="message-card__sender max-w-48 truncate font-medium">{message.senderName}</span>
                 <span className="inline-flex items-center gap-1" title={exactTime}>
                   <Clock3 className="size-3" />
                   {timeAgo}
@@ -90,7 +88,7 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
 
       <CardContent className="flex min-w-0 flex-col gap-2 px-3 pb-3">
         {content.trim().length > 0 && (
-          <p className="whitespace-pre-wrap break-words text-sm leading-5.5 text-foreground/90">
+          <p className="message-card__body whitespace-pre-wrap break-words text-sm leading-5.5">
             <MessageContent
               content={contentPreview}
               links={message.contentLinks ?? []}

@@ -1,0 +1,59 @@
+.message-card {
+  border-color: color-mix(in oklab, var(--border) 76%, transparent);
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease,
+    outline-color 180ms ease;
+}
+
+.message-card[data-read-state="unread"] {
+  background: color-mix(in oklab, var(--primary) 6%, var(--card));
+  color: var(--foreground);
+}
+
+.message-card[data-read-state="unread"]:hover {
+  background: color-mix(in oklab, var(--primary) 8%, var(--card));
+}
+
+.message-card[data-read-state="read"] {
+  background: color-mix(in oklab, var(--card) 90%, var(--muted));
+  color: color-mix(in oklab, var(--foreground) 86%, transparent);
+}
+
+.message-card[data-read-state="read"]:hover {
+  background: color-mix(in oklab, var(--card) 96%, var(--muted));
+}
+
+.message-card[data-read-state="unread"] .message-card__title {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.message-card[data-read-state="read"] .message-card__title {
+  color: color-mix(in oklab, var(--foreground) 76%, transparent);
+}
+
+.message-card[data-read-state="unread"] .message-card__sender {
+  color: color-mix(in oklab, var(--foreground) 78%, transparent);
+}
+
+.message-card[data-read-state="read"] .message-card__sender {
+  color: color-mix(in oklab, var(--foreground) 62%, transparent);
+}
+
+.message-card[data-read-state="unread"] .message-card__body {
+  color: color-mix(in oklab, var(--foreground) 94%, transparent);
+}
+
+.message-card[data-read-state="read"] .message-card__body {
+  color: color-mix(in oklab, var(--foreground) 76%, transparent);
+}
+
+/* Keep the automatic-position anchor distinct from the blue unread treatment. */
+.message-card[data-anchor="true"] {
+  outline-color: color-mix(in oklab, var(--foreground) 24%, transparent);
+}

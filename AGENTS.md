@@ -34,6 +34,9 @@
 - 代码改动原则：
   - 最小改动优先
   - 保持 API 兼容，除非用户明确要求 breaking change
+- 前端样式组织：
+  - [packages/web/src/index.css](packages/web/src/index.css) 仅放全局设计 token、基础元素样式和跨页面共享规则
+  - 页面、功能或组件专属样式应放在对应源码附近（如 `Component.css`），并由使用它的组件显式引入，避免继续堆积到 `index.css`
 
 ## 4. 推荐执行顺序
 
