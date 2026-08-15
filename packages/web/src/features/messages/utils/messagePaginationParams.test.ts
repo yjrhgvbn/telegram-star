@@ -32,15 +32,22 @@ describe("messagePaginationParams", () => {
     });
   });
 
-  it("only enables auto locate for the unfiltered all-messages view", () => {
-    expect(shouldAutoLocateMessages({ limit: 20, autoLocateEnabled: true })).toBe(true);
+  it("only enables auto locate for a concrete filter without read or search constraints", () => {
     expect(shouldAutoLocateMessages({
       limit: 20,
+      filterId: 12,
+      autoLocateEnabled: true,
+    })).toBe(true);
+    expect(shouldAutoLocateMessages({ limit: 20, autoLocateEnabled: true })).toBe(false);
+    expect(shouldAutoLocateMessages({
+      limit: 20,
+      filterId: 12,
       autoLocateEnabled: true,
       isRead: false,
     })).toBe(false);
     expect(shouldAutoLocateMessages({
       limit: 20,
+      filterId: 12,
       autoLocateEnabled: true,
       search: "night",
     })).toBe(false);

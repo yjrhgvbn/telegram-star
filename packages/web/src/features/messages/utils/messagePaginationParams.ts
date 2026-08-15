@@ -20,5 +20,10 @@ export function buildMessageListBaseParams(
 }
 
 export function shouldAutoLocateMessages(input: MessagePaginationParamsInput) {
-  return Boolean(input.autoLocateEnabled && input.isRead === undefined && !input.search);
+  return Boolean(
+    input.autoLocateEnabled
+    && input.filterId !== undefined
+    && input.isRead === undefined
+    && !input.search,
+  );
 }

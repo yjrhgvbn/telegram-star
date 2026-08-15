@@ -93,10 +93,10 @@ export async function findMostRecentReadMessage(where: Prisma.MessageWhereInput)
   });
 }
 
-export async function findNewestUnreadMessage(where: Prisma.MessageWhereInput) {
+export async function findOldestUnreadMessage(where: Prisma.MessageWhereInput) {
   return db.message.findFirst({
     where: { ...where, isRead: false },
-    orderBy: MESSAGE_ORDER_DESC,
+    orderBy: MESSAGE_ORDER_ASC,
   });
 }
 

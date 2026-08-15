@@ -34,8 +34,9 @@ export function MessagesFeature() {
   const selectedFilter = filters.find((item) => String(item.id) === selectedFilterId) ?? null;
   const currentTitle = selectedFilterId === "" ? "全部消息" : (selectedFilter?.name ?? "过滤消息");
 
-  const selectedFilterAutoLocate = filters.find((item) => String(item.id) === selectedFilterId)?.autoLocateUnreadNearRead;
-  const autoLocateUnreadNearRead = selectedFilterId === "" ? true : (selectedFilterAutoLocate ?? true);
+  // “全部消息”没有独立的定位配置，默认从最新消息进入；仅具体过滤器按自身配置定位未读。
+  const autoLocateUnreadNearRead = selectedFilterId !== ""
+    && (selectedFilter?.autoLocateUnreadNearRead ?? true);
   const apiReadFilter = readFilter === "all" ? undefined : readFilter === "read";
   const apiFilterId = selectedFilterId ? Number(selectedFilterId) : undefined;
 

@@ -22,7 +22,7 @@ import {
   findMessageReadState,
   findMostRecentReadMessage,
   findNewestMessage,
-  findNewestUnreadMessage,
+  findOldestUnreadMessage,
   listInitialMessages,
   listMessagesAfterCursor,
   listMessagesAroundCursor,
@@ -208,12 +208,12 @@ async function findAutoLocateAnchorId(where: Prisma.MessageWhereInput): Promise<
   const mostRecentRead = await findMostRecentReadMessage(where);
 
   // 自动定位的目标是“接近用户上次处理进度”：
-  // 1. 没有已读记录时跳到最新未读；
+  // 1. 没有已读记录时从最老未读开始；
   // 2. 有已读记录时优先跳到其后的第一条未读；
   // 3. 全部已读时退回最新消息，避免空白列表。
   if (!mostRecentRead) {
-    const newestUnread = await findNewestUnreadMessage(where);
-    return newestUnread?.id ?? null;
+    const oldestUnread = await findOldestUnreadMessage(where);
+    return oldestUnread?.id ?? null;
   }
 
   const newerUnread = await findFirstUnreadAfterCursor(where, mostRecentRead);
