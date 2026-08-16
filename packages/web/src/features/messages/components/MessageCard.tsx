@@ -13,7 +13,7 @@ interface Props {
   message: Message;
   onToggleRead: (id: number) => void;
   searchQuery?: string;
-  /** 是否为自动定位锚点，高亮显示边框以提示用户当前位置 */
+  /** 是否为自动定位锚点，展示时短暂高亮以提示用户当前位置 */
   isAnchor?: boolean;
 }
 

@@ -1,31 +1,34 @@
 .message-card {
+  --message-card-resting-background: var(--card);
+
   border-color: color-mix(in oklab, var(--border) 76%, transparent);
-  outline: 2px solid transparent;
-  outline-offset: 1px;
   transition:
     background-color 180ms ease,
     border-color 180ms ease,
     box-shadow 180ms ease,
-    color 180ms ease,
-    outline-color 180ms ease;
+    color 180ms ease;
 }
 
 .message-card[data-read-state="unread"] {
-  background: color-mix(in oklab, var(--primary) 6%, var(--card));
+  --message-card-resting-background: color-mix(in oklab, var(--primary) 6%, var(--card));
+
+  background-color: var(--message-card-resting-background);
   color: var(--foreground);
 }
 
 .message-card[data-read-state="unread"]:hover {
-  background: color-mix(in oklab, var(--primary) 8%, var(--card));
+  background-color: color-mix(in oklab, var(--primary) 8%, var(--card));
 }
 
 .message-card[data-read-state="read"] {
-  background: color-mix(in oklab, var(--card) 90%, var(--muted));
+  --message-card-resting-background: color-mix(in oklab, var(--card) 90%, var(--muted));
+
+  background-color: var(--message-card-resting-background);
   color: color-mix(in oklab, var(--foreground) 86%, transparent);
 }
 
 .message-card[data-read-state="read"]:hover {
-  background: color-mix(in oklab, var(--card) 96%, var(--muted));
+  background-color: color-mix(in oklab, var(--card) 96%, var(--muted));
 }
 
 .message-card[data-read-state="unread"] .message-card__title {
@@ -53,7 +56,24 @@
   color: color-mix(in oklab, var(--foreground) 76%, transparent);
 }
 
-/* Keep the automatic-position anchor distinct from the blue unread treatment. */
+/* Briefly reveal the automatic-position target, then return it to its normal read state. */
 .message-card[data-anchor="true"] {
-  outline-color: color-mix(in oklab, var(--foreground) 24%, transparent);
+  animation: message-card-anchor-highlight 1s ease-out;
+}
+
+@keyframes message-card-anchor-highlight {
+  0%,
+  18% {
+    background-color: color-mix(in oklab, var(--primary) 14%, var(--card));
+  }
+
+  100% {
+    background-color: var(--message-card-resting-background);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-card[data-anchor="true"] {
+    animation-duration: 600ms;
+  }
 }
