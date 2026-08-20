@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { messageContentLinksSchema } from "./messages.js";
 
-export const filterConditionTypeSchema = z.enum(["keyword", "chat", "regex"]);
+export const filterConditionTypeSchema = z.enum(["keyword", "chat", "regex", "script"]);
+export const filterConditionEffectSchema = z.enum(["require", "exclude"]);
 
 export function isValidFilterRegexPattern(pattern: string): boolean {
   try {
@@ -15,9 +16,36 @@ export function isValidFilterRegexPattern(pattern: string): boolean {
 export const filterConditionSchema = z
   .object({
     type: filterConditionTypeSchema,
+    effect: filterConditionEffectSchema.optional(),
     values: z.array(z.string().trim().min(1)).min(1),
   })
   .superRefine((condition, ctx) => {
+    if (condition.type === "chat" && condition.effect === "exclude") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["effect"],
+        message: "chat conditions cannot be excluded",
+      });
+    }
+
+    if (condition.type === "script") {
+      if (condition.values.length !== 1) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["values"],
+          message: "script conditions must contain exactly one source value",
+        });
+      }
+
+      if ((condition.values[0]?.length ?? 0) > 20_000) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["values", 0],
+          message: "script source must not exceed 20000 characters",
+        });
+      }
+    }
+
     if (condition.type !== "regex") return;
 
     condition.values.forEach((value, index) => {
@@ -208,6 +236,7 @@ export const filterBackfillJobIdParamSchema = filterIdParamSchema.extend({
 });
 
 export type FilterConditionType = z.infer<typeof filterConditionTypeSchema>;
+export type FilterConditionEffect = z.infer<typeof filterConditionEffectSchema>;
 export type FilterCondition = z.infer<typeof filterConditionSchema>;
 export type Filter = z.infer<typeof filterSchema>;
 export type FilterCreateInput = z.infer<typeof filterCreateInputSchema>;

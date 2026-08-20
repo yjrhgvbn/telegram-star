@@ -1,7 +1,9 @@
-import { Trash2, X } from "lucide-react";
+import { ArrowUpDown, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -10,13 +12,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { FilterConditionType, JoinedChat } from "@/types";
+import type {
+  FilterConditionType,
+  JoinedChat,
+} from "@/types";
 import { conditionTypeOptions, type DraftCondition } from "../types";
 import { JoinedChatPicker } from "./JoinedChatPicker";
 
-const contentConditionTypeOptions = conditionTypeOptions.filter(
-  (option) => option.value !== "chat",
-);
+type ContentConditionType = Exclude<FilterConditionType, "chat">;
+
+const contentConditionTypeOptions: Array<{
+  value: ContentConditionType;
+  label: string;
+}> = [
+  { value: "keyword", label: "关键词" },
+  { value: "regex", label: "正则表达式" },
+  { value: "script", label: "JavaScript" },
+];
+
+const scriptPlaceholder = `return message.content.includes("红包")
+  && /(?:^|\\D)300(?:\\D|$)/.test(message.content);`;
 
 interface ConditionEditorProps {
   condition: DraftCondition;
@@ -45,19 +60,86 @@ export function ConditionEditor({
   const inputLabel = condition.type === "regex" ? "正则表达式" : "关键词";
   const inputPlaceholder =
     condition.type === "regex" ? "输入正则后按 Enter" : "输入后按 Enter";
+  const selectedContentType = condition.type === "chat"
+    ? null
+    : contentConditionTypeOptions.find((option) => option.value === condition.type) ??
+      contentConditionTypeOptions[0];
   const description = condition.type === "chat" && condition.values.length === 0
     ? "未指定会话时，匹配全部会话"
-    : `${definition.description}（OR）`;
+    : condition.type === "script"
+      ? condition.effect === "exclude"
+        ? "代码同步返回 true 时排除该消息"
+        : "代码同步返回 true 时命中该条件"
+      : condition.effect === "exclude"
+        ? `${definition.description}；任一值出现就排除（NOT）`
+        : `${definition.description}（OR）`;
 
-  const handleTypeChange = (nextType: FilterConditionType) => {
-    if (nextType === "chat" || nextType === condition.type) return;
-    onUpdate(condition.id, (current) => ({ ...current, type: nextType }));
+  const handleTypeChange = (value: string | null) => {
+    const option = contentConditionTypeOptions.find((item) => item.value === value);
+    if (!option) return;
+
+    onUpdate(condition.id, (current) => {
+      const switchesScriptMode = current.type === "script" || option.value === "script";
+      return {
+        ...current,
+        type: option.value,
+        ...(switchesScriptMode && current.type !== option.value
+          ? { values: [], input: "" }
+          : {}),
+      };
+    });
   };
 
+  const handleEffectToggle = () => {
+    if (condition.type === "chat") return;
+
+    onUpdate(condition.id, (current) => ({
+      ...current,
+      effect: current.effect === "exclude" ? "require" : "exclude",
+    }));
+  };
+
+  const isExcluded = condition.effect === "exclude";
+  const effectToggleLabel = isExcluded
+    ? "当前为命中排除，点击切换为必须满足"
+    : "当前为必须满足，点击切换为命中排除";
+
   return (
-    <section className="grid grid-cols-[44px_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-card/94">
-      <div className="grid place-items-center border-r border-border bg-muted/88 px-1 text-[10px] font-bold tracking-wide text-primary">
-        {index === 0 ? "当" : "并且"}
+    <section className="grid grid-cols-[48px_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-card/94">
+      <div className="border-r border-border bg-muted/55">
+        {condition.type === "chat" ? (
+          <span className="flex h-full min-h-12 items-center justify-center px-1 text-xs font-semibold tracking-wide text-primary">
+            {index === 0 ? "当" : "并且"}
+          </span>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="h-full min-h-12 w-full cursor-pointer flex-col gap-1 rounded-none px-0 py-0 transition-colors hover:bg-muted/85 has-data-[icon=inline-end]:px-0 focus-visible:ring-inset"
+            aria-label={effectToggleLabel}
+            aria-pressed={isExcluded}
+            title={effectToggleLabel}
+            onClick={handleEffectToggle}
+          >
+            <span
+              className={cn(
+                "text-xs font-semibold tracking-wide transition-colors",
+                isExcluded ? "text-destructive" : "text-primary",
+              )}
+            >
+              {isExcluded ? "排除" : index === 0 ? "当" : "并且"}
+            </span>
+            <ArrowUpDown
+              data-icon="inline-end"
+              aria-hidden="true"
+              className={cn(
+                "opacity-50 sm:hidden",
+                isExcluded ? "text-destructive/70" : "text-muted-foreground",
+              )}
+            />
+          </Button>
+        )}
       </div>
 
       <div className="min-w-0 p-3">
@@ -77,7 +159,7 @@ export function ConditionEditor({
           ) : null}
         </div>
 
-        <div className="mt-2 grid items-start gap-2 sm:grid-cols-[150px_minmax(0,1fr)]">
+        <div className="mt-2 grid items-start gap-2 sm:grid-cols-[120px_minmax(0,1fr)]">
           {condition.type === "chat" ? (
             <div className="flex h-9 w-full items-center rounded-lg border border-border bg-muted/55 px-2.5 text-sm font-medium text-foreground">
               <span className="truncate">{definition.operatorLabel}</span>
@@ -85,21 +167,21 @@ export function ConditionEditor({
           ) : (
             <Select
               items={contentConditionTypeOptions}
-              value={condition.type}
-              onValueChange={(value) => handleTypeChange(value as FilterConditionType)}
+              value={selectedContentType?.value}
+              onValueChange={handleTypeChange}
             >
               <SelectTrigger
                 size="lg"
                 className="w-full bg-card"
                 aria-label="消息内容匹配方式"
               >
-                <SelectValue>{definition.operatorLabel}</SelectValue>
+                <SelectValue>{selectedContentType?.label}</SelectValue>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent align="start" alignItemWithTrigger={false}>
                 <SelectGroup>
                   {contentConditionTypeOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
-                      {option.operatorLabel}
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectGroup>
@@ -118,6 +200,21 @@ export function ConditionEditor({
               onSelectionChange={(values) =>
                 onUpdate(condition.id, (current) => ({ ...current, values }))
               }
+            />
+          ) : condition.type === "script" ? (
+            <Textarea
+              name={`condition-${condition.id}`}
+              aria-label="JavaScript 代码"
+              placeholder={scriptPlaceholder}
+              value={condition.input}
+              spellCheck={false}
+              onChange={(event) =>
+                onUpdate(condition.id, (current) => ({
+                  ...current,
+                  input: event.target.value,
+                }))
+              }
+              className="min-h-36 resize-y bg-card font-mono text-xs leading-5 sm:col-span-2"
             />
           ) : (
             <div className="flex min-h-9 min-w-0 flex-wrap items-center gap-1 rounded-lg border border-input bg-card px-1.5 py-1 shadow-xs transition focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/18">
@@ -169,6 +266,9 @@ export function ConditionEditor({
 
         <p className="mt-1.5 text-[10px] leading-4 text-muted-foreground">
           {description}
+          {condition.type === "script"
+            ? "；可读取 message.chatId 和 message.content，也可返回 { matched, matchedText }"
+            : null}
         </p>
       </div>
     </section>

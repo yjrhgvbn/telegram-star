@@ -1,5 +1,6 @@
 import type {
   FilterCondition,
+  FilterConditionEffect,
   FilterConditionType,
   HistoricalFilterPreviewMessage,
   JoinedChat,
@@ -19,6 +20,7 @@ export function createDraftCondition(type: FilterConditionType = "keyword"): Dra
   return {
     id: `${type}-${Math.random().toString(36).slice(2, 10)}`,
     type,
+    effect: "require",
     values: [],
     input: "",
   };
@@ -37,12 +39,16 @@ export function toDraftConditions(conditions: FilterCondition[]): DraftCondition
     return createInitialDraftConditions();
   }
 
-  const drafts = conditions.map((condition, index) => ({
-    id: `${condition.type}-${index}-${Math.random().toString(36).slice(2, 10)}`,
-    type: condition.type,
-    values: [...condition.values],
-    input: "",
-  }));
+  const drafts = conditions.map((condition, index) => {
+    const isScript = condition.type === "script";
+    return {
+      id: `${condition.type}-${index}-${Math.random().toString(36).slice(2, 10)}`,
+      type: condition.type,
+      effect: condition.effect ?? "require",
+      values: isScript ? [] : [...condition.values],
+      input: isScript ? (condition.values[0] ?? "") : "",
+    };
+  });
 
   return conditions.some((condition) => condition.type === "chat")
     ? drafts
@@ -51,11 +57,12 @@ export function toDraftConditions(conditions: FilterCondition[]): DraftCondition
 
 export function normalizeConditions(conditions: DraftCondition[]): FilterCondition[] {
   return conditions
-    .map((condition) => ({
-      type: condition.type,
-      values: (
+    .map((condition) => {
+      const values = (
         // 关键词条件允许"输入框未点添加就直接保存"，把暂存输入一并并入最终值
-        condition.type === "keyword"
+        condition.type === "script"
+          ? [condition.input]
+          : condition.type === "keyword"
           ? [
               ...condition.values,
               ...condition.input
@@ -71,11 +78,17 @@ export function normalizeConditions(conditions: DraftCondition[]): FilterConditi
                   .map((item) => item.trim())
                   .filter(Boolean),
               ]
-          : condition.values
+            : condition.values
       )
         .map((value) => value.trim())
-        .filter(Boolean),
-    }))
+        .filter(Boolean);
+
+      return {
+        type: condition.type,
+        ...(condition.effect === "exclude" ? { effect: condition.effect } : {}),
+        values,
+      } as FilterCondition;
+    })
     .filter((condition) => condition.values.length > 0);
 }
 
@@ -102,6 +115,33 @@ export function assertValidRegexConditions(conditions: FilterCondition[]): void 
 
   if (invalidValue) {
     throw new Error(`正则表达式无效：${invalidValue}`);
+  }
+}
+
+function compileFilterScript(source: string): void {
+  // 这里只做语法检查；真正执行统一在服务端完成，避免预览与实时监听出现两套结果。
+  new Function("message", `"use strict";\n${source}`);
+}
+
+export function assertValidScriptConditions(conditions: FilterCondition[]): void {
+  for (const condition of conditions) {
+    if (condition.type !== "script") continue;
+
+    if (condition.values.length !== 1) {
+      throw new Error("每个自定义 JavaScript 条件只能包含一段代码");
+    }
+
+    const source = condition.values[0];
+    if (source.length > 20_000) {
+      throw new Error("自定义 JavaScript 不能超过 20,000 个字符");
+    }
+
+    try {
+      compileFilterScript(source);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`JavaScript 代码无效：${detail}`);
+    }
   }
 }
 
@@ -134,13 +174,18 @@ export function deriveFilterName(
   chats: JoinedChat[] = [],
 ): string {
   const contentCondition = conditions.find(
-    (condition) => condition.type === "keyword" || condition.type === "regex",
+    (condition) => ["keyword", "regex", "script"].includes(condition.type),
   );
   const contentValue = contentCondition?.values[0]?.trim();
 
   if (contentCondition && contentValue) {
+    if (contentCondition.type === "script") return "自定义代码规则";
+
+    const effectPrefix = contentCondition.effect === "exclude" ? "排除：" : "";
     return truncateFilterName(
-      contentCondition.type === "regex" ? `正则：${contentValue}` : contentValue,
+      contentCondition.type === "regex"
+        ? `${effectPrefix}正则：${contentValue}`
+        : `${effectPrefix}${contentValue}`,
     );
   }
 
@@ -162,10 +207,18 @@ export function describeFilterCondition(
   }
 
   if (condition.type === "regex") {
-    return `内容匹配${formatQuotedList(condition.values, "尚未填写的正则表达式")}`;
+    const description = `内容匹配${formatQuotedList(condition.values, "尚未填写的正则表达式")}`;
+    return condition.effect === "exclude" ? `排除${description}` : description;
   }
 
-  return `内容包含${formatQuotedList(condition.values, "尚未填写的关键词")}`;
+  if (condition.type === "script") {
+    return condition.effect === "exclude"
+      ? "自定义代码返回 true 时排除"
+      : "自定义代码返回 true";
+  }
+
+  const description = `内容包含${formatQuotedList(condition.values, "尚未填写的关键词")}`;
+  return condition.effect === "exclude" ? `排除${description}` : description;
 }
 
 export function describeFilterRule(
@@ -182,6 +235,10 @@ export type ConditionEvidence = {
   detail: string;
   matched: boolean;
 };
+
+function applyConditionEffect(rawMatched: boolean, effect?: FilterConditionEffect): boolean {
+  return effect === "exclude" ? !rawMatched : rawMatched;
+}
 
 export function evaluatePreviewMessage(
   message: Pick<HistoricalFilterPreviewMessage, "chatId" | "content">,
@@ -213,9 +270,24 @@ export function evaluatePreviewMessage(
       });
       return {
         type: condition.type,
-        label: "正则匹配",
-        detail: matchedPattern ? `匹配「${matchedPattern}」` : "没有表达式匹配",
-        matched: Boolean(matchedPattern),
+        label: condition.effect === "exclude" ? "排除正则" : "正则匹配",
+        detail: condition.effect === "exclude"
+          ? matchedPattern
+            ? `匹配排除项「${matchedPattern}」`
+            : "没有匹配排除项"
+          : matchedPattern
+            ? `匹配「${matchedPattern}」`
+            : "没有表达式匹配",
+        matched: applyConditionEffect(Boolean(matchedPattern), condition.effect),
+      };
+    }
+
+    if (condition.type === "script") {
+      return {
+        type: condition.type,
+        label: condition.effect === "exclude" ? "代码排除" : "自定义代码",
+        detail: "执行结果由服务端预览确认",
+        matched: true,
       };
     }
 
@@ -224,9 +296,15 @@ export function evaluatePreviewMessage(
     );
     return {
       type: condition.type,
-      label: "内容条件",
-      detail: matchedKeyword ? `包含「${matchedKeyword}」` : "没有关键词出现",
-      matched: Boolean(matchedKeyword),
+      label: condition.effect === "exclude" ? "排除关键词" : "内容条件",
+      detail: condition.effect === "exclude"
+        ? matchedKeyword
+          ? `出现排除词「${matchedKeyword}」`
+          : "没有排除词出现"
+        : matchedKeyword
+          ? `包含「${matchedKeyword}」`
+          : "没有关键词出现",
+      matched: applyConditionEffect(Boolean(matchedKeyword), condition.effect),
     };
   });
 }

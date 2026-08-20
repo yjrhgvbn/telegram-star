@@ -17,6 +17,7 @@ export type {
   FilterBackfillMode,
   FilterBackfillResponse,
   FilterCondition,
+  FilterConditionEffect,
   FilterConditionType,
   FilterCreateInput,
   FilterHistoryScope,

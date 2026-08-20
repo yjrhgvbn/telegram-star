@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Inbox, KeyRound, ListFilter, MessageCircle, Plus, Regex, Settings2 } from "lucide-react";
+import { Code2, Inbox, KeyRound, ListFilter, MessageCircle, Plus, Regex, Settings2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ interface Props {
 }
 
 function getFilterIcon(conditions: FilterCondition[]) {
+  if (conditions.some((condition) => condition.type === "script")) return Code2;
   if (conditions.some((condition) => condition.type === "keyword")) return KeyRound;
   if (conditions.some((condition) => condition.type === "regex")) return Regex;
   if (conditions.some((condition) => condition.type === "chat")) return MessageCircle;

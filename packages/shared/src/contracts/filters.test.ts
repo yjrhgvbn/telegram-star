@@ -69,6 +69,42 @@ describe("filters contract", () => {
     ).toThrow();
   });
 
+  it("accepts exclusion and script conditions while keeping chat scope positive", () => {
+    expect(
+      filterCreateInputSchema.parse({
+        name: "红包提醒",
+        conditions: [
+          { type: "chat", values: ["1001"] },
+          { type: "keyword", effect: "exclude", values: ["已领完"] },
+          {
+            type: "script",
+            values: ["return message.content.includes('红包');"],
+          },
+        ],
+      }),
+    ).toMatchObject({
+      conditions: [
+        { type: "chat", values: ["1001"] },
+        { type: "keyword", effect: "exclude", values: ["已领完"] },
+        { type: "script", values: ["return message.content.includes('红包');"] },
+      ],
+    });
+
+    expect(() =>
+      filterCreateInputSchema.parse({
+        name: "错误会话条件",
+        conditions: [{ type: "chat", effect: "exclude", values: ["1001"] }],
+      }),
+    ).toThrow();
+
+    expect(() =>
+      filterCreateInputSchema.parse({
+        name: "多段脚本",
+        conditions: [{ type: "script", values: ["return true;", "return false;"] }],
+      }),
+    ).toThrow();
+  });
+
   it("accepts optional forward target bindings on create and update", () => {
     expect(
       filterCreateInputSchema.parse({

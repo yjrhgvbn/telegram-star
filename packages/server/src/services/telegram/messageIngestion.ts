@@ -85,6 +85,18 @@ export function findFirstMatchingFilter(
     if (conditions.length === 0) continue;
 
     const match = matchFilterConditions({ chatId, content }, conditions);
+    if (match.error) {
+      // 实时链路遇到单条自定义脚本错误时跳过该规则，继续尝试后续规则。
+      appLogger.warn(
+        {
+          event: "filter.script.execution_failed",
+          filterId: filter.id,
+          err: match.error,
+        },
+        "Custom filter script execution failed",
+      );
+      continue;
+    }
     if (match.matched) {
       return { filter, matchedKeyword: match.matchedKeyword };
     }

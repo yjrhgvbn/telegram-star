@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import type { ForwardTarget, JoinedChat } from "@/types";
-import { conditionTypeOptions, type DraftCondition } from "../types";
+import type { DraftCondition } from "../types";
 import {
   describeFilterCondition,
   mergePersistableConditions,
@@ -36,10 +36,6 @@ export function RuleSummary({
 
   const chatTitleById = new Map(chats.map((chat) => [chat.id, chat.title]));
   const conditionTokens: SummaryToken[] = readableConditions.map((condition, index) => {
-    const definition =
-      conditionTypeOptions.find((option) => option.value === condition.type) ??
-      conditionTypeOptions[0];
-
     if (condition.type === "chat") {
       const names = condition.values.map((value) => chatTitleById.get(value) ?? value);
       return {
@@ -54,8 +50,16 @@ export function RuleSummary({
         key: `${condition.type}-${index}`,
         label:
           condition.values.length === 1
-            ? `表达式：${condition.values[0]}`
-            : `表达式：${condition.values.length} 个`,
+            ? `${condition.effect === "exclude" ? "排除表达式" : "表达式"}：${condition.values[0]}`
+            : `${condition.effect === "exclude" ? "排除表达式" : "表达式"}：${condition.values.length} 个`,
+        detail: describeFilterCondition(condition, chats),
+      };
+    }
+
+    if (condition.type === "script") {
+      return {
+        key: `${condition.type}-${index}`,
+        label: condition.effect === "exclude" ? "代码：命中时排除" : "代码：自定义判断",
         detail: describeFilterCondition(condition, chats),
       };
     }
@@ -64,9 +68,9 @@ export function RuleSummary({
       key: `${condition.type}-${index}`,
       label:
         condition.values.length === 1
-          ? `关键词：${condition.values[0]}`
-          : `关键词：${condition.values.length} 个`,
-      detail: `${definition.operatorLabel}：${condition.values.join("、")}`,
+          ? `${condition.effect === "exclude" ? "排除词" : "关键词"}：${condition.values[0]}`
+          : `${condition.effect === "exclude" ? "排除词" : "关键词"}：${condition.values.length} 个`,
+      detail: describeFilterCondition(condition, chats),
     };
   });
   const visibleConditionTokens = conditionTokens.slice(0, 2);

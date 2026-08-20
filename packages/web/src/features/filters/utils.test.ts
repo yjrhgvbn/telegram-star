@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertValidRegexConditions,
+  assertValidScriptConditions,
   createInitialDraftConditions,
   deriveFilterName,
   describeFilterRule,
@@ -46,6 +47,26 @@ describe("filter form utils", () => {
 
     expect(normalizeConditions(conditions)).toEqual([
       { type: "regex", values: ["v\\d+\\.\\d+", "foo,bar", "release\\s+\\d+"] },
+    ]);
+  });
+
+  it("stores one script source and preserves its exclusion effect", () => {
+    expect(
+      normalizeConditions([
+        {
+          id: "script-1",
+          type: "script",
+          effect: "exclude",
+          values: [],
+          input: "  return message.content.includes('测试');  ",
+        },
+      ]),
+    ).toEqual([
+      {
+        type: "script",
+        effect: "exclude",
+        values: ["return message.content.includes('测试');"],
+      },
     ]);
   });
 
@@ -95,6 +116,17 @@ describe("filter form utils", () => {
     ).toThrow("正则表达式无效：(");
   });
 
+  it("checks script syntax without executing user code in the browser", () => {
+    expect(() =>
+      assertValidScriptConditions([
+        { type: "script", values: ["return message.content.length > 0;"] },
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      assertValidScriptConditions([{ type: "script", values: ["return (;"] }]),
+    ).toThrow(/JavaScript 代码无效/);
+  });
+
   it("converts persisted conditions into editable drafts without sharing value arrays", () => {
     const source = [{ type: "keyword" as const, values: ["发布"] }];
     const drafts = toDraftConditions(source);
@@ -115,6 +147,26 @@ describe("filter form utils", () => {
         { type: "keyword", values: ["发布"] },
       ]).map((condition) => condition.type),
     ).toEqual(["chat", "keyword"]);
+  });
+
+  it("loads persisted script source back into the code editor", () => {
+    expect(
+      toDraftConditions([
+        {
+          type: "script",
+          effect: "exclude",
+          values: ["return message.content.includes('广告');"],
+        },
+      ]),
+    ).toMatchObject([
+      { type: "chat", values: [], input: "" },
+      {
+        type: "script",
+        effect: "exclude",
+        values: [],
+        input: "return message.content.includes('广告');",
+      },
+    ]);
   });
 
   it("derives an optional name from content first and chat scope as a fallback", () => {
@@ -145,6 +197,16 @@ describe("filter form utils", () => {
         [{ id: "1001", title: "将夜" }],
       ),
     ).toBe("消息来自「将夜」，并且内容包含「更新」或「番外」");
+
+    expect(
+      describeFilterRule([
+        { type: "keyword", values: ["红包"] },
+        { type: "keyword", effect: "exclude", values: ["已领完", "广告"] },
+        { type: "script", values: ["return true;"] },
+      ]),
+    ).toBe(
+      "内容包含「红包」，并且排除内容包含「已领完」或「广告」，并且自定义代码返回 true",
+    );
   });
 
   it("explains why a preview message passed every condition", () => {
@@ -160,6 +222,22 @@ describe("filter form utils", () => {
     ).toEqual([
       { type: "chat", label: "消息来源", detail: "来自「将夜」", matched: true },
       { type: "keyword", label: "内容条件", detail: "包含「番外」", matched: true },
+    ]);
+  });
+
+  it("evaluates exclusion evidence as an inverted condition", () => {
+    expect(
+      evaluatePreviewMessage(
+        { chatId: "1001", content: "300 元红包，速领" },
+        [{ type: "keyword", effect: "exclude", values: ["已领完"] }],
+      ),
+    ).toEqual([
+      {
+        type: "keyword",
+        label: "排除关键词",
+        detail: "没有排除词出现",
+        matched: true,
+      },
     ]);
   });
 });

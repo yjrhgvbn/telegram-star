@@ -152,11 +152,15 @@ describe("FilterForm", () => {
       screen.getByRole("combobox", { name: "消息内容匹配方式" }),
     );
     expect(
-      await screen.findByRole("option", { name: "包含任一关键词" }),
+      await screen.findByRole("option", { name: "关键词" }),
     ).not.toBeNull();
     expect(
-      await screen.findByRole("option", { name: "匹配任一表达式" }),
+      await screen.findByRole("option", { name: "正则表达式" }),
     ).not.toBeNull();
+    expect(
+      await screen.findByRole("option", { name: "JavaScript" }),
+    ).not.toBeNull();
+    expect(screen.queryByRole("option", { name: /排除/ })).toBeNull();
     expect(screen.queryByRole("option", { name: "来自任一会话" })).toBeNull();
     await user.keyboard("{Escape}");
 
@@ -195,5 +199,109 @@ describe("FilterForm", () => {
         input: "",
       }).values,
     ).toEqual([]);
+  });
+
+  it("renders a script condition as an editable code area", () => {
+    render(
+      <FilterFormHarness
+        onAutoLocateChange={vi.fn()}
+        onToggleForwardTarget={vi.fn()}
+        onAddCondition={vi.fn()}
+        conditions={[
+          { id: "chat-condition", type: "chat", values: [], input: "" },
+          {
+            id: "script-condition",
+            type: "script",
+            values: [],
+            input: "return message.content.includes('红包');",
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      (screen.getByRole("textbox", { name: "JavaScript 代码" }) as HTMLTextAreaElement).value,
+    ).toBe("return message.content.includes('红包');");
+    expect(screen.getByText(/可读取 message\.chatId 和 message\.content/)).not.toBeNull();
+  });
+
+  it("toggles the condition effect from the left rail", async () => {
+    const user = userEvent.setup();
+    const onUpdateCondition = vi.fn();
+
+    render(
+      <FilterFormHarness
+        onAutoLocateChange={vi.fn()}
+        onToggleForwardTarget={vi.fn()}
+        onAddCondition={vi.fn()}
+        onUpdateCondition={onUpdateCondition}
+      />,
+    );
+
+    const effectToggle = screen.getByRole("button", {
+      name: "当前为必须满足，点击切换为命中排除",
+    });
+    expect(effectToggle.getAttribute("aria-pressed")).toBe("false");
+
+    await user.click(effectToggle);
+
+    const [conditionId, updater] = onUpdateCondition.mock.calls[0] as [
+      string,
+      (condition: DraftCondition) => DraftCondition,
+    ];
+    expect(conditionId).toBe("keyword-condition");
+    expect(
+      updater({
+        id: "keyword-condition",
+        type: "keyword",
+        values: ["将夜"],
+        input: "",
+      }).effect,
+    ).toBe("exclude");
+  });
+
+  it("changes only the content type and preserves an exclusion effect", async () => {
+    const user = userEvent.setup();
+    const onUpdateCondition = vi.fn();
+    const source: DraftCondition = {
+      id: "keyword-condition",
+      type: "keyword",
+      effect: "exclude",
+      values: ["广告"],
+      input: "临时值",
+    };
+
+    render(
+      <FilterFormHarness
+        onAutoLocateChange={vi.fn()}
+        onToggleForwardTarget={vi.fn()}
+        onAddCondition={vi.fn()}
+        onUpdateCondition={onUpdateCondition}
+        conditions={[
+          { id: "chat-condition", type: "chat", values: [], input: "" },
+          source,
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "当前为命中排除，点击切换为必须满足",
+      }).getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    await user.click(screen.getByRole("combobox", { name: "消息内容匹配方式" }));
+    await user.click(await screen.findByRole("option", { name: "JavaScript" }));
+
+    const [, updater] = onUpdateCondition.mock.calls[0] as [
+      string,
+      (condition: DraftCondition) => DraftCondition,
+    ];
+    expect(updater(source)).toEqual({
+      ...source,
+      type: "script",
+      values: [],
+      input: "",
+    });
   });
 });

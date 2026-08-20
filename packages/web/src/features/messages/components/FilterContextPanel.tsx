@@ -28,7 +28,11 @@ export function FilterContextPanel({
   const enabledFilters = filters.filter((filter) => filter.enabled).length;
   const keywordCount = countConditionValues(selectedFilter, "keyword");
   const regexCount = countConditionValues(selectedFilter, "regex");
+  const scriptCount = countConditionValues(selectedFilter, "script");
   const chatCount = countConditionValues(selectedFilter, "chat");
+  const excludedConditionCount = selectedFilter?.conditions.filter(
+    (condition) => condition.effect === "exclude",
+  ).length ?? 0;
 
   return (
     <aside className="hidden w-[260px] shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[var(--workspace-panel-shadow)] xl:flex">
@@ -105,6 +109,14 @@ export function FilterContextPanel({
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs text-muted-foreground">正则</span>
                 <span className="text-xs font-medium">{regexCount}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs text-muted-foreground">自定义代码</span>
+                <span className="text-xs font-medium">{scriptCount}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs text-muted-foreground">排除条件</span>
+                <span className="text-xs font-medium">{excludedConditionCount}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs text-muted-foreground">会话范围</span>

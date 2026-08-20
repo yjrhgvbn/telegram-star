@@ -35,6 +35,9 @@ export function planFilterMessageReconciliation(
       conditions,
     );
 
+    // 脚本错误不能被解释成“不命中”，否则一次规则编辑会误删已有消息。
+    if (match.error) throw new Error(match.error);
+
     if (!match.matched) {
       messageIdsToDelete.push(message.id);
       continue;

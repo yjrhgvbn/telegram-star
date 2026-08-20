@@ -358,6 +358,7 @@ export async function previewHistoricalFilterMessages(options: {
           { chatId, content: baseMessage.content },
           options.conditions,
         );
+        if (match.error) throw new Error(match.error);
         const sampleTarget = match.matched ? matchedSamples : unmatchedSamples;
         const shouldCaptureSample =
           sampleLimit > 0 && sampleTarget.length < sampleLimit;
@@ -527,6 +528,7 @@ export async function backfillFilterHistory(options: {
           { chatId, content: textContent },
           options.conditions,
         );
+        if (match.error) throw new Error(match.error);
         if (!match.matched) continue;
 
         matchedCount += 1;

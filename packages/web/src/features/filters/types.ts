@@ -1,8 +1,9 @@
-import type { FilterConditionType } from "@/types";
+import type { FilterConditionEffect, FilterConditionType } from "@/types";
 
 export type DraftCondition = {
   id: string;
   type: FilterConditionType;
+  effect?: FilterConditionEffect;
   values: string[];
   input: string;
 };
@@ -41,5 +42,12 @@ export const conditionTypeOptions: ConditionTypeDefinition[] = [
     subject: "消息内容",
     operatorLabel: "匹配任一表达式",
     description: "表达式之间满足任意一个即可",
+  },
+  {
+    value: "script",
+    label: "自定义代码",
+    subject: "消息内容",
+    operatorLabel: "自定义 JavaScript",
+    description: "代码同步返回 true 时条件成立",
   },
 ];

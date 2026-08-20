@@ -13,7 +13,10 @@ import {
   type FilterPreviewResponse,
   type FilterUpdateInput,
 } from "@telegram-star/shared/contracts/filters";
-import { parseConditions } from "../../services/filter-matching.js";
+import {
+  parseConditions,
+  validateConditions,
+} from "../../services/filter-matching.js";
 import { backfillFilterHistory, previewHistoricalFilterMessages } from "../../services/telegram.js";
 import {
   createFilterRow,
@@ -28,6 +31,13 @@ import {
 export class FilterNotFoundError extends Error {
   constructor() {
     super("Filter not found");
+  }
+}
+
+function assertValidFilterConditions(conditions: FilterCreateInput["conditions"]): void {
+  const validation = validateConditions(conditions);
+  if (!validation.valid) {
+    throw new Error(validation.error ?? "Invalid filter conditions");
   }
 }
 
@@ -54,6 +64,7 @@ export function toApiFilter(row: FilterRow): Filter {
 }
 
 export async function previewFilterHistory(input: FilterPreviewInput): Promise<FilterPreviewResponse> {
+  assertValidFilterConditions(input.conditions);
   const scope = normalizeHistoryScope(input);
 
   // 预览接口与回拉接口共用同一套范围参数，避免两边行为不一致。
@@ -81,12 +92,15 @@ export async function listFilters(): Promise<Filter[]> {
 }
 
 export async function createFilter(input: FilterCreateInput): Promise<Filter> {
+  assertValidFilterConditions(input.conditions);
   return toApiFilter(await createFilterRow(input));
 }
 
 export async function updateFilter(id: number, input: FilterUpdateInput): Promise<Filter> {
   const existing = await findFilterById(id);
   if (!existing) throw new FilterNotFoundError();
+
+  if (input.conditions) assertValidFilterConditions(input.conditions);
 
   return toApiFilter(await updateFilterRow(id, input));
 }
@@ -110,12 +124,15 @@ export async function backfillFilter(id: number, scope: FilterHistoryScope): Pro
   const existing = await findFilterById(id);
   if (!existing) throw new FilterNotFoundError();
 
+  const conditions = parseConditions(existing.conditions);
+  assertValidFilterConditions(conditions);
+
   // 回填必须使用数据库里已保存的条件，而不是请求体传来的条件。
   // 这样用户点击“回拉历史”时，扫描规则始终等于当前持久化过滤器。
   return filterBackfillResponseSchema.parse(
     await backfillFilterHistory({
       filterId: existing.id,
-      conditions: parseConditions(existing.conditions),
+      conditions,
       perChatLimit: scope.perChatLimit,
     }),
   );

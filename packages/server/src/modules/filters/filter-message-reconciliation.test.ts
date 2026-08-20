@@ -33,4 +33,13 @@ describe("planFilterMessageReconciliation", () => {
       keywordUpdates: [{ messageIds: [5], matchedKeyword: null }],
     });
   });
+
+  it("does not silently delete history when a custom script throws", () => {
+    expect(() =>
+      planFilterMessageReconciliation(
+        [{ id: 6, chatId: "chat-1", content: "红包 300 元", matchedKeyword: null }],
+        [{ type: "script", values: ["throw new Error('script failed');"] }],
+      ),
+    ).toThrow("script failed");
+  });
 });

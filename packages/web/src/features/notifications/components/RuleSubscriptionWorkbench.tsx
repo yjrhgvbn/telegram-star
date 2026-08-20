@@ -20,12 +20,14 @@ const conditionLabels: Record<FilterConditionType, string> = {
   keyword: "关键词",
   chat: "群组",
   regex: "正则",
+  script: "代码",
 };
 
 const conditionUnits: Record<FilterConditionType, string> = {
   keyword: "个词",
   chat: "个来源",
   regex: "条表达式",
+  script: "段代码",
 };
 
 export function describeFilterSummary(filter: Filter): string {

@@ -25,6 +25,7 @@ import { PreviewPanel } from "./components/PreviewPanel";
 import type { DraftCondition } from "./types";
 import {
   assertValidRegexConditions,
+  assertValidScriptConditions,
   createDraftCondition,
   createInitialDraftConditions,
   deriveFilterName,
@@ -91,6 +92,9 @@ export function FiltersFeature() {
     () => mergePersistableConditions(normalizeConditions(conditions)),
     [conditions],
   );
+  const hasIncompleteScriptCondition = conditions.some(
+    (condition) => condition.type === "script" && !condition.input.trim(),
+  );
   const suggestedName = useMemo(
     () => deriveFilterName(persistedConditions, chats),
     [chats, persistedConditions],
@@ -128,12 +132,19 @@ export function FiltersFeature() {
     request: DraftPreviewRequest | null;
     error: string;
   }>(() => {
-    if (!isEditorSelected || persistedConditions.length === 0) {
+    if (!isEditorSelected) {
       return { request: null, error: "" };
     }
 
+    if (hasIncompleteScriptCondition) {
+      return { request: null, error: "请填写自定义 JavaScript 代码" };
+    }
+
+    if (persistedConditions.length === 0) return { request: null, error: "" };
+
     try {
       assertValidRegexConditions(persistedConditions);
+      assertValidScriptConditions(persistedConditions);
       return {
         request: {
           conditions: persistedConditions,
@@ -148,7 +159,13 @@ export function FiltersFeature() {
         error: candidateError instanceof Error ? candidateError.message : "条件无效",
       };
     }
-  }, [currentConditionSignature, isEditorSelected, persistedConditions, previewPerChatLimit]);
+  }, [
+    currentConditionSignature,
+    hasIncompleteScriptCondition,
+    isEditorSelected,
+    persistedConditions,
+    previewPerChatLimit,
+  ]);
 
   // 输入停顿后再切换查询键，避免每个按键都触发 Telegram 历史请求。
   useEffect(() => {
@@ -273,11 +290,16 @@ export function FiltersFeature() {
   };
 
   const buildConditions = () => {
+    if (hasIncompleteScriptCondition) {
+      throw new Error("请填写自定义 JavaScript 代码");
+    }
+
     if (persistedConditions.length === 0) {
       throw new Error("至少添加一个有效条件");
     }
 
     assertValidRegexConditions(persistedConditions);
+    assertValidScriptConditions(persistedConditions);
     return persistedConditions;
   };
 
@@ -320,6 +342,7 @@ export function FiltersFeature() {
 
   const appendConditionValues = (id: string) => {
     const draft = conditions.find((condition) => condition.id === id);
+    if (draft?.type === "script") return;
     const separator = draft?.type === "regex" ? /\n/ : /[,，\n]/;
     if (
       !draft ||

@@ -3,6 +3,7 @@ import {
   hasConflictingChatConditions,
   matchFilterConditions,
   parseConditions,
+  serializeConditions,
   validateConditions,
 } from "./filter-matching.js";
 
@@ -85,5 +86,95 @@ describe("filter matching", () => {
         { type: "chat", values: ["chat-2"] },
       ]),
     ).toBe(true);
+  });
+
+  it("round-trips exclusion and script conditions without changing legacy conditions", () => {
+    const serialized = serializeConditions([
+      { type: "keyword", values: [" 红包 "] },
+      { type: "keyword", effect: "exclude", values: [" 已领完 "] },
+      { type: "script", values: [" return message.content.includes('300'); "] },
+    ]);
+
+    expect(JSON.parse(serialized)).toEqual([
+      { type: "keyword", values: ["红包"] },
+      { type: "keyword", effect: "exclude", values: ["已领完"] },
+      { type: "script", values: ["return message.content.includes('300');"] },
+    ]);
+    expect(parseConditions(serialized)).toEqual(JSON.parse(serialized));
+  });
+
+  it("rejects a message when any exclusion condition matches", () => {
+    expect(
+      matchFilterConditions(
+        { chatId: "chat-1", content: "300 元红包，速领" },
+        [
+          { type: "keyword", values: ["红包"] },
+          { type: "keyword", effect: "exclude", values: ["已领完", "广告"] },
+        ],
+      ),
+    ).toEqual({ matched: true, matchedKeyword: "红包" });
+
+    expect(
+      matchFilterConditions(
+        { chatId: "chat-1", content: "300 元红包，已领完" },
+        [
+          { type: "keyword", values: ["红包"] },
+          { type: "keyword", effect: "exclude", values: ["已领完", "广告"] },
+        ],
+      ),
+    ).toEqual({ matched: false, matchedKeyword: null });
+  });
+
+  it("runs a user script with message data and accepts an optional matched text", () => {
+    const result = matchFilterConditions(
+      { chatId: "chat-1", content: "恭喜发财，红包金额 300 元" },
+      [
+        {
+          type: "script",
+          values: [
+            "return { matched: /红包.*(?:^|\\D)300(?:\\D|$)/.test(message.content), matchedText: '300 元红包' };",
+          ],
+        },
+      ],
+    );
+
+    expect(result).toEqual({ matched: true, matchedKeyword: "300 元红包" });
+  });
+
+  it("supports excluding a message when a user script returns true", () => {
+    const conditions = [
+      { type: "keyword" as const, values: ["红包"] },
+      {
+        type: "script" as const,
+        effect: "exclude" as const,
+        values: ["return message.content.includes('测试');"],
+      },
+    ];
+
+    expect(
+      matchFilterConditions({ chatId: "chat-1", content: "正式红包 300 元" }, conditions),
+    ).toEqual({ matched: true, matchedKeyword: "红包" });
+    expect(
+      matchFilterConditions({ chatId: "chat-1", content: "测试红包 300 元" }, conditions),
+    ).toEqual({ matched: false, matchedKeyword: null });
+  });
+
+  it("reports script validation and runtime errors without matching", () => {
+    const validation = validateConditions([
+      { type: "script", values: ["return (;"] },
+    ]);
+    expect(validation.valid).toBe(false);
+    expect(validation.error).toContain("condition.script source is invalid");
+
+    expect(
+      matchFilterConditions(
+        { chatId: "chat-1", content: "红包 300 元" },
+        [{ type: "script", values: ["throw new Error('boom');"] }],
+      ),
+    ).toMatchObject({
+      matched: false,
+      matchedKeyword: null,
+      error: expect.stringContaining("boom"),
+    });
   });
 });
