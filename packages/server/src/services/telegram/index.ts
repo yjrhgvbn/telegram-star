@@ -5,6 +5,7 @@ export type {
   HistoricalFilterPreviewMessage,
   HistoricalFilterPreviewSample,
 } from "./types.js";
+export { discoverJoinedChats } from "./discovery.js";
 export {
   getClient,
   getConnectionStatusWithConfig as getConnectionStatus,

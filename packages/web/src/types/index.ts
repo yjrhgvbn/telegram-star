@@ -10,6 +10,14 @@ export type {
 } from "@telegram-star/shared/contracts/clients";
 
 export type {
+  ChatDiscoveryChatType,
+  ChatDiscoveryMatch,
+  ChatDiscoveryResponse,
+  ChatDiscoveryResult,
+  JoinedChat,
+} from "@telegram-star/shared/contracts/chats";
+
+export type {
   Filter,
   FilterBackfillJob,
   FilterBackfillJobCreateInput,
@@ -52,11 +60,6 @@ export type {
   ReadSyncLogLevel,
   ReadSyncLogsResponse,
 } from "@telegram-star/shared/contracts/messages";
-
-export interface JoinedChat {
-  id: string;
-  title: string;
-}
 
 export interface AuthStatus {
   connected: boolean;

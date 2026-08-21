@@ -18,6 +18,10 @@
       "types": "./dist/contracts/clients.d.ts",
       "import": "./dist/contracts/clients.js"
     },
+    "./contracts/chats": {
+      "types": "./dist/contracts/chats.d.ts",
+      "import": "./dist/contracts/chats.js"
+    },
     "./contracts/filters": {
       "types": "./dist/contracts/filters.d.ts",
       "import": "./dist/contracts/filters.js"

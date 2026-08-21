@@ -79,7 +79,7 @@ export async function listJoinedChats(): Promise<JoinedChat[]> {
     throw new Error("Telegram client is not connected");
   }
 
-  const dialogs = await client.getDialogs({ limit: 300 });
+  const dialogs = await client.getDialogs({ limit: 500 });
   const seen = new Set<string>();
   const chats: JoinedChat[] = [];
 

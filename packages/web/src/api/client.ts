@@ -1,7 +1,5 @@
-import type {
-  JoinedChat,
-  AuthStatus,
-} from "../types";
+import type { AuthStatus } from "../types";
+import { chatsApi } from "@/shared/api/chats";
 import { clientsApi } from "@/shared/api/clients";
 import { configApi } from "@/shared/api/config";
 import { filtersApi } from "@/shared/api/filters";
@@ -40,15 +38,7 @@ export const api = {
 
   filters: filtersApi,
 
-  chats: {
-    list: () => request<JoinedChat[]>("/chats"),
-    messagesByChat: (params: { chatId: string; limit?: number }) => {
-      const searchParams = new URLSearchParams();
-      searchParams.set("chatId", params.chatId);
-      if (params.limit) searchParams.set("limit", params.limit.toString());
-      return request<{ chatId: string; messages: import("../types").LiveChatMessage[] }>(`/chats/messages?${searchParams.toString()}`);
-    },
-  },
+  chats: chatsApi,
 
   messages: messagesApi,
 

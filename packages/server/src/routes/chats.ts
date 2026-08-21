@@ -1,13 +1,44 @@
 import type { FastifyInstance } from "fastify";
-import { listJoinedChats, listSingleChatMessages } from "../services/telegram.js";
+import {
+  chatDiscoveryQuerySchema,
+  chatDiscoveryResponseSchema,
+  joinedChatListSchema,
+} from "@telegram-star/shared/contracts/chats";
+import { formatValidationError } from "../shared/validation/zod.js";
+import {
+  discoverJoinedChats,
+  listJoinedChats,
+  listSingleChatMessages,
+} from "../services/telegram.js";
 
 export async function chatRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/chats", async (request, reply) => {
     try {
       const chats = await listJoinedChats();
-      return chats;
+      return joinedChatListSchema.parse(chats);
     } catch (err: any) {
       return reply.status(400).send({ error: err.message || "Failed to load chats" });
+    }
+  });
+
+  app.get("/api/chats/discover", async (request, reply) => {
+    const queryResult = chatDiscoveryQuerySchema.safeParse(request.query);
+    if (!queryResult.success) {
+      return reply.status(400).send({
+        error: formatValidationError(queryResult.error, "Invalid chat discovery query"),
+      });
+    }
+
+    try {
+      return chatDiscoveryResponseSchema.parse(
+        await discoverJoinedChats({
+          query: queryResult.data.q,
+          limit: queryResult.data.limit,
+        }),
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to discover chats";
+      return reply.status(400).send({ error: message });
     }
   });
 
