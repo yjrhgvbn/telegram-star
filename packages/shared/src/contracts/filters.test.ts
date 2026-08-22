@@ -3,6 +3,7 @@ import {
   filterBackfillJobCreateInputSchema,
   filterBackfillJobSchema,
   filterCreateInputSchema,
+  filterFocusInputSchema,
   filterListSchema,
   filterPreviewInputSchema,
   filterUpdateInputSchema,
@@ -31,6 +32,7 @@ describe("filters contract", () => {
     expect(filters[0]?.conditions[1]).toEqual({ type: "regex", values: ["v\\d+\\.\\d+"] });
     expect(filters[0]?.forwardTargetIds).toEqual([2]);
     expect(filters[0]?.latestMessageAt).toBe("2026-06-25T02:00:00.000Z");
+    expect(filters[0]?.systemKey).toBeNull();
   });
 
   it("defaults activity fields for responses from an older server", () => {
@@ -48,6 +50,37 @@ describe("filters contract", () => {
     ]);
 
     expect(filters[0]?.latestMessageAt).toBeNull();
+    expect(filters[0]).toMatchObject({
+      isFocused: false,
+      lastEngagedAt: null,
+      lastEngagementType: null,
+      lastEngagedMessageId: null,
+      manualGroupId: null,
+      manualSortOrder: 0,
+      systemKey: null,
+    });
+  });
+
+  it("accepts the protected all-messages system group", () => {
+    const filter = filterListSchema.parse([{
+      id: 1,
+      name: "全部消息",
+      systemKey: "all_messages",
+      conditions: [],
+      enabled: false,
+      autoLocateUnreadNearRead: false,
+      forwardTargetIds: [],
+      createdAt: "2026-08-22T00:00:00.000Z",
+      updatedAt: "2026-08-22T00:00:00.000Z",
+    }])[0];
+
+    expect(filter).toMatchObject({ systemKey: "all_messages", conditions: [] });
+  });
+
+  it("validates explicit focus changes", () => {
+    expect(filterFocusInputSchema.parse({ isFocused: true })).toEqual({ isFocused: true });
+    expect(() => filterFocusInputSchema.parse({ isFocused: "true" })).toThrow();
+    expect(() => filterFocusInputSchema.parse({ isFocused: true, extra: true })).toThrow();
   });
 
   it("accepts regex conditions and rejects invalid regex patterns", () => {

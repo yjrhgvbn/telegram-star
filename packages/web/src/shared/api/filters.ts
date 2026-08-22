@@ -1,4 +1,9 @@
 import {
+  filterGroupActionResponseSchema,
+  type FilterManualOrderInput,
+  type FilterPlacementInput,
+} from "@telegram-star/shared/contracts/filter-groups";
+import {
   filterBackfillJobSchema,
   filterBackfillResponseSchema,
   filterDeleteResponseSchema,
@@ -8,6 +13,7 @@ import {
   filterSchema,
   type FilterBackfillJobCreateInput,
   type FilterCreateInput,
+  type FilterFocusInput,
   type FilterHistoryScope,
   type FilterPreviewInput,
   type FilterUpdateInput,
@@ -48,6 +54,33 @@ export const filtersApi = {
     request(`/filters/${id}`, { method: "DELETE" }, filterDeleteResponseSchema),
   toggle: (id: number) =>
     request(`/filters/${id}/toggle`, { method: "PATCH" }, filterSchema),
+  setFocused: (id: number, data: FilterFocusInput) =>
+    request(
+      `/filters/${id}/focus`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      },
+      filterSchema,
+    ),
+  setPlacement: (id: number, data: FilterPlacementInput) =>
+    request(
+      `/filters/${id}/placement`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      },
+      filterSchema,
+    ),
+  reorderManual: (data: FilterManualOrderInput) =>
+    request(
+      "/filters/manual-order",
+      {
+        method: "PUT",
+        body: JSON.stringify(data),
+      },
+      filterGroupActionResponseSchema,
+    ),
   backfill: (id: number, data?: FilterHistoryScope) =>
     request(
       `/filters/${id}/backfill`,

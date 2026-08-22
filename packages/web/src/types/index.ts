@@ -28,13 +28,27 @@ export type {
   FilterConditionEffect,
   FilterConditionType,
   FilterCreateInput,
+  FilterEngagementType,
+  FilterFocusInput,
   FilterHistoryScope,
   FilterPreviewResponse,
+  FilterSystemKey,
   FilterUpdateInput,
   HistoricalFilterPreviewMessage,
   HistoricalFilterPreviewSample,
   LiveChatMessage,
 } from "@telegram-star/shared/contracts/filters";
+
+export type {
+  FilterGroup,
+  FilterGroupActionResponse,
+  FilterGroupCreateInput,
+  FilterGroupLayout,
+  FilterGroupOrderInput,
+  FilterGroupUpdateInput,
+  FilterManualOrderInput,
+  FilterPlacementInput,
+} from "@telegram-star/shared/contracts/filter-groups";
 
 export type {
   ForwardTarget,
@@ -49,6 +63,8 @@ export type {
   MessageBatchReadResponse,
   MessageContentLink,
   MessageDirection,
+  MessageEngagementInput,
+  MessageEngagementResponse,
   MessageEventPayload,
   MessageForceSyncReadResponse,
   MessageListParams,

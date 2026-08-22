@@ -194,7 +194,7 @@ async function handleIncomingMessage(
   if (!message) return;
 
   const activeFilters = await db.filter.findMany({
-    where: { enabled: true },
+    where: { enabled: true, systemKey: null },
     orderBy: { id: "asc" },
     select: { id: true, name: true, conditions: true },
   });

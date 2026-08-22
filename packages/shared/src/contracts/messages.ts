@@ -98,6 +98,20 @@ export const messageReadStateResponseSchema = z.object({
   isRead: z.boolean(),
 });
 
+export const messageEngagementInputSchema = z
+  .object({
+    type: z.literal("opened_telegram"),
+  })
+  .strict();
+
+export const messageEngagementResponseSchema = z.object({
+  recorded: z.boolean(),
+  filterId: z.number().int().positive().nullable(),
+  lastEngagedAt: z.string().nullable(),
+  lastEngagementType: z.enum(["marked_read", "opened_telegram"]).nullable(),
+  lastEngagedMessageId: z.number().int().positive().nullable(),
+});
+
 export const messageBatchReadResponseSchema = z.object({
   success: z.boolean(),
   count: z.number().int().nonnegative(),
@@ -150,6 +164,8 @@ export type MessageListQuery = z.infer<typeof messageListQuerySchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type MessageListResponse = z.infer<typeof messageListResponseSchema>;
 export type MessageReadStateResponse = z.infer<typeof messageReadStateResponseSchema>;
+export type MessageEngagementInput = z.infer<typeof messageEngagementInputSchema>;
+export type MessageEngagementResponse = z.infer<typeof messageEngagementResponseSchema>;
 export type MessageBatchReadResponse = z.infer<typeof messageBatchReadResponseSchema>;
 export type MessageForceSyncReadResponse = z.infer<typeof messageForceSyncReadResponseSchema>;
 export type MessageStats = z.infer<typeof messageStatsSchema>;

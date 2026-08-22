@@ -24,6 +24,9 @@ vi.mock("./filters.service.js", () => {
     deleteFilter: vi.fn(),
     listFilters: vi.fn(),
     previewFilterHistory: vi.fn(),
+    reorderManualFilters: vi.fn(),
+    setFilterFocused: vi.fn(),
+    setFilterPlacement: vi.fn(),
     toggleFilter: vi.fn(),
     updateFilter: vi.fn(),
   };
@@ -53,6 +56,12 @@ function createFilter(id: number, patch: Partial<Filter> = {}): Filter {
     autoLocateUnreadNearRead: true,
     forwardTargetIds: [],
     latestMessageAt: null,
+    isFocused: false,
+    lastEngagedAt: null,
+    lastEngagementType: null,
+    lastEngagedMessageId: null,
+    manualGroupId: null,
+    manualSortOrder: 0,
     createdAt: `2026-06-29T00:00:0${id}.000Z`,
     updatedAt: `2026-06-29T00:00:0${id}.000Z`,
     ...patch,
@@ -66,6 +75,9 @@ describe("filter routes", () => {
     vi.mocked(filtersService.deleteFilter).mockReset();
     vi.mocked(filtersService.listFilters).mockReset();
     vi.mocked(filtersService.previewFilterHistory).mockReset();
+    vi.mocked(filtersService.reorderManualFilters).mockReset();
+    vi.mocked(filtersService.setFilterFocused).mockReset();
+    vi.mocked(filtersService.setFilterPlacement).mockReset();
     vi.mocked(filtersService.toggleFilter).mockReset();
     vi.mocked(filtersService.updateFilter).mockReset();
     vi.mocked(backfillJobsService.createFilterBackfillJob).mockReset();
@@ -189,8 +201,9 @@ describe("filter routes", () => {
     expect(parseJson(response.payload)).toEqual({ error: "Filter not found" });
   });
 
-  it("updates, toggles, previews, and backfills through validated params", async () => {
+  it("updates, focuses, toggles, previews, and backfills through validated params", async () => {
     const updated = createFilter(3, { name: "updated" });
+    const focused = createFilter(3, { isFocused: true });
     const toggled = createFilter(3, { enabled: false });
     const preview: FilterPreviewResponse = {
       messages: [],
@@ -207,6 +220,7 @@ describe("filter routes", () => {
     };
 
     vi.mocked(filtersService.updateFilter).mockResolvedValue(updated);
+    vi.mocked(filtersService.setFilterFocused).mockResolvedValue(focused);
     vi.mocked(filtersService.toggleFilter).mockResolvedValue(toggled);
     vi.mocked(filtersService.previewFilterHistory).mockResolvedValue(preview);
     vi.mocked(filtersService.backfillFilter).mockResolvedValue(backfill);
@@ -223,6 +237,11 @@ describe("filter routes", () => {
       },
     });
     const toggleResponse = await app.inject({ method: "PATCH", url: "/api/filters/3/toggle" });
+    const focusResponse = await app.inject({
+      method: "PATCH",
+      url: "/api/filters/3/focus",
+      payload: { isFocused: true },
+    });
     const previewResponse = await app.inject({
       method: "POST",
       url: "/api/filters/preview",
@@ -240,6 +259,7 @@ describe("filter routes", () => {
 
     expect(updateResponse.statusCode).toBe(200);
     expect(toggleResponse.statusCode).toBe(200);
+    expect(focusResponse.statusCode).toBe(200);
     expect(previewResponse.statusCode).toBe(200);
     expect(backfillResponse.statusCode).toBe(200);
     expect(filtersService.updateFilter).toHaveBeenCalledWith(3, {
@@ -248,10 +268,55 @@ describe("filter routes", () => {
       forwardTargetIds: [4],
     });
     expect(filtersService.toggleFilter).toHaveBeenCalledWith(3);
+    expect(filtersService.setFilterFocused).toHaveBeenCalledWith(3, { isFocused: true });
     expect(filtersService.previewFilterHistory).toHaveBeenCalledWith({
       conditions: [{ type: "keyword", values: ["updated"] }],
       page: 2,
     });
     expect(filtersService.backfillFilter).toHaveBeenCalledWith(3, { perChatLimit: 10 });
+  });
+
+  it("rejects invalid focus payloads", async () => {
+    const app = await createRouteTestApp(filterRoutes);
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/filters/3/focus",
+      payload: { isFocused: "yes" },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(400);
+    expect(filtersService.setFilterFocused).not.toHaveBeenCalled();
+  });
+
+  it("moves and reorders filters through validated payloads", async () => {
+    const moved = createFilter(3, { manualGroupId: 2, manualSortOrder: 1 });
+    vi.mocked(filtersService.setFilterPlacement).mockResolvedValue(moved);
+    vi.mocked(filtersService.reorderManualFilters).mockResolvedValue({ success: true });
+    const app = await createRouteTestApp(filterRoutes);
+
+    const moveResponse = await app.inject({
+      method: "PATCH",
+      url: "/api/filters/3/placement",
+      payload: { manualGroupId: 2, targetIndex: 1 },
+    });
+    const orderResponse = await app.inject({
+      method: "PUT",
+      url: "/api/filters/manual-order",
+      payload: { manualGroupId: 2, filterIds: [3, 1] },
+    });
+    await app.close();
+
+    expect(moveResponse.statusCode, moveResponse.payload).toBe(200);
+    expect(orderResponse.statusCode, orderResponse.payload).toBe(200);
+    expect(filtersService.setFilterPlacement).toHaveBeenCalledWith(3, {
+      manualGroupId: 2,
+      targetIndex: 1,
+    });
+    expect(filtersService.reorderManualFilters).toHaveBeenCalledWith({
+      manualGroupId: 2,
+      filterIds: [3, 1],
+    });
   });
 });

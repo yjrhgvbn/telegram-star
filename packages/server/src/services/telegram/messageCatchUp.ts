@@ -329,7 +329,7 @@ function defaultRunDependencies(context: ActiveCatchUpContext): MessageCatchUpRu
     saveCheckpoint: saveCatchUpCheckpoint,
     loadActiveFilters: () =>
       db.filter.findMany({
-        where: { enabled: true },
+        where: { enabled: true, systemKey: null },
         orderBy: { id: "asc" },
         select: { id: true, name: true, conditions: true },
       }),

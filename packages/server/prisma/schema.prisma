@@ -10,16 +10,36 @@ datasource db {
 model Filter {
   id        Int         @id @default(autoincrement())
   name      String
+  systemKey String?     @unique @map("system_key")
   conditions String
   enabled   Boolean     @default(true)
   autoLocateUnreadNearRead Boolean @default(true) @map("auto_locate_unread_near_read")
+  isFocused Boolean     @default(false) @map("is_focused")
+  lastEngagedAt String? @map("last_engaged_at")
+  lastEngagementType String? @map("last_engagement_type")
+  lastEngagedMessageId Int? @map("last_engaged_message_id")
+  manualGroupId Int? @map("manual_group_id")
+  manualSortOrder Int @default(0) @map("manual_sort_order")
   createdAt String      @map("created_at")
   updatedAt String      @map("updated_at")
   messages  Message[]
   backfillJobs FilterBackfillJob[]
   forwardTargets ForwardTarget[] @relation("FilterToForwardTarget")
+  manualGroup FilterGroup? @relation(fields: [manualGroupId], references: [id], onDelete: SetNull)
 
+  @@index([manualGroupId, manualSortOrder])
   @@map("filters")
+}
+
+model FilterGroup {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt String   @map("created_at")
+  updatedAt String   @map("updated_at")
+  filters   Filter[]
+
+  @@map("filter_groups")
 }
 
 model FilterBackfillJob {

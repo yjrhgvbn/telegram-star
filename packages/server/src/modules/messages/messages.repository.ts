@@ -32,6 +32,16 @@ export interface MessageStatsCounts {
   today: number;
 }
 
+export type MessageGroupEngagementType = "marked_read" | "opened_telegram";
+
+export interface MessageGroupEngagementRecord {
+  recorded: boolean;
+  filterId: number | null;
+  lastEngagedAt: string | null;
+  lastEngagementType: MessageGroupEngagementType | null;
+  lastEngagedMessageId: number | null;
+}
+
 export async function findMessageCursor(id: number) {
   return db.message.findUnique({
     where: { id },
@@ -42,22 +52,108 @@ export async function findMessageCursor(id: number) {
 export async function findMessageReadState(id: number) {
   return db.message.findUnique({
     where: { id },
-    select: { id: true, isRead: true },
+    select: { id: true, isRead: true, matchedFilterId: true },
   });
 }
 
 export async function setMessageReadState(id: number, isRead: boolean) {
-  return db.message.update({
-    where: { id },
-    data: { isRead },
-    select: { id: true, isRead: true },
+  return db.$transaction(async (transaction) => {
+    const updated = await transaction.message.update({
+      where: { id },
+      data: { isRead },
+      select: { id: true, isRead: true, matchedFilterId: true },
+    });
+
+    if (isRead && updated.matchedFilterId !== null) {
+      const now = new Date().toISOString();
+      await transaction.filter.update({
+        where: { id: updated.matchedFilterId },
+        data: {
+          lastEngagedAt: now,
+          lastEngagementType: "marked_read",
+          lastEngagedMessageId: updated.id,
+        },
+      });
+    }
+
+    return updated;
   });
 }
 
 export async function markMessagesRead(ids: number[]) {
-  return db.message.updateMany({
-    where: { id: { in: ids } },
-    data: { isRead: true },
+  return db.$transaction(async (transaction) => {
+    const unreadMessages = await transaction.message.findMany({
+      where: { id: { in: ids }, isRead: false },
+      select: { id: true, matchedFilterId: true },
+    });
+    const result = await transaction.message.updateMany({
+      where: { id: { in: ids } },
+      data: { isRead: true },
+    });
+
+    const unreadById = new Map(unreadMessages.map((message) => [message.id, message]));
+    const latestMessageByFilter = new Map<number, number>();
+    for (const id of ids) {
+      const filterId = unreadById.get(id)?.matchedFilterId;
+      if (filterId !== null && filterId !== undefined) {
+        latestMessageByFilter.set(filterId, id);
+      }
+    }
+
+    const now = new Date().toISOString();
+    for (const [filterId, messageId] of latestMessageByFilter) {
+      await transaction.filter.update({
+        where: { id: filterId },
+        data: {
+          lastEngagedAt: now,
+          lastEngagementType: "marked_read",
+          lastEngagedMessageId: messageId,
+        },
+      });
+    }
+
+    return result;
+  });
+}
+
+export async function recordMessageGroupEngagement(
+  messageId: number,
+  type: MessageGroupEngagementType,
+): Promise<MessageGroupEngagementRecord | null> {
+  return db.$transaction(async (transaction) => {
+    const message = await transaction.message.findUnique({
+      where: { id: messageId },
+      select: { id: true, matchedFilterId: true },
+    });
+    if (!message) return null;
+
+    if (message.matchedFilterId === null) {
+      return {
+        recorded: false,
+        filterId: null,
+        lastEngagedAt: null,
+        lastEngagementType: null,
+        lastEngagedMessageId: null,
+      };
+    }
+
+    const now = new Date().toISOString();
+    await transaction.filter.update({
+      where: { id: message.matchedFilterId },
+      data: {
+        lastEngagedAt: now,
+        lastEngagementType: type,
+        lastEngagedMessageId: message.id,
+      },
+    });
+
+    return {
+      recorded: true,
+      filterId: message.matchedFilterId,
+      lastEngagedAt: now,
+      lastEngagementType: type,
+      lastEngagedMessageId: message.id,
+    };
   });
 }
 

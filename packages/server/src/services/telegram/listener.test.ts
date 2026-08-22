@@ -105,7 +105,7 @@ describe("Telegram message listener", () => {
     await editedHandler!.callback({ message });
 
     expect(mocks.filterFindMany).toHaveBeenCalledWith({
-      where: { enabled: true },
+      where: { enabled: true, systemKey: null },
       orderBy: { id: "asc" },
       select: { id: true, name: true, conditions: true },
     });

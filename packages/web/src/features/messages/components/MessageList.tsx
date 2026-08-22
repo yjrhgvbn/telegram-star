@@ -44,6 +44,7 @@ interface Props {
   onFlushPending: () => void;
   onSetAtBottom: (v: boolean) => void;
   onToggleRead: (id: number) => void;
+  onOpenTelegram: (id: number) => void;
   markAsReadLocal: (ids: number[]) => void;
   searchQuery?: string;
 }
@@ -195,6 +196,7 @@ export function MessageList({
   onFlushPending,
   onSetAtBottom,
   onToggleRead,
+  onOpenTelegram,
   markAsReadLocal,
   searchQuery,
 }: Props) {
@@ -356,6 +358,7 @@ export function MessageList({
                     <MessageCard
                       message={message}
                       onToggleRead={onToggleRead}
+                      onOpenTelegram={onOpenTelegram}
                       searchQuery={searchQuery}
                       isAnchor={message.id === anchorId}
                     />

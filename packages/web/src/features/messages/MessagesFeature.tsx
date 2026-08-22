@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ArrowLeft, PencilLine, RefreshCw } from "lucide-react";
 import { useMessages, useStats } from "./hooks/useMessages";
 import { useFilters } from "@/hooks/useFilters";
+import { useFilterGroups } from "@/hooks/useFilterGroups";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { AppShell } from "@/components/AppShell";
 import { FilterPanel } from "./components/FilterPanel";
@@ -30,7 +31,22 @@ export function MessagesFeature() {
   const [readFilter, setReadFilter] = useState<ReadFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { filters, loading: filtersLoading } = useFilters();
+  const {
+    filters,
+    messageGroups,
+    loading: filtersLoading,
+    setFilterFocused,
+    setFilterPlacement,
+  } = useFilters();
+  const {
+    groups: filterGroups,
+    ungroupedPosition,
+    loading: filterGroupsLoading,
+    createGroup,
+    renameGroup,
+    deleteGroup,
+    reorderGroups,
+  } = useFilterGroups();
   const selectedFilter = filters.find((item) => String(item.id) === selectedFilterId) ?? null;
   const currentTitle = selectedFilterId === "" ? "全部消息" : (selectedFilter?.name ?? "过滤消息");
 
@@ -54,6 +70,7 @@ export function MessagesFeature() {
     flushPending,
     setAtBottom,
     toggleRead,
+    recordTelegramOpen,
     markAsReadLocal,
     refresh,
   } = useMessages({
@@ -79,6 +96,10 @@ export function MessagesFeature() {
     navigate("/messages");
   }, [navigate]);
 
+  const handleEditSelectedFilter = useCallback(() => {
+    if (selectedFilter) navigate(`/filters/${selectedFilter.id}`);
+  }, [navigate, selectedFilter]);
+
   const handleSearch = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
@@ -97,8 +118,8 @@ export function MessagesFeature() {
     >
       <div
         className={cn(
-          "relative flex h-full min-h-0 flex-1 overflow-hidden bg-background lg:gap-3",
-          isGroupSelected ? "lg:p-3" : "p-3",
+          "relative flex h-full min-h-0 flex-1 overflow-hidden bg-background lg:gap-3 lg:p-3",
+          !isGroupSelected && "max-lg:bg-card",
         )}
       >
         {/*
@@ -115,10 +136,18 @@ export function MessagesFeature() {
           )}
         >
           <FilterPanel
-            filters={filters}
-            loading={filtersLoading}
+            filters={messageGroups}
+            filterGroups={filterGroups}
+            ungroupedPosition={ungroupedPosition}
+            loading={filtersLoading || filterGroupsLoading}
             selectedFilterId={selectedFilterId}
             onSelectFilter={handleSelectFilter}
+            onSetFocused={setFilterFocused}
+            onCreateGroup={createGroup}
+            onRenameGroup={renameGroup}
+            onDeleteGroup={deleteGroup}
+            onReorderGroups={reorderGroups}
+            onSetPlacement={setFilterPlacement}
           />
         </aside>
 
@@ -177,6 +206,20 @@ export function MessagesFeature() {
                 </TabsList>
               </Tabs>
 
+              {selectedFilter ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  className="xl:hidden"
+                  onClick={handleEditSelectedFilter}
+                  aria-label={`编辑过滤器 ${selectedFilter.name}`}
+                  title="编辑过滤器"
+                >
+                  <PencilLine />
+                </Button>
+              ) : null}
+
               <Button type="button" variant="outline" size="icon-sm" onClick={refresh} aria-label="刷新消息">
                 <RefreshCw className={cn(messagesLoading && "animate-spin")} />
               </Button>
@@ -221,6 +264,7 @@ export function MessagesFeature() {
               onFlushPending={flushPending}
               onSetAtBottom={setAtBottom}
               onToggleRead={toggleRead}
+              onOpenTelegram={recordTelegramOpen}
               markAsReadLocal={markAsReadLocal}
               searchQuery={searchQuery}
             />
@@ -232,6 +276,7 @@ export function MessagesFeature() {
           selectedFilter={selectedFilter}
           selectedFilterId={selectedFilterId}
           telegramAuthorized={authStatus.authorized}
+          onEditSelectedFilter={handleEditSelectedFilter}
         />
       </div>
     </AppShell>

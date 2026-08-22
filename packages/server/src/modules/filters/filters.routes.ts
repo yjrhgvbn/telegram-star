@@ -1,8 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import {
+  filterManualOrderInputSchema,
+  filterPlacementInputSchema,
+} from "@telegram-star/shared/contracts/filter-groups";
+import {
   filterBackfillJobCreateInputSchema,
   filterBackfillJobIdParamSchema,
   filterCreateInputSchema,
+  filterFocusInputSchema,
   filterHistoryScopeSchema,
   filterIdParamSchema,
   filterPreviewInputSchema,
@@ -16,9 +21,13 @@ import {
   deleteFilter,
   listFilters,
   previewFilterHistory,
+  reorderManualFilters,
+  setFilterPlacement,
+  setFilterFocused,
   toggleFilter,
   updateFilter,
 } from "./filters.service.js";
+import { FilterGroupNotFoundError } from "../filter-groups/filter-groups.service.js";
 import {
   FilterBackfillJobNotFoundError,
   createFilterBackfillJob,
@@ -36,7 +45,8 @@ function routeErrorMessage(error: unknown, fallback: string): string {
 function sendRouteError(reply: any, error: unknown, fallback: string) {
   if (
     error instanceof FilterNotFoundError ||
-    error instanceof FilterBackfillJobNotFoundError
+    error instanceof FilterBackfillJobNotFoundError ||
+    error instanceof FilterGroupNotFoundError
   ) {
     return reply.status(404).send({ error: error.message });
   }
@@ -67,6 +77,15 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  app.put("/api/filters/manual-order", async (request, reply) => {
+    try {
+      const input = filterManualOrderInputSchema.parse(request.body ?? {});
+      return await reorderManualFilters(input);
+    } catch (error: unknown) {
+      return sendRouteError(reply, error, "Failed to reorder filters");
+    }
+  });
+
   app.put("/api/filters/:id", async (request, reply) => {
     try {
       const { id } = filterIdParamSchema.parse(request.params);
@@ -92,6 +111,26 @@ export async function filterRoutes(app: FastifyInstance): Promise<void> {
       return await toggleFilter(id);
     } catch (error: unknown) {
       return sendRouteError(reply, error, "Failed to toggle filter");
+    }
+  });
+
+  app.patch("/api/filters/:id/focus", async (request, reply) => {
+    try {
+      const { id } = filterIdParamSchema.parse(request.params);
+      const input = filterFocusInputSchema.parse(request.body ?? {});
+      return await setFilterFocused(id, input);
+    } catch (error: unknown) {
+      return sendRouteError(reply, error, "Failed to update filter focus");
+    }
+  });
+
+  app.patch("/api/filters/:id/placement", async (request, reply) => {
+    try {
+      const { id } = filterIdParamSchema.parse(request.params);
+      const input = filterPlacementInputSchema.parse(request.body ?? {});
+      return await setFilterPlacement(id, input);
+    } catch (error: unknown) {
+      return sendRouteError(reply, error, "Failed to move filter");
     }
   });
 

@@ -11,6 +11,10 @@ export const queryKeys = {
     latestBackfill: (filterId: number) =>
       ["filters", filterId, "backfill", "latest"] as const,
   },
+  filterGroups: {
+    all: ["filter-groups"] as const,
+    layout: ["filter-groups", "layout"] as const,
+  },
   chats: {
     joined: ["chats", "joined"] as const,
   },

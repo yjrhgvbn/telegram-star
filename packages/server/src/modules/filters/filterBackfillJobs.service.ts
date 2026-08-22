@@ -1,4 +1,5 @@
 import {
+  ALL_MESSAGES_SYSTEM_KEY,
   filterBackfillJobSchema,
   type FilterBackfillJob,
   type FilterBackfillJobCreateInput,
@@ -172,9 +173,12 @@ export async function createFilterBackfillJob(
 ): Promise<FilterBackfillJob> {
   const filter = await db.filter.findUnique({
     where: { id: filterId },
-    select: { id: true },
+    select: { id: true, systemKey: true },
   });
   if (!filter) throw new FilterBackfillJobNotFoundError("Filter not found");
+  if (filter.systemKey === ALL_MESSAGES_SYSTEM_KEY) {
+    throw new FilterBackfillJobNotFoundError("System message groups cannot be backfilled");
+  }
 
   const existing = await db.filterBackfillJob.findFirst({
     where: { filterId, status: { in: ["queued", "running"] } },

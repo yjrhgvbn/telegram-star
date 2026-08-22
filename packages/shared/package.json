@@ -26,6 +26,10 @@
       "types": "./dist/contracts/filters.d.ts",
       "import": "./dist/contracts/filters.js"
     },
+    "./contracts/filter-groups": {
+      "types": "./dist/contracts/filter-groups.d.ts",
+      "import": "./dist/contracts/filter-groups.js"
+    },
     "./contracts/forward-targets": {
       "types": "./dist/contracts/forward-targets.d.ts",
       "import": "./dist/contracts/forward-targets.js"

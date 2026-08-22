@@ -11,6 +11,7 @@ import { chatRoutes } from "./routes/chats.js";
 import { clientsRoutes } from "./modules/clients/clients.routes.js";
 import { configRoutes } from "./modules/config/config.routes.js";
 import { filterRoutes } from "./modules/filters/filters.routes.js";
+import { filterGroupRoutes } from "./modules/filter-groups/filter-groups.routes.js";
 import { messageRoutes } from "./modules/messages/messages.routes.js";
 import { forwardTargetsRoutes } from "./modules/forward-targets/forward-targets.routes.js";
 import { mediaRoutes } from "./modules/media/media.routes.js";
@@ -76,6 +77,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   await app.register(chatRoutes);
   await app.register(clientsRoutes, { prefix: "/api/clients" });
   await app.register(filterRoutes);
+  await app.register(filterGroupRoutes, { prefix: "/api/filter-groups" });
   await app.register(messageRoutes);
   await app.register(forwardTargetsRoutes, { prefix: "/api/forward-targets" });
   await app.register(mediaRoutes);

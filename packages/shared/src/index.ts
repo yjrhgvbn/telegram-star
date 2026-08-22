@@ -2,6 +2,7 @@ export * from "./contracts/config.js";
 export * from "./contracts/clients.js";
 export * from "./contracts/chats.js";
 export * from "./contracts/filters.js";
+export * from "./contracts/filter-groups.js";
 export * from "./contracts/forward-targets.js";
 export * from "./contracts/health.js";
 export * from "./contracts/messages.js";

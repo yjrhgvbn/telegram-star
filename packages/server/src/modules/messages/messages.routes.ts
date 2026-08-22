@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import {
   messageBatchReadResponseSchema,
   messageForceSyncReadResponseSchema,
+  messageEngagementInputSchema,
+  messageEngagementResponseSchema,
   messageIdParamSchema,
   messageIdsInputSchema,
   messageListQuerySchema,
@@ -21,6 +23,7 @@ import {
   listMessageReadSyncLogs,
   listMessages,
   markMessagesAsRead,
+  recordMessageEngagement,
   toggleMessageRead,
 } from "./messages.service.js";
 
@@ -58,6 +61,28 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
     try {
       return messageReadStateResponseSchema.parse(
         await toggleMessageRead(paramsResult.data.id, request.log),
+      );
+    } catch (error) {
+      if (error instanceof MessageNotFoundError) {
+        return reply.status(404).send({ error: "Message not found" });
+      }
+      throw error;
+    }
+  });
+
+  app.post("/api/messages/:id/engagement", async (request, reply) => {
+    const paramsResult = messageIdParamSchema.safeParse(request.params);
+    const bodyResult = messageEngagementInputSchema.safeParse(request.body ?? {});
+    if (!paramsResult.success || !bodyResult.success) {
+      const error = paramsResult.success ? bodyResult.error : paramsResult.error;
+      return reply
+        .status(400)
+        .send({ error: validationErrorMessage(error, "Invalid message engagement") });
+    }
+
+    try {
+      return messageEngagementResponseSchema.parse(
+        await recordMessageEngagement(paramsResult.data.id, bodyResult.data),
       );
     } catch (error) {
       if (error instanceof MessageNotFoundError) {

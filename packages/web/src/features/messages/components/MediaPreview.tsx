@@ -18,6 +18,7 @@ import { rememberTelegramJumpMessageId } from "../utils/messageNavigation";
 
 interface Props {
   message: Message;
+  onOpenTelegram?: (id: number) => void;
 }
 
 /** 格式化文件大小 */
@@ -282,7 +283,7 @@ function PollPreview({ message }: Props) {
 }
 
 /** 根据 mediaType 渲染对应的预览组件 */
-export function MediaPreview({ message }: Props) {
+export function MediaPreview({ message, onOpenTelegram }: Props) {
   const handleExternalLink = useClientExternalLink();
 
   if (!message.mediaType) return null;
@@ -297,7 +298,10 @@ export function MediaPreview({ message }: Props) {
         className="media-preview__link"
         title="在 Telegram 中查看"
         onClick={(event) =>
-          handleExternalLink(event, link, () => rememberTelegramJumpMessageId(message.id))
+          handleExternalLink(event, link, () => {
+            rememberTelegramJumpMessageId(message.id);
+            onOpenTelegram?.(message.id);
+          })
         }
       >
         {content}

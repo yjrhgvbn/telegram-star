@@ -62,15 +62,25 @@ export const filterConditionSchema = z
 export const filterConditionsSchema = z.array(filterConditionSchema).min(1);
 
 export const filterForwardTargetIdsSchema = z.array(z.number().int().positive());
+export const filterEngagementTypeSchema = z.enum(["marked_read", "opened_telegram"]);
+export const ALL_MESSAGES_SYSTEM_KEY = "all_messages" as const;
+export const filterSystemKeySchema = z.literal(ALL_MESSAGES_SYSTEM_KEY);
 
 export const filterSchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
+  systemKey: filterSystemKeySchema.nullable().default(null),
   conditions: z.array(filterConditionSchema),
   enabled: z.boolean(),
   autoLocateUnreadNearRead: z.boolean(),
   forwardTargetIds: filterForwardTargetIdsSchema,
   latestMessageAt: z.string().nullable().default(null),
+  isFocused: z.boolean().default(false),
+  lastEngagedAt: z.string().nullable().default(null),
+  lastEngagementType: filterEngagementTypeSchema.nullable().default(null),
+  lastEngagedMessageId: z.number().int().positive().nullable().default(null),
+  manualGroupId: z.number().int().positive().nullable().default(null),
+  manualSortOrder: z.number().int().nonnegative().default(0),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -92,6 +102,12 @@ export const filterUpdateInputSchema = z
     conditions: filterConditionsSchema.optional(),
     autoLocateUnreadNearRead: z.boolean().optional(),
     forwardTargetIds: filterForwardTargetIdsSchema.optional(),
+  })
+  .strict();
+
+export const filterFocusInputSchema = z
+  .object({
+    isFocused: z.boolean(),
   })
   .strict();
 
@@ -239,8 +255,11 @@ export type FilterConditionType = z.infer<typeof filterConditionTypeSchema>;
 export type FilterConditionEffect = z.infer<typeof filterConditionEffectSchema>;
 export type FilterCondition = z.infer<typeof filterConditionSchema>;
 export type Filter = z.infer<typeof filterSchema>;
+export type FilterSystemKey = z.infer<typeof filterSystemKeySchema>;
+export type FilterEngagementType = z.infer<typeof filterEngagementTypeSchema>;
 export type FilterCreateInput = z.infer<typeof filterCreateInputSchema>;
 export type FilterUpdateInput = z.infer<typeof filterUpdateInputSchema>;
+export type FilterFocusInput = z.infer<typeof filterFocusInputSchema>;
 export type FilterHistoryScope = z.infer<typeof filterHistoryScopeSchema>;
 export type FilterPreviewInput = z.infer<typeof filterPreviewInputSchema>;
 export type LiveChatMessage = z.infer<typeof liveChatMessageSchema>;

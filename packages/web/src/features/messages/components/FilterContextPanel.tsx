@@ -1,5 +1,13 @@
-import { BellRing, Inbox, ListFilter, LocateFixed, MessageSquareText } from "lucide-react";
+import {
+  BellRing,
+  Inbox,
+  ListFilter,
+  LocateFixed,
+  MessageSquareText,
+  PencilLine,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { Filter } from "@/types";
 
@@ -8,6 +16,7 @@ interface FilterContextPanelProps {
   selectedFilter: Filter | null;
   selectedFilterId: string;
   telegramAuthorized: boolean;
+  onEditSelectedFilter: () => void;
 }
 
 function countConditionValues(filter: Filter | null, type: string) {
@@ -23,6 +32,7 @@ export function FilterContextPanel({
   selectedFilter,
   selectedFilterId,
   telegramAuthorized,
+  onEditSelectedFilter,
 }: FilterContextPanelProps) {
   const isAllMessages = selectedFilterId === "";
   const enabledFilters = filters.filter((filter) => filter.enabled).length;
@@ -41,7 +51,21 @@ export function FilterContextPanel({
           <h2 className="text-sm font-semibold">上下文</h2>
           <p className="text-xs text-muted-foreground">当前消息路径</p>
         </div>
-        <Badge variant="outline">{isAllMessages ? "全部" : "规则"}</Badge>
+        <div className="flex items-center gap-1.5">
+          <Badge variant="outline">{isAllMessages ? "全部" : "规则"}</Badge>
+          {selectedFilter ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onEditSelectedFilter}
+              aria-label={`编辑过滤器 ${selectedFilter.name}`}
+              title="编辑过滤器"
+            >
+              <PencilLine />
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <Separator />

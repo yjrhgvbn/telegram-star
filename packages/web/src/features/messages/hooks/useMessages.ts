@@ -2,7 +2,7 @@ import { useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { queryKeys } from "@/shared/query/queryKeys";
-import type { Message, MessageStats } from "@/types";
+import type { Filter, Message, MessageStats } from "@/types";
 import { useMessageEvents } from "./useMessageEvents";
 import {
   useMessagePagination,
@@ -25,6 +25,7 @@ export interface UseMessagesReturn {
   flushPending: () => void;    // 用户点击 badge 时：清除 pending 状态并触发 loadNewer
   setAtBottom: (v: boolean) => void; // MessageList 通知当前是否在底部
   toggleRead: (id: number) => Promise<void>;
+  recordTelegramOpen: (id: number) => void;
   markAsReadLocal: (ids: number[]) => void;
   refresh: () => void;
 }
@@ -70,7 +71,32 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
     const updated = await api.messages.toggleRead(id);
     setMessageReadState(id, updated.isRead);
     void queryClient.invalidateQueries({ queryKey: queryKeys.messages.stats });
-  }, [queryClient, setMessageReadState]);
+    if (updated.isRead) invalidateFilterActivity();
+  }, [invalidateFilterActivity, queryClient, setMessageReadState]);
+
+  const recordTelegramOpen = useCallback((id: number) => {
+    void api.messages
+      .recordEngagement(id, { type: "opened_telegram" })
+      .then((engagement) => {
+        if (!engagement.recorded || engagement.filterId === null) return;
+
+        queryClient.setQueryData<Filter[]>(queryKeys.filters.all, (current) =>
+          (current ?? []).map((filter) =>
+            filter.id === engagement.filterId
+              ? {
+                  ...filter,
+                  lastEngagedAt: engagement.lastEngagedAt,
+                  lastEngagementType: engagement.lastEngagementType,
+                  lastEngagedMessageId: engagement.lastEngagedMessageId,
+                }
+              : filter,
+          ),
+        );
+      })
+      .catch((error: unknown) => {
+        console.error("[MessageEngagement] failed to record Telegram open", error);
+      });
+  }, [queryClient]);
 
   const refreshMessages = useCallback(() => {
     refresh();
@@ -92,6 +118,7 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
     flushPending,
     setAtBottom,
     toggleRead,
+    recordTelegramOpen,
     markAsReadLocal,
     refresh: refreshMessages,
   };

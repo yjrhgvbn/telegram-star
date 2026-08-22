@@ -35,6 +35,7 @@ vi.mock("./messages.service.js", () => {
     listMessageReadSyncLogs: vi.fn(),
     listMessages: vi.fn(),
     markMessagesAsRead: vi.fn(),
+    recordMessageEngagement: vi.fn(),
     toggleMessageRead: vi.fn(),
   };
 });
@@ -75,6 +76,7 @@ describe("message routes", () => {
     vi.mocked(messagesService.listMessageReadSyncLogs).mockReset();
     vi.mocked(messagesService.listMessages).mockReset();
     vi.mocked(messagesService.markMessagesAsRead).mockReset();
+    vi.mocked(messagesService.recordMessageEngagement).mockReset();
     vi.mocked(messagesService.toggleMessageRead).mockReset();
   });
 
@@ -172,6 +174,38 @@ describe("message routes", () => {
     expect(messagesService.toggleMessageRead).toHaveBeenCalledWith(7, expect.any(Object));
     expect(messagesService.markMessagesAsRead).toHaveBeenCalledWith([1, 2], expect.any(Object));
     expect(messagesService.forceSyncMessageRead).toHaveBeenCalledWith([1, 2]);
+  });
+
+  it("records Telegram opens for the message group", async () => {
+    const engagement = {
+      recorded: true,
+      filterId: 3,
+      lastEngagedAt: "2026-08-22T06:00:00.000Z",
+      lastEngagementType: "opened_telegram" as const,
+      lastEngagedMessageId: 7,
+    };
+    vi.mocked(messagesService.recordMessageEngagement).mockResolvedValue(engagement);
+    const app = await createRouteTestApp(messageRoutes);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/messages/7/engagement",
+      payload: { type: "opened_telegram" },
+    });
+    const invalidResponse = await app.inject({
+      method: "POST",
+      url: "/api/messages/7/engagement",
+      payload: { type: "viewed_group" },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(parseJson(response.payload)).toEqual(engagement);
+    expect(invalidResponse.statusCode).toBe(400);
+    expect(messagesService.recordMessageEngagement).toHaveBeenCalledOnce();
+    expect(messagesService.recordMessageEngagement).toHaveBeenCalledWith(7, {
+      type: "opened_telegram",
+    });
   });
 
   it("returns stats, read sync logs, and opens event stream route", async () => {

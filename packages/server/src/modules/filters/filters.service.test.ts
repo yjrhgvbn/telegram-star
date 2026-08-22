@@ -13,6 +13,12 @@ describe("filters.service", () => {
       ]),
       enabled: true,
       autoLocateUnreadNearRead: false,
+      isFocused: true,
+      lastEngagedAt: "2026-06-29T00:45:00.000Z",
+      lastEngagementType: "marked_read",
+      lastEngagedMessageId: 18,
+      manualGroupId: 3,
+      manualSortOrder: 2,
       forwardTargets: [{ id: 2 }, { id: 5 }],
       messages: [{ messageDate: "2026-06-29T00:30:00.000Z" }],
       createdAt: "2026-06-29T00:00:00.000Z",
@@ -26,6 +32,14 @@ describe("filters.service", () => {
     expect(filter.autoLocateUnreadNearRead).toBe(false);
     expect(filter.forwardTargetIds).toEqual([2, 5]);
     expect(filter.latestMessageAt).toBe("2026-06-29T00:30:00.000Z");
+    expect(filter).toMatchObject({
+      isFocused: true,
+      lastEngagedAt: "2026-06-29T00:45:00.000Z",
+      lastEngagementType: "marked_read",
+      lastEngagedMessageId: 18,
+      manualGroupId: 3,
+      manualSortOrder: 2,
+    });
   });
 
   it("normalizes history scope without inventing defaults", () => {

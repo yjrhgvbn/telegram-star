@@ -1,5 +1,6 @@
 import {
   messageBatchReadResponseSchema,
+  messageEngagementResponseSchema,
   messageForceSyncReadResponseSchema,
   messageListParamsSchema,
   messageListResponseSchema,
@@ -7,6 +8,7 @@ import {
   messageStatsSchema,
   readSyncLogsResponseSchema,
   type MessageListParams,
+  type MessageEngagementInput,
 } from "@telegram-star/shared/contracts/messages";
 import { request } from "./request";
 
@@ -31,6 +33,15 @@ export const messagesApi = {
     request(`/messages${toMessageQuery(params)}`, undefined, messageListResponseSchema),
   toggleRead: (id: number) =>
     request(`/messages/${id}/read`, { method: "PATCH" }, messageReadStateResponseSchema),
+  recordEngagement: (id: number, data: MessageEngagementInput) =>
+    request(
+      `/messages/${id}/engagement`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+      messageEngagementResponseSchema,
+    ),
   batchRead: (ids: number[]) =>
     request(
       "/messages/batch-read",

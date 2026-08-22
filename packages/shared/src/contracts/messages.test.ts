@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  messageEngagementInputSchema,
+  messageEngagementResponseSchema,
   messageIdsInputSchema,
   messageListQuerySchema,
   messageListResponseSchema,
@@ -87,5 +89,22 @@ describe("messages contract", () => {
 
   it("rejects empty batch ids", () => {
     expect(() => messageIdsInputSchema.parse({ ids: [] })).toThrow();
+  });
+
+  it("only accepts explicit Telegram-open engagement events", () => {
+    expect(messageEngagementInputSchema.parse({ type: "opened_telegram" })).toEqual({
+      type: "opened_telegram",
+    });
+    expect(() => messageEngagementInputSchema.parse({ type: "viewed_group" })).toThrow();
+
+    expect(
+      messageEngagementResponseSchema.parse({
+        recorded: true,
+        filterId: 2,
+        lastEngagedAt: "2026-08-22T06:00:00.000Z",
+        lastEngagementType: "opened_telegram",
+        lastEngagedMessageId: 9,
+      }),
+    ).toMatchObject({ filterId: 2, lastEngagedMessageId: 9 });
   });
 });

@@ -1,4 +1,11 @@
 import {
+  filterGroupActionResponseSchema,
+  type FilterGroupActionResponse,
+  type FilterManualOrderInput,
+  type FilterPlacementInput,
+} from "@telegram-star/shared/contracts/filter-groups";
+import {
+  ALL_MESSAGES_SYSTEM_KEY,
   filterBackfillResponseSchema,
   filterDeleteResponseSchema,
   filterListSchema,
@@ -8,6 +15,7 @@ import {
   type FilterBackfillResponse,
   type FilterCreateInput,
   type FilterDeleteResponse,
+  type FilterFocusInput,
   type FilterHistoryScope,
   type FilterPreviewInput,
   type FilterPreviewResponse,
@@ -23,15 +31,45 @@ import {
   deleteFilterWithMessages,
   findFilterById,
   findFilterRows,
+  findManualFilterIds,
+  reorderManualFilterRows,
+  setFilterPlacementRow,
+  setFilterFocusedRow,
   type FilterRow,
   toggleFilterRow,
   updateFilterRow,
 } from "./filters.repository.js";
+import { findFilterGroupById } from "../filter-groups/filter-groups.repository.js";
+import { FilterGroupNotFoundError } from "../filter-groups/filter-groups.service.js";
 
 export class FilterNotFoundError extends Error {
   constructor() {
     super("Filter not found");
   }
+}
+
+export class FilterManualOrderMismatchError extends Error {
+  constructor() {
+    super("Filter order must contain every filter in the selected group exactly once");
+  }
+}
+
+export class SystemFilterProtectedError extends Error {
+  constructor() {
+    super("System message groups cannot be modified");
+  }
+}
+
+function assertRegularFilter(filter: { systemKey: string | null }): void {
+  if (filter.systemKey === ALL_MESSAGES_SYSTEM_KEY) {
+    throw new SystemFilterProtectedError();
+  }
+}
+
+function haveSameIds(currentIds: number[], nextIds: number[]): boolean {
+  if (currentIds.length !== nextIds.length) return false;
+  const current = new Set(currentIds);
+  return nextIds.every((id) => current.has(id));
 }
 
 function assertValidFilterConditions(conditions: FilterCreateInput["conditions"]): void {
@@ -99,6 +137,7 @@ export async function createFilter(input: FilterCreateInput): Promise<Filter> {
 export async function updateFilter(id: number, input: FilterUpdateInput): Promise<Filter> {
   const existing = await findFilterById(id);
   if (!existing) throw new FilterNotFoundError();
+  assertRegularFilter(existing);
 
   if (input.conditions) assertValidFilterConditions(input.conditions);
 
@@ -108,6 +147,7 @@ export async function updateFilter(id: number, input: FilterUpdateInput): Promis
 export async function deleteFilter(id: number): Promise<FilterDeleteResponse> {
   const existing = await findFilterById(id);
   if (!existing) throw new FilterNotFoundError();
+  assertRegularFilter(existing);
 
   await deleteFilterWithMessages(id);
   return filterDeleteResponseSchema.parse({ success: true });
@@ -116,13 +156,48 @@ export async function deleteFilter(id: number): Promise<FilterDeleteResponse> {
 export async function toggleFilter(id: number): Promise<Filter> {
   const existing = await findFilterById(id);
   if (!existing) throw new FilterNotFoundError();
+  assertRegularFilter(existing);
 
   return toApiFilter(await toggleFilterRow(id, !existing.enabled));
+}
+
+export async function setFilterFocused(id: number, input: FilterFocusInput): Promise<Filter> {
+  const existing = await findFilterById(id);
+  if (!existing) throw new FilterNotFoundError();
+  assertRegularFilter(existing);
+
+  return toApiFilter(await setFilterFocusedRow(id, input));
+}
+
+export async function setFilterPlacement(
+  id: number,
+  input: FilterPlacementInput,
+): Promise<Filter> {
+  if (!(await findFilterById(id))) throw new FilterNotFoundError();
+  if (input.manualGroupId !== null && !(await findFilterGroupById(input.manualGroupId))) {
+    throw new FilterGroupNotFoundError();
+  }
+
+  return toApiFilter(await setFilterPlacementRow(id, input));
+}
+
+export async function reorderManualFilters(
+  input: FilterManualOrderInput,
+): Promise<FilterGroupActionResponse> {
+  if (input.manualGroupId !== null && !(await findFilterGroupById(input.manualGroupId))) {
+    throw new FilterGroupNotFoundError();
+  }
+  const currentIds = await findManualFilterIds(input.manualGroupId);
+  if (!haveSameIds(currentIds, input.filterIds)) throw new FilterManualOrderMismatchError();
+
+  await reorderManualFilterRows(input);
+  return filterGroupActionResponseSchema.parse({ success: true });
 }
 
 export async function backfillFilter(id: number, scope: FilterHistoryScope): Promise<FilterBackfillResponse> {
   const existing = await findFilterById(id);
   if (!existing) throw new FilterNotFoundError();
+  assertRegularFilter(existing);
 
   const conditions = parseConditions(existing.conditions);
   assertValidFilterConditions(conditions);

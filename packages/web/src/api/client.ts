@@ -3,6 +3,7 @@ import { chatsApi } from "@/shared/api/chats";
 import { clientsApi } from "@/shared/api/clients";
 import { configApi } from "@/shared/api/config";
 import { filtersApi } from "@/shared/api/filters";
+import { filterGroupsApi } from "@/shared/api/filter-groups";
 import { forwardTargetsApi } from "@/shared/api/forward-targets";
 import { messagesApi } from "@/shared/api/messages";
 import { request } from "@/shared/api/request";
@@ -37,6 +38,8 @@ export const api = {
   },
 
   filters: filtersApi,
+
+  filterGroups: filterGroupsApi,
 
   chats: chatsApi,
 

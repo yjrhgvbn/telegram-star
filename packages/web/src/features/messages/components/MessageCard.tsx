@@ -13,12 +13,19 @@ import "./MessageCard.css";
 interface Props {
   message: Message;
   onToggleRead: (id: number) => void;
+  onOpenTelegram?: (id: number) => void;
   searchQuery?: string;
   /** 是否为自动定位锚点，展示时短暂高亮以提示用户当前位置 */
   isAnchor?: boolean;
 }
 
-export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Props) {
+export function MessageCard({
+  message,
+  onToggleRead,
+  onOpenTelegram,
+  searchQuery,
+  isAnchor,
+}: Props) {
   const handleExternalLink = useClientExternalLink();
   const timeAgo = getTimeAgo(message.messageDate);
   const exactTime = new Date(message.messageDate).toLocaleString("zh-CN");
@@ -99,7 +106,7 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
           </p>
         )}
 
-        <MediaPreview message={message} />
+        <MediaPreview message={message} onOpenTelegram={onOpenTelegram} />
 
         <div className="flex flex-wrap items-center gap-1.5">
           <Button
@@ -118,9 +125,10 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
               rel="noopener noreferrer"
               className={buttonVariants({ variant: "ghost", size: "sm" })}
               onClick={(event) =>
-                handleExternalLink(event, message.telegramLink, () =>
-                  rememberTelegramJumpMessageId(message.id),
-                )
+                handleExternalLink(event, message.telegramLink, () => {
+                  rememberTelegramJumpMessageId(message.id);
+                  onOpenTelegram?.(message.id);
+                })
               }
             >
               查看原文

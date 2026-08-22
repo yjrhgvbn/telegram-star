@@ -2,6 +2,8 @@ import type {
   MessageBatchReadResponse,
   MessageDirection,
   MessageForceSyncReadResponse,
+  MessageEngagementInput,
+  MessageEngagementResponse,
   MessageListQuery,
   MessageListResponse,
   MessageReadStateResponse,
@@ -28,6 +30,7 @@ import {
   listMessagesAroundCursor,
   listMessagesBeforeCursor,
   markMessagesRead,
+  recordMessageGroupEngagement,
   setMessageReadState,
 } from "./messages.repository.js";
 import { runInteractionSyncInBackground } from "./readSyncFallback.js";
@@ -157,6 +160,18 @@ export async function markMessagesAsRead(
 
   emitMessageEvent({ type: "read", messageIds: ids });
   return { success: true, count: ids.length };
+}
+
+export async function recordMessageEngagement(
+  id: number,
+  input: MessageEngagementInput,
+): Promise<MessageEngagementResponse> {
+  const engagement = await recordMessageGroupEngagement(id, input.type);
+  if (!engagement) {
+    throw new MessageNotFoundError(id);
+  }
+
+  return engagement;
 }
 
 export async function forceSyncMessageRead(ids: number[]): Promise<MessageForceSyncReadResponse> {

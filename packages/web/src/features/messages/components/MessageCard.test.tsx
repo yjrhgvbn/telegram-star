@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Message } from "@/types";
 import { MessageCard } from "./MessageCard";
@@ -21,6 +21,7 @@ function createMessage(patch: Partial<Message> = {}): Message {
     isRead: true,
     matchedFilterId: 12,
     matchedKeyword: "尼古喵喵",
+    filterName: "日漫",
     createdAt: "2026-07-31T10:00:00.000Z",
     mediaType: null,
     mediaFileName: null,
@@ -72,5 +73,21 @@ describe("MessageCard", () => {
 
     expect(screen.getByRole("link", { name: "https://example.com/path" }).getAttribute("href"))
       .toBe("https://example.com/path");
+  });
+
+  it("records an explicit follow-up when the Telegram original is opened", () => {
+    const onOpenTelegram = vi.fn();
+    const message = createMessage({ telegramLink: "https://t.me/c/1/101" });
+
+    render(
+      <MessageCard
+        message={message}
+        onToggleRead={vi.fn()}
+        onOpenTelegram={onOpenTelegram}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: /查看原文/ }));
+    expect(onOpenTelegram).toHaveBeenCalledWith(message.id);
   });
 });
