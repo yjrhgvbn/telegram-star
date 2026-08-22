@@ -5,6 +5,7 @@ import type {
   ClientPlatform,
   ClientRuntimeType,
 } from "@telegram-star/shared/contracts/clients";
+import { getBrowserStorage } from "@telegram-star/shared/browser-storage";
 
 export const CLIENT_DEVICE_ID_STORAGE_KEY = "telegram-star:client-device-id:v1";
 
@@ -25,11 +26,6 @@ interface RuntimeDetectionOptions {
 }
 
 type ClientDeviceStorage = Pick<Storage, "getItem" | "setItem">;
-
-function getBrowserStorage(): ClientDeviceStorage | undefined {
-  if (typeof window === "undefined") return undefined;
-  return window.localStorage;
-}
 
 function getRandomClientId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -112,7 +108,7 @@ export function detectClientRuntime(
 }
 
 export function getClientDeviceId(
-  storage: ClientDeviceStorage | undefined = getBrowserStorage(),
+  storage: ClientDeviceStorage | undefined = getBrowserStorage("local"),
 ): string {
   if (!storage) return getRandomClientId();
 

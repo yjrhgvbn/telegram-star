@@ -1,13 +1,10 @@
+import { getBrowserStorage } from "@telegram-star/shared/browser-storage";
+
 export const MOBILE_SERVER_CONFIG_STORAGE_KEY = "telegram-star:mobile-server-url:v1";
 export const MOBILE_LAST_CONNECTED_AT_STORAGE_KEY = "telegram-star:mobile-last-connected-at:v1";
 export const MOBILE_CLIENT_ID_STORAGE_KEY = "telegram-star:mobile-client-id:v1";
 
 export type MobileShellStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
-
-function getBrowserStorage(): MobileShellStorage | undefined {
-  if (typeof window === "undefined") return undefined;
-  return window.localStorage;
-}
 
 export function normalizeServerUrl(value: string | null | undefined): string {
   let normalized = (value ?? "").trim();
@@ -37,7 +34,7 @@ export function getDefaultServerUrl(): string {
 }
 
 export function readSavedServerUrl(
-  storage: MobileShellStorage | undefined = getBrowserStorage(),
+  storage: MobileShellStorage | undefined = getBrowserStorage("local"),
 ): string | null {
   if (!storage) return null;
 
@@ -52,7 +49,7 @@ export function readSavedServerUrl(
 
 export function saveServerUrl(
   serverUrl: string,
-  storage: MobileShellStorage | undefined = getBrowserStorage(),
+  storage: MobileShellStorage | undefined = getBrowserStorage("local"),
 ): void {
   if (!storage) return;
 
@@ -64,7 +61,7 @@ export function saveServerUrl(
 }
 
 export function readLastConnectedAt(
-  storage: MobileShellStorage | undefined = getBrowserStorage(),
+  storage: MobileShellStorage | undefined = getBrowserStorage("local"),
 ): string | null {
   if (!storage) return null;
 
@@ -77,7 +74,7 @@ export function readLastConnectedAt(
 
 export function saveLastConnectedAt(
   value: string,
-  storage: MobileShellStorage | undefined = getBrowserStorage(),
+  storage: MobileShellStorage | undefined = getBrowserStorage("local"),
 ): void {
   if (!storage) return;
 
@@ -89,7 +86,7 @@ export function saveLastConnectedAt(
 }
 
 export function clearMobileShellStorage(
-  storage: MobileShellStorage | undefined = getBrowserStorage(),
+  storage: MobileShellStorage | undefined = getBrowserStorage("local"),
 ): void {
   if (!storage) return;
 
@@ -102,7 +99,7 @@ export function clearMobileShellStorage(
 }
 
 export function getInitialServerUrl(
-  storage: MobileShellStorage | undefined = getBrowserStorage(),
+  storage: MobileShellStorage | undefined = getBrowserStorage("local"),
 ): string {
   return readSavedServerUrl(storage) ?? getDefaultServerUrl();
 }

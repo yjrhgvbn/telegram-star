@@ -19,6 +19,10 @@ import { cn } from "@/lib/utils";
 import { queryKeys } from "@/shared/query/queryKeys";
 import type { FilterBackfillJobCreateInput, FilterCondition } from "@/types";
 import { FilterForm } from "./components/FilterForm";
+import {
+  FilterConfirmationDialog,
+  type FilterConfirmationKind,
+} from "./components/FilterConfirmationDialog";
 import { FilterLibrary } from "./components/FilterLibrary";
 import { HistoryBackfillDialog } from "./components/HistoryBackfillDialog";
 import { PreviewPanel } from "./components/PreviewPanel";
@@ -77,6 +81,8 @@ export function FiltersFeature() {
   const [error, setError] = useState("");
   const [operation, setOperation] = useState<CommitMode | null>(null);
   const [operationMessage, setOperationMessage] = useState("");
+  const [confirmationKind, setConfirmationKind] =
+    useState<FilterConfirmationKind | null>(null);
   const [previewLimit, setPreviewLimit] = useState("200");
   const [startedBackfillJobId, setStartedBackfillJobId] = useState<string | null>(null);
   const [debouncedPreviewRequest, setDebouncedPreviewRequest] =
@@ -253,6 +259,7 @@ export function FiltersFeature() {
     setIsDirty(false);
     setError("");
     setOperationMessage("");
+    setConfirmationKind(null);
     setDebouncedPreviewRequest(null);
     // Only reset when the route resolves to a different rule. Cache updates for
     // the current rule must not wipe an unsaved draft.
@@ -460,11 +467,13 @@ export function FiltersFeature() {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!selectedFilter) return;
-    if (!window.confirm(`确定删除规则“${selectedFilter.name}”吗？此操作无法撤销。`)) {
-      return;
-    }
+    setConfirmationKind("delete");
+  };
+
+  const deleteSelectedFilter = async () => {
+    if (!selectedFilter) return;
 
     try {
       setOperation("delete");
@@ -479,11 +488,26 @@ export function FiltersFeature() {
   };
 
   const handleBackToList = () => {
-    if (isDirty && !window.confirm("当前修改尚未保存，确定返回规则列表吗？")) {
+    if (isDirty) {
+      setConfirmationKind("discard");
       return;
     }
 
     navigate("/filters");
+  };
+
+  const handleConfirm = () => {
+    const confirmedKind = confirmationKind;
+    setConfirmationKind(null);
+
+    if (confirmedKind === "delete") {
+      void deleteSelectedFilter();
+      return;
+    }
+
+    if (confirmedKind === "discard") {
+      navigate("/filters");
+    }
   };
 
   if (!isEditorSelected) {
@@ -706,6 +730,13 @@ export function FiltersFeature() {
             </div>
           </div>
         </footer>
+
+        <FilterConfirmationDialog
+          kind={confirmationKind}
+          filterName={selectedFilter?.name ?? name.trim()}
+          onCancel={() => setConfirmationKind(null)}
+          onConfirm={handleConfirm}
+        />
       </div>
     </AppShell>
   );

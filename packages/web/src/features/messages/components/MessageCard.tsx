@@ -4,6 +4,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useClientExternalLink } from "@/shared/runtime/ClientShellBridgeProvider";
+import { rememberTelegramJumpMessageId } from "../utils/messageNavigation";
 import { MediaPreview } from "./MediaPreview";
 import { MessageContent } from "./MessageContent";
 import type { Message } from "@/types";
@@ -118,7 +119,7 @@ export function MessageCard({ message, onToggleRead, searchQuery, isAnchor }: Pr
               className={buttonVariants({ variant: "ghost", size: "sm" })}
               onClick={(event) =>
                 handleExternalLink(event, message.telegramLink, () =>
-                  sessionStorage.setItem("telegram_jump_msg_id", message.id.toString()),
+                  rememberTelegramJumpMessageId(message.id),
                 )
               }
             >

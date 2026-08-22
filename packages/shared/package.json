@@ -37,6 +37,10 @@
     "./contracts/messages": {
       "types": "./dist/contracts/messages.d.ts",
       "import": "./dist/contracts/messages.js"
+    },
+    "./browser-storage": {
+      "types": "./dist/browser-storage.d.ts",
+      "import": "./dist/browser-storage.js"
     }
   },
   "scripts": {

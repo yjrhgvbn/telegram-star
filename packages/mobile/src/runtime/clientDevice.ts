@@ -5,6 +5,7 @@ import {
   type ClientDevice,
   type ClientOs,
 } from "@telegram-star/shared/contracts/clients";
+import { getBrowserStorage } from "@telegram-star/shared/browser-storage";
 import {
   MOBILE_CLIENT_ID_STORAGE_KEY,
   normalizeServerUrl,
@@ -12,11 +13,6 @@ import {
 } from "./serverConfig";
 
 export const MOBILE_HEARTBEAT_INTERVAL_MS = 60_000;
-
-function getBrowserStorage(): MobileShellStorage | undefined {
-  if (typeof window === "undefined") return undefined;
-  return window.localStorage;
-}
 
 function getRandomClientId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -36,7 +32,7 @@ function getMobileOs(
 }
 
 export function getMobileClientId(
-  storage: MobileShellStorage | undefined = getBrowserStorage(),
+  storage: MobileShellStorage | undefined = getBrowserStorage("local"),
 ): string {
   if (!storage) return getRandomClientId();
 

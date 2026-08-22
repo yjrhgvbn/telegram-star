@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { api } from "@/api/client";
 import type { Message } from "@/types";
+import { consumeTelegramJumpMessageId } from "../utils/messageNavigation";
 
-const TELEGRAM_JUMP_MESSAGE_ID_KEY = "telegram_jump_msg_id";
 const READ_SYNC_NEIGHBOR_RADIUS = 5;
 
 export type ReadSyncMessage = Pick<Message, "id" | "isRead">;
@@ -57,7 +57,7 @@ export function useReadSyncOnVisibility({
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== "visible") return;
 
-      const jumpMessageId = consumeJumpMessageId();
+      const jumpMessageId = consumeTelegramJumpMessageId();
       if (jumpMessageId === null) return;
 
       const idsToCheck = getNearbyUnreadMessageIds(
@@ -80,16 +80,4 @@ export function useReadSyncOnVisibility({
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
-}
-
-function consumeJumpMessageId(): number | null {
-  if (typeof sessionStorage === "undefined") return null;
-
-  const jumpMessageId = sessionStorage.getItem(TELEGRAM_JUMP_MESSAGE_ID_KEY);
-  if (!jumpMessageId) return null;
-
-  sessionStorage.removeItem(TELEGRAM_JUMP_MESSAGE_ID_KEY);
-
-  const parsedId = Number.parseInt(jumpMessageId, 10);
-  return Number.isFinite(parsedId) ? parsedId : null;
 }

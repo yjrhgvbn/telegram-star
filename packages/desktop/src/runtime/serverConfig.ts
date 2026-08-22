@@ -1,12 +1,9 @@
+import { getBrowserStorage } from "@telegram-star/shared/browser-storage";
+
 export const DESKTOP_SERVER_CONFIG_STORAGE_KEY = "telegram-star:desktop-server-url:v1";
 export const DESKTOP_LAST_CONNECTED_AT_STORAGE_KEY = "telegram-star:desktop-last-connected-at:v1";
 
 export type DesktopShellStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
-
-function getBrowserStorage(): DesktopShellStorage | undefined {
-  if (typeof window === "undefined") return undefined;
-  return window.localStorage;
-}
 
 export function normalizeServerUrl(value: string | null | undefined): string {
   let normalized = (value ?? "").trim();
@@ -36,7 +33,7 @@ export function getDefaultServerUrl(): string {
 }
 
 export function readSavedServerUrl(
-  storage: DesktopShellStorage | undefined = getBrowserStorage(),
+  storage: DesktopShellStorage | undefined = getBrowserStorage("local"),
 ): string | null {
   if (!storage) return null;
 
@@ -51,7 +48,7 @@ export function readSavedServerUrl(
 
 export function saveServerUrl(
   serverUrl: string,
-  storage: DesktopShellStorage | undefined = getBrowserStorage(),
+  storage: DesktopShellStorage | undefined = getBrowserStorage("local"),
 ): void {
   if (!storage) return;
 
@@ -64,7 +61,7 @@ export function saveServerUrl(
 }
 
 export function clearSavedServerUrl(
-  storage: DesktopShellStorage | undefined = getBrowserStorage(),
+  storage: DesktopShellStorage | undefined = getBrowserStorage("local"),
 ): void {
   if (!storage) return;
 
@@ -76,7 +73,7 @@ export function clearSavedServerUrl(
 }
 
 export function readLastConnectedAt(
-  storage: DesktopShellStorage | undefined = getBrowserStorage(),
+  storage: DesktopShellStorage | undefined = getBrowserStorage("local"),
 ): string | null {
   if (!storage) return null;
 
@@ -89,7 +86,7 @@ export function readLastConnectedAt(
 
 export function saveLastConnectedAt(
   value: string,
-  storage: DesktopShellStorage | undefined = getBrowserStorage(),
+  storage: DesktopShellStorage | undefined = getBrowserStorage("local"),
 ): void {
   if (!storage) return;
 
@@ -101,7 +98,7 @@ export function saveLastConnectedAt(
 }
 
 export function clearDesktopShellStorage(
-  storage: DesktopShellStorage | undefined = getBrowserStorage(),
+  storage: DesktopShellStorage | undefined = getBrowserStorage("local"),
 ): void {
   clearSavedServerUrl(storage);
 
@@ -113,7 +110,7 @@ export function clearDesktopShellStorage(
 }
 
 export function getInitialServerUrl(
-  storage: DesktopShellStorage | undefined = getBrowserStorage(),
+  storage: DesktopShellStorage | undefined = getBrowserStorage("local"),
 ): string {
   return readSavedServerUrl(storage) ?? getDefaultServerUrl();
 }

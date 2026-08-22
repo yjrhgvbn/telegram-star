@@ -14,6 +14,7 @@ import {
 import { getMediaThumbUrl } from "@/shared/api/url";
 import type { Message } from "@/types";
 import { useClientExternalLink } from "@/shared/runtime/ClientShellBridgeProvider";
+import { rememberTelegramJumpMessageId } from "../utils/messageNavigation";
 
 interface Props {
   message: Message;
@@ -296,9 +297,7 @@ export function MediaPreview({ message }: Props) {
         className="media-preview__link"
         title="在 Telegram 中查看"
         onClick={(event) =>
-          handleExternalLink(event, link, () =>
-            sessionStorage.setItem("telegram_jump_msg_id", message.id.toString()),
-          )
+          handleExternalLink(event, link, () => rememberTelegramJumpMessageId(message.id))
         }
       >
         {content}
