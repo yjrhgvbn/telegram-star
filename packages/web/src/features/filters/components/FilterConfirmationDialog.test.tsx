@@ -36,6 +36,9 @@ describe("FilterConfirmationDialog", () => {
       />,
     );
 
+    expect(screen.getByRole("alertdialog").textContent).toContain(
+      "返回上一页后，当前页面中的修改将不会保留。",
+    );
     await user.click(screen.getByRole("button", { name: "取消" }));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });

@@ -41,7 +41,7 @@ export function FilterConfirmationDialog({
           <AlertDialogDescription>
             {deleting
               ? "删除后无法恢复，这条规则也将立即停止监听。"
-              : "返回规则列表后，当前页面中的修改将不会保留。"}
+              : "返回上一页后，当前页面中的修改将不会保留。"}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

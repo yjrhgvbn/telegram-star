@@ -487,13 +487,18 @@ export function FiltersFeature() {
     }
   };
 
-  const handleBackToList = () => {
+  // 编辑器可从规则列表或消息上下文进入，返回时应保留真实入口。
+  const navigateBack = () => {
+    navigate(-1);
+  };
+
+  const handleBack = () => {
     if (isDirty) {
       setConfirmationKind("discard");
       return;
     }
 
-    navigate("/filters");
+    navigateBack();
   };
 
   const handleConfirm = () => {
@@ -506,7 +511,7 @@ export function FiltersFeature() {
     }
 
     if (confirmedKind === "discard") {
-      navigate("/filters");
+      navigateBack();
     }
   };
 
@@ -601,8 +606,8 @@ export function FiltersFeature() {
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={handleBackToList}
-              aria-label="返回规则列表"
+              onClick={handleBack}
+              aria-label="返回上一页"
             >
               <ArrowLeft />
             </Button>
