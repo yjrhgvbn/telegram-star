@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useState, type ReactNode, type UIEvent } from "react";
+import { memo, useDeferredValue, useEffect, useState, type ReactNode, type UIEvent } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -17,6 +17,12 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { HistoricalFilterPreviewMessage } from "@/types";
+import {
+  cleanPreviewContent,
+  findPreviewHighlightRanges,
+  getPreviewHighlightTexts,
+  type PreviewHighlightRange,
+} from "../previewHighlight";
 
 interface PreviewSummary {
   scannedChats: number;
@@ -43,32 +49,30 @@ const scopeOptions = [
   { value: "1000", label: "最近 1,000 条 / 会话" },
 ];
 
-function cleanPreviewContent(content: string): string {
-  return content
-    .replace(/\*\*/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function renderHighlightedContent(
   content: string,
-  matchedKeyword: string | null,
+  ranges: PreviewHighlightRange[],
 ): ReactNode {
-  if (!matchedKeyword) return content;
+  if (ranges.length === 0) return content;
 
-  const start = content.toLocaleLowerCase().indexOf(matchedKeyword.toLocaleLowerCase());
-  if (start < 0) return content;
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
 
-  const end = start + matchedKeyword.length;
-  return (
-    <>
-      {content.slice(0, start)}
-      <mark className="rounded bg-primary/14 px-0.5 text-foreground">
-        {content.slice(start, end)}
-      </mark>
-      {content.slice(end)}
-    </>
-  );
+  for (const range of ranges) {
+    if (range.start > cursor) nodes.push(content.slice(cursor, range.start));
+    nodes.push(
+      <mark
+        key={`${range.start}-${range.end}`}
+        className="rounded-sm bg-primary/20 px-0.5 font-semibold text-foreground ring-1 ring-primary/30"
+      >
+        {content.slice(range.start, range.end)}
+      </mark>,
+    );
+    cursor = range.end;
+  }
+
+  if (cursor < content.length) nodes.push(content.slice(cursor));
+  return nodes;
 }
 
 function formatMessageDate(value: string): string {
@@ -82,6 +86,56 @@ function formatMessageDate(value: string): string {
     minute: "2-digit",
   });
 }
+
+const PreviewMessageItem = memo(function PreviewMessageItem({
+  message,
+}: {
+  message: HistoricalFilterPreviewMessage;
+}) {
+  const content = cleanPreviewContent(message.content) || "媒体消息";
+  const highlightTexts = getPreviewHighlightTexts(message);
+  const highlightRanges = findPreviewHighlightRanges(content, highlightTexts);
+  const messageDate = formatMessageDate(message.messageDate);
+
+  return (
+    <article className="relative border-b border-border/72 py-3 pr-3 pl-8 [contain-intrinsic-size:0_116px] [content-visibility:auto] last:border-b-0">
+      <span className="absolute top-4 left-3 size-2 rounded-full bg-primary ring-4 ring-primary/12" />
+      <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate">
+          {message.chatTitle}{messageDate ? ` · ${messageDate}` : ""}
+        </span>
+        {message.telegramLink ? (
+          <a
+            href={message.telegramLink}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="打开 Telegram 原消息"
+            className="grid size-7 shrink-0 place-items-center rounded-lg text-primary transition hover:bg-accent focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <ExternalLink className="size-3.5" />
+          </a>
+        ) : null}
+      </div>
+
+      <p className="mt-1.5 line-clamp-5 text-sm leading-6 text-foreground/92">
+        {renderHighlightedContent(content, highlightRanges)}
+      </p>
+
+      <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate">
+          {highlightRanges.length > 0
+            ? `高亮 ${highlightRanges.length} 处 · ${highlightTexts.length} 个命中项`
+            : message.matchedKeyword
+              ? `匹配「${message.matchedKeyword}」`
+              : "符合当前规则"}
+        </span>
+        <span className="hidden shrink-0 sm:inline">
+          {message.inDatabase ? "已在消息列表" : "尚未同步"}
+        </span>
+      </div>
+    </article>
+  );
+});
 
 export function PreviewPanel({
   previewEnabled,
@@ -251,50 +305,12 @@ export function PreviewPanel({
               </div>
             ) : (
               <div aria-live="polite">
-                {visibleMessages.map((message) => {
-                  const content = cleanPreviewContent(message.content) || "媒体消息";
-                  const messageDate = formatMessageDate(message.messageDate);
-
-                  return (
-                    <article
-                      key={`${message.chatId}-${message.id}`}
-                      className="relative border-b border-border/72 py-3 pr-3 pl-8 [contain-intrinsic-size:0_116px] [content-visibility:auto] last:border-b-0"
-                    >
-                      <span className="absolute top-4 left-3 size-2 rounded-full bg-primary ring-4 ring-primary/12" />
-                      <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                        <span className="min-w-0 flex-1 truncate">
-                          {message.chatTitle}{messageDate ? ` · ${messageDate}` : ""}
-                        </span>
-                        {message.telegramLink ? (
-                          <a
-                            href={message.telegramLink}
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-label="打开 Telegram 原消息"
-                            className="grid size-7 shrink-0 place-items-center rounded-lg text-primary transition hover:bg-accent focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                          >
-                            <ExternalLink className="size-3.5" />
-                          </a>
-                        ) : null}
-                      </div>
-
-                      <p className="mt-1.5 line-clamp-5 text-sm leading-6 text-foreground/92">
-                        {renderHighlightedContent(content, message.matchedKeyword)}
-                      </p>
-
-                      <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
-                        <span className="min-w-0 flex-1 truncate">
-                          {message.matchedKeyword
-                            ? `匹配「${message.matchedKeyword}」`
-                            : "符合当前规则"}
-                        </span>
-                        <span className="hidden shrink-0 sm:inline">
-                          {message.inDatabase ? "已在消息列表" : "尚未同步"}
-                        </span>
-                      </div>
-                    </article>
-                  );
-                })}
+                {visibleMessages.map((message) => (
+                  <PreviewMessageItem
+                    key={`${message.chatId}-${message.id}`}
+                    message={message}
+                  />
+                ))}
               </div>
             )}
           </div>

@@ -5,7 +5,6 @@ import {
   createInitialDraftConditions,
   deriveFilterName,
   describeFilterRule,
-  evaluatePreviewMessage,
   mergePersistableConditions,
   normalizeConditions,
   toDraftConditions,
@@ -209,35 +208,4 @@ describe("filter form utils", () => {
     );
   });
 
-  it("explains why a preview message passed every condition", () => {
-    expect(
-      evaluatePreviewMessage(
-        { chatId: "1001", content: "新的番外已经发布" },
-        [
-          { type: "chat", values: ["1001"] },
-          { type: "keyword", values: ["更新", "番外"] },
-        ],
-        [{ id: "1001", title: "将夜" }],
-      ),
-    ).toEqual([
-      { type: "chat", label: "消息来源", detail: "来自「将夜」", matched: true },
-      { type: "keyword", label: "内容条件", detail: "包含「番外」", matched: true },
-    ]);
-  });
-
-  it("evaluates exclusion evidence as an inverted condition", () => {
-    expect(
-      evaluatePreviewMessage(
-        { chatId: "1001", content: "300 元红包，速领" },
-        [{ type: "keyword", effect: "exclude", values: ["已领完"] }],
-      ),
-    ).toEqual([
-      {
-        type: "keyword",
-        label: "排除关键词",
-        detail: "没有排除词出现",
-        matched: true,
-      },
-    ]);
-  });
 });

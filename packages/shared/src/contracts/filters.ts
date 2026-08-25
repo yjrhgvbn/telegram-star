@@ -124,6 +124,19 @@ export const filterPreviewInputSchema = filterHistoryScopeSchema.extend({
   conditions: filterConditionsSchema,
 });
 
+/**
+ * 单条条件的服务端判定证据。预览使用实际命中文本做高亮，
+ * matchedKeyword 继续作为旧消息入库与通知模板的兼容字段。
+ */
+export const filterMatchEvidenceSchema = z.object({
+  conditionIndex: z.number().int().nonnegative(),
+  type: filterConditionTypeSchema,
+  effect: filterConditionEffectSchema,
+  passed: z.boolean(),
+  matchedValues: z.array(z.string()),
+  matchedTexts: z.array(z.string()),
+});
+
 export const liveChatMessageSchema = z.object({
   id: z.number().int(),
   chatId: z.string(),
@@ -146,6 +159,8 @@ export const liveChatMessageSchema = z.object({
 
 export const historicalFilterPreviewMessageSchema = liveChatMessageSchema.extend({
   matchedKeyword: z.string().nullable(),
+  // optional 允许新版 Web 继续读取旧服务端的预览响应。
+  matchEvidence: z.array(filterMatchEvidenceSchema).optional(),
 });
 
 export const historicalFilterPreviewSampleSchema = historicalFilterPreviewMessageSchema.extend({
@@ -262,6 +277,7 @@ export type FilterUpdateInput = z.infer<typeof filterUpdateInputSchema>;
 export type FilterFocusInput = z.infer<typeof filterFocusInputSchema>;
 export type FilterHistoryScope = z.infer<typeof filterHistoryScopeSchema>;
 export type FilterPreviewInput = z.infer<typeof filterPreviewInputSchema>;
+export type FilterMatchEvidence = z.infer<typeof filterMatchEvidenceSchema>;
 export type LiveChatMessage = z.infer<typeof liveChatMessageSchema>;
 export type HistoricalFilterPreviewMessage = z.infer<typeof historicalFilterPreviewMessageSchema>;
 export type HistoricalFilterPreviewSample = z.infer<typeof historicalFilterPreviewSampleSchema>;

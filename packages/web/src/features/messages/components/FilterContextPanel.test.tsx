@@ -39,7 +39,7 @@ describe("FilterContextPanel", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "编辑过滤器 本季新番" }));
+    await user.click(screen.getByRole("button", { name: "编辑规则 本季新番" }));
     expect(onEditSelectedFilter).toHaveBeenCalledOnce();
   });
 
@@ -54,6 +54,6 @@ describe("FilterContextPanel", () => {
       />,
     );
 
-    expect(screen.queryByRole("button", { name: /编辑过滤器/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /编辑规则/ })).toBeNull();
   });
 });

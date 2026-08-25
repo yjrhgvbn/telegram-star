@@ -31,6 +31,7 @@ export type {
   FilterEngagementType,
   FilterFocusInput,
   FilterHistoryScope,
+  FilterMatchEvidence,
   FilterPreviewResponse,
   FilterSystemKey,
   FilterUpdateInput,

@@ -49,8 +49,8 @@ export function FilterLibrary({
           onChange={(event) => setQuery(event.target.value)}
           onClear={() => setQuery("")}
           placeholder="搜索规则名称、会话或关键词"
-          aria-label="搜索过滤器"
-          clearLabel="清空过滤器搜索"
+          aria-label="搜索规则"
+          clearLabel="清空规则搜索"
         />
 
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[var(--workspace-panel-shadow)]">
@@ -71,7 +71,7 @@ export function FilterLibrary({
                 <Filter className="size-5" />
               </span>
               <h3 className="mt-3 text-sm font-semibold">
-                {filters.length === 0 ? "还没有过滤器" : "没有找到匹配的规则"}
+                {filters.length === 0 ? "还没有规则" : "没有找到匹配的规则"}
               </h3>
               <p className="mt-1 max-w-sm text-sm leading-6 text-muted-foreground">
                 {filters.length === 0
@@ -130,7 +130,7 @@ export function FilterLibrary({
         <footer className="flex shrink-0 justify-end">
           <Button type="button" className="h-11 w-full sm:w-auto sm:min-w-44" onClick={onCreate}>
             <Plus data-icon="inline-start" />
-            新建过滤器
+            新建规则
           </Button>
         </footer>
       </div>

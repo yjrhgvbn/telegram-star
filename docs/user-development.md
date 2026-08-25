@@ -209,7 +209,7 @@ pnpm --filter @telegram-star/server db:deploy
 
 ### 7.4 单元测试
 
-当前测试使用 Vitest，优先覆盖过滤器匹配、消息分页、配置解析、媒体缓存策略、Telegram 媒体元信息、后端 service 边界等可独立验证的纯逻辑：
+当前测试使用 Vitest，优先覆盖规则匹配、消息分页、配置解析、媒体缓存策略、Telegram 媒体元信息、后端 service 边界等可独立验证的纯逻辑：
 
 ```bash
 pnpm test

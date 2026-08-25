@@ -213,8 +213,8 @@ export function MessagesFeature() {
                   size="icon-sm"
                   className="xl:hidden"
                   onClick={handleEditSelectedFilter}
-                  aria-label={`编辑过滤器 ${selectedFilter.name}`}
-                  title="编辑过滤器"
+                  aria-label={`编辑规则 ${selectedFilter.name}`}
+                  title="编辑规则"
                 >
                   <PencilLine />
                 </Button>

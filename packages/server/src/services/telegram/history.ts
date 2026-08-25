@@ -4,6 +4,7 @@
  */
 import { db } from "../../db/index.js";
 import {
+  evaluateFilterConditions,
   hasConflictingChatConditions,
   matchFilterConditions,
   type FilterCondition,
@@ -259,6 +260,7 @@ async function loadPreviewChatSnapshot(options: {
         telegramLink: buildTelegramLink(options.chatId, options.entity, item.id),
         inDatabase: existingIdSet.has(item.id),
         matchedKeyword: null,
+        matchEvidence: [],
         mediaType: mediaInfo?.mediaType ?? null,
         mediaFileName: mediaInfo?.mediaFileName ?? null,
         mediaFileSize: mediaInfo?.mediaFileSize ?? null,
@@ -354,7 +356,7 @@ export async function previewHistoricalFilterMessages(options: {
       });
 
       for (const baseMessage of snapshot) {
-        const match = matchFilterConditions(
+        const match = evaluateFilterConditions(
           { chatId, content: baseMessage.content },
           options.conditions,
         );
@@ -368,6 +370,7 @@ export async function previewHistoricalFilterMessages(options: {
         const previewMessage: HistoricalFilterPreviewMessage = {
           ...baseMessage,
           matchedKeyword: match.matchedKeyword,
+          matchEvidence: match.evidence,
         };
 
         // The API keeps the existing match-only list for backfill while also

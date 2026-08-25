@@ -122,7 +122,7 @@ export function FiltersFeature() {
   const latestBackfillQuery = useQuery({
     queryKey: queryKeys.filters.latestBackfill(selectedFilter?.id ?? 0),
     queryFn: () => {
-      if (!selectedFilter) throw new Error("过滤器尚未保存");
+      if (!selectedFilter) throw new Error("规则尚未保存");
       return api.filters.latestBackfillJob(selectedFilter.id);
     },
     enabled: Boolean(selectedFilter && authStatus.authorized),
@@ -546,7 +546,7 @@ export function FiltersFeature() {
         : "填写条件后自动预览";
   const displayedName = selectedFilter
     ? name.trim() || suggestedName
-    : name.trim() || "新建过滤器";
+    : name.trim() || "新建规则";
   const automaticNameDescription = persistedConditions.length > 0
     ? `将自动命名为「${suggestedName}」`
     : "名称将自动使用首个关键词或正则";
@@ -566,7 +566,7 @@ export function FiltersFeature() {
               <Input
                 id="filter-name"
                 name="filter-name"
-                aria-label="自定义过滤器名称"
+                aria-label="自定义规则名称"
                 placeholder={suggestedName}
                 value={name}
                 autoFocus
@@ -586,7 +586,7 @@ export function FiltersFeature() {
                 variant="ghost"
                 size="xs"
                 className="-ml-1 max-w-full justify-start px-1 font-semibold"
-                aria-label="编辑过滤器名称"
+                aria-label="编辑规则名称"
                 title="点击编辑名称"
                 onClick={() => setIsNameEditing(true)}
               >

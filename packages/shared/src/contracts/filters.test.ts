@@ -5,6 +5,7 @@ import {
   filterCreateInputSchema,
   filterFocusInputSchema,
   filterListSchema,
+  filterMatchEvidenceSchema,
   filterPreviewInputSchema,
   filterUpdateInputSchema,
 } from "./filters";
@@ -199,6 +200,26 @@ describe("filters contract", () => {
         perChatLimit: 0,
       }),
     ).toThrow();
+  });
+
+  it("validates structured preview match evidence", () => {
+    expect(
+      filterMatchEvidenceSchema.parse({
+        conditionIndex: 1,
+        type: "regex",
+        effect: "require",
+        passed: true,
+        matchedValues: ["v\\d+"],
+        matchedTexts: ["V12"],
+      }),
+    ).toEqual({
+      conditionIndex: 1,
+      type: "regex",
+      effect: "require",
+      passed: true,
+      matchedValues: ["v\\d+"],
+      matchedTexts: ["V12"],
+    });
   });
 
   it("validates time and quantity backfill jobs", () => {

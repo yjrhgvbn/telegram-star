@@ -128,7 +128,7 @@ describe("FilterPanel", () => {
     expect(ungroupedSection?.textContent).toContain("暂未整理");
     expect(within(ungroupedSection!).getByText("2")).toBeTruthy();
     expect(screen.queryByText("所有已追踪内容")).toBeNull();
-    expect(screen.queryByRole("button", { name: "新建过滤器" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "新建规则" })).toBeNull();
     expect(screen.getByRole("tab", { name: "我的分组" }).getAttribute("data-active")).not.toBeNull();
   });
 
@@ -219,7 +219,7 @@ describe("FilterPanel", () => {
     });
 
     await enterManageMode(user);
-    expect(screen.queryByRole("button", { name: "新建过滤器" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "新建规则" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "新建分组" }));
     await user.type(screen.getByRole("textbox", { name: "新分组名称" }), "以后再看");
     await user.click(screen.getByRole("button", { name: "保存新分组" }));

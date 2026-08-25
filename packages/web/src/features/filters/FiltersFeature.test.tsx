@@ -105,10 +105,10 @@ describe("FiltersFeature", () => {
     const user = userEvent.setup();
     renderEditorFromMessages();
 
-    await user.click(screen.getByRole("button", { name: "编辑过滤器名称" }));
-    await user.clear(screen.getByRole("textbox", { name: "自定义过滤器名称" }));
+    await user.click(screen.getByRole("button", { name: "编辑规则名称" }));
+    await user.clear(screen.getByRole("textbox", { name: "自定义规则名称" }));
     await user.type(
-      screen.getByRole("textbox", { name: "自定义过滤器名称" }),
+      screen.getByRole("textbox", { name: "自定义规则名称" }),
       "临时名称",
     );
     await user.click(screen.getByRole("button", { name: "返回上一页" }));

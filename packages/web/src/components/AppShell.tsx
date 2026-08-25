@@ -32,7 +32,7 @@ const navItems: Array<{
   },
   {
     value: "filters",
-    label: "过滤器",
+    label: "规则",
     description: "规则维护",
     path: "/filters",
     icon: ListFilter,

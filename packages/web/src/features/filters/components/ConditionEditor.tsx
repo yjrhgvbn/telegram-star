@@ -16,7 +16,7 @@ import type {
   FilterConditionType,
   JoinedChat,
 } from "@/types";
-import { conditionTypeOptions, type DraftCondition } from "../types";
+import { conditionTypeDefinitions, type DraftCondition } from "../types";
 import { JoinedChatPicker } from "./JoinedChatPicker";
 
 type ContentConditionType = Exclude<FilterConditionType, "chat">;
@@ -54,9 +54,7 @@ export function ConditionEditor({
   onRemove,
   onAppendValues,
 }: ConditionEditorProps) {
-  const definition =
-    conditionTypeOptions.find((option) => option.value === condition.type) ??
-    conditionTypeOptions[0];
+  const definition = conditionTypeDefinitions[condition.type];
   const inputLabel = condition.type === "regex" ? "正则表达式" : "关键词";
   const inputPlaceholder =
     condition.type === "regex" ? "输入正则后按 Enter" : "输入后按 Enter";
@@ -267,7 +265,7 @@ export function ConditionEditor({
         <p className="mt-1.5 text-[10px] leading-4 text-muted-foreground">
           {description}
           {condition.type === "script"
-            ? "；可读取 message.chatId 和 message.content，也可返回 { matched, matchedText }"
+            ? "；可读取 message.chatId 和 message.content，也可返回 { matched, matchedText?, matchedTexts? }"
             : null}
         </p>
       </div>

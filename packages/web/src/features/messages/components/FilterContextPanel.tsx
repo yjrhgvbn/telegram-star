@@ -59,8 +59,8 @@ export function FilterContextPanel({
               variant="ghost"
               size="icon-sm"
               onClick={onEditSelectedFilter}
-              aria-label={`编辑过滤器 ${selectedFilter.name}`}
-              title="编辑过滤器"
+              aria-label={`编辑规则 ${selectedFilter.name}`}
+              title="编辑规则"
             >
               <PencilLine />
             </Button>

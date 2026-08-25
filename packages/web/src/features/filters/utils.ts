@@ -1,8 +1,6 @@
 import type {
   FilterCondition,
-  FilterConditionEffect,
   FilterConditionType,
-  HistoricalFilterPreviewMessage,
   JoinedChat,
 } from "@/types";
 import type { DraftCondition } from "./types";
@@ -195,7 +193,7 @@ export function deriveFilterName(
     return truncateFilterName(resolveChatNames([firstChatId], chats)[0] ?? firstChatId);
   }
 
-  return "新过滤器";
+  return "新规则";
 }
 
 export function describeFilterCondition(
@@ -227,84 +225,4 @@ export function describeFilterRule(
 ): string {
   if (conditions.length === 0) return "尚未定义命中条件";
   return conditions.map((condition) => describeFilterCondition(condition, chats)).join("，并且");
-}
-
-export type ConditionEvidence = {
-  type: FilterConditionType;
-  label: string;
-  detail: string;
-  matched: boolean;
-};
-
-function applyConditionEffect(rawMatched: boolean, effect?: FilterConditionEffect): boolean {
-  return effect === "exclude" ? !rawMatched : rawMatched;
-}
-
-export function evaluatePreviewMessage(
-  message: Pick<HistoricalFilterPreviewMessage, "chatId" | "content">,
-  conditions: FilterCondition[],
-  chats: JoinedChat[] = [],
-): ConditionEvidence[] {
-  const normalizedContent = message.content.toLowerCase();
-
-  return conditions.map((condition) => {
-    if (condition.type === "chat") {
-      const matched = condition.values.includes(message.chatId);
-      return {
-        type: condition.type,
-        label: "消息来源",
-        detail: matched
-          ? `来自${formatQuotedList(resolveChatNames([message.chatId], chats), message.chatId)}`
-          : `需要来自${formatQuotedList(resolveChatNames(condition.values, chats), "指定会话")}`,
-        matched,
-      };
-    }
-
-    if (condition.type === "regex") {
-      const matchedPattern = condition.values.find((pattern) => {
-        try {
-          return new RegExp(pattern, "i").test(message.content);
-        } catch {
-          return false;
-        }
-      });
-      return {
-        type: condition.type,
-        label: condition.effect === "exclude" ? "排除正则" : "正则匹配",
-        detail: condition.effect === "exclude"
-          ? matchedPattern
-            ? `匹配排除项「${matchedPattern}」`
-            : "没有匹配排除项"
-          : matchedPattern
-            ? `匹配「${matchedPattern}」`
-            : "没有表达式匹配",
-        matched: applyConditionEffect(Boolean(matchedPattern), condition.effect),
-      };
-    }
-
-    if (condition.type === "script") {
-      return {
-        type: condition.type,
-        label: condition.effect === "exclude" ? "代码排除" : "自定义代码",
-        detail: "执行结果由服务端预览确认",
-        matched: true,
-      };
-    }
-
-    const matchedKeyword = condition.values.find((keyword) =>
-      normalizedContent.includes(keyword.toLowerCase()),
-    );
-    return {
-      type: condition.type,
-      label: condition.effect === "exclude" ? "排除关键词" : "内容条件",
-      detail: condition.effect === "exclude"
-        ? matchedKeyword
-          ? `出现排除词「${matchedKeyword}」`
-          : "没有排除词出现"
-        : matchedKeyword
-          ? `包含「${matchedKeyword}」`
-          : "没有关键词出现",
-      matched: applyConditionEffect(Boolean(matchedKeyword), condition.effect),
-    };
-  });
 }

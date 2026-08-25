@@ -34,7 +34,7 @@ docker compose logs --tail=200 telegram-star
 ## 3. Web / PWA 验证
 
 - 打开 Web UI。
-- 测试 Telegram 登录状态、消息列表、过滤器、通知转发设置。
+- 测试 Telegram 登录状态、消息列表、规则、通知转发设置。
 - 刷新页面后仍可访问。
 - 已安装 PWA 时确认更新提示或刷新后生效。
 
@@ -76,7 +76,7 @@ pnpm tauri:ios:dev
 - 检查后端日志。
 - 检查设备列表 `lastSeenAt` 是否更新。
 - 检查 Web/PWA/Tauri 远程业务页是否加载最新静态资源。
-- 如果有 migration，确认历史消息、过滤器和通知转发配置仍存在。
+- 如果有 migration，确认历史消息、规则和通知转发配置仍存在。
 
 ## 7. 回滚提醒
 

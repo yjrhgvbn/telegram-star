@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  evaluateFilterConditions,
   hasConflictingChatConditions,
   matchFilterConditions,
   parseConditions,
@@ -48,6 +49,48 @@ describe("filter matching", () => {
     );
 
     expect(result).toEqual({ matched: true, matchedKeyword: "v\\d+\\.\\d+" });
+  });
+
+  it("collects evidence for every matching value and the actual regex text", () => {
+    const result = evaluateFilterConditions(
+      { chatId: "chat-1", content: "RELEASE V12.4, release NOTICE v13.5" },
+      [
+        { type: "keyword", values: ["release", "notice"] },
+        { type: "regex", values: ["v\\d+\\.\\d+"] },
+        { type: "chat", values: ["chat-1"] },
+      ],
+    );
+
+    expect(result).toEqual({
+      matched: true,
+      matchedKeyword: "release",
+      evidence: [
+        {
+          conditionIndex: 0,
+          type: "keyword",
+          effect: "require",
+          passed: true,
+          matchedValues: ["release", "notice"],
+          matchedTexts: ["release", "notice"],
+        },
+        {
+          conditionIndex: 1,
+          type: "regex",
+          effect: "require",
+          passed: true,
+          matchedValues: ["v\\d+\\.\\d+"],
+          matchedTexts: ["V12.4", "v13.5"],
+        },
+        {
+          conditionIndex: 2,
+          type: "chat",
+          effect: "require",
+          passed: true,
+          matchedValues: ["chat-1"],
+          matchedTexts: [],
+        },
+      ],
+    });
   });
 
   it("fails when any condition does not match", () => {
