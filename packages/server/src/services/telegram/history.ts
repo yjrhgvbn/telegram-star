@@ -323,6 +323,7 @@ export async function previewHistoricalFilterMessages(options: {
   const scopedChatIds = getScopedChatIds(options.conditions);
   const previews: HistoricalFilterPreviewMessage[] = [];
   const matchedSamples: HistoricalFilterPreviewSample[] = [];
+  const excludedSamples: HistoricalFilterPreviewSample[] = [];
   const unmatchedSamples: HistoricalFilterPreviewSample[] = [];
   let scannedChats = 0;
 
@@ -361,7 +362,14 @@ export async function previewHistoricalFilterMessages(options: {
           options.conditions,
         );
         if (match.error) throw new Error(match.error);
-        const sampleTarget = match.matched ? matchedSamples : unmatchedSamples;
+        const rejectedByExclusion = !match.matched && match.evidence.some(
+          (evidence) => evidence.effect === "exclude" && !evidence.passed,
+        );
+        const sampleTarget = match.matched
+          ? matchedSamples
+          : rejectedByExclusion
+            ? excludedSamples
+            : unmatchedSamples;
         const shouldCaptureSample =
           sampleLimit > 0 && sampleTarget.length < sampleLimit;
 
@@ -389,13 +397,17 @@ export async function previewHistoricalFilterMessages(options: {
   const nextPage = getNextDialogPage(inspectableDialogs.length, page, pageSize);
   const preferredMatchedCount = Math.ceil(sampleLimit * (2 / 3));
   const preferredUnmatchedCount = sampleLimit - preferredMatchedCount;
+  const preferredRejectedSamples = [
+    ...excludedSamples.slice(0, 1),
+    ...unmatchedSamples,
+  ].slice(0, preferredUnmatchedCount);
   const samples = [
     ...matchedSamples.slice(0, preferredMatchedCount),
-    ...unmatchedSamples.slice(0, preferredUnmatchedCount),
+    ...preferredRejectedSamples,
   ];
   const sampleKeys = new Set(samples.map((sample) => `${sample.chatId}-${sample.id}`));
 
-  for (const sample of [...matchedSamples, ...unmatchedSamples]) {
+  for (const sample of [...matchedSamples, ...excludedSamples, ...unmatchedSamples]) {
     if (samples.length >= sampleLimit) break;
 
     const key = `${sample.chatId}-${sample.id}`;

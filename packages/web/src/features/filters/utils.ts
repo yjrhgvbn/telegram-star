@@ -1,9 +1,10 @@
 import type {
   FilterCondition,
+  FilterConditionEffect,
   FilterConditionType,
   JoinedChat,
 } from "@/types";
-import type { DraftCondition } from "./types";
+import type { DraftCondition, DraftConditionGroup } from "./types";
 
 function isValidRegexPattern(pattern: string): boolean {
   try {
@@ -14,11 +15,20 @@ function isValidRegexPattern(pattern: string): boolean {
   }
 }
 
-export function createDraftCondition(type: FilterConditionType = "keyword"): DraftCondition {
+function createDraftId(prefix: string): string {
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function createDraftCondition(
+  type: FilterConditionType = "keyword",
+  groupId = createDraftId(`group-${type}`),
+  effect: FilterConditionEffect = "require",
+): DraftCondition {
   return {
-    id: `${type}-${Math.random().toString(36).slice(2, 10)}`,
+    id: createDraftId(type),
+    groupId,
     type,
-    effect: "require",
+    effect,
     values: [],
     input: "",
   };
@@ -40,9 +50,10 @@ export function toDraftConditions(conditions: FilterCondition[]): DraftCondition
   const drafts = conditions.map((condition, index) => {
     const isScript = condition.type === "script";
     return {
-      id: `${condition.type}-${index}-${Math.random().toString(36).slice(2, 10)}`,
+      id: createDraftId(`${condition.type}-${index}`),
+      groupId: condition.groupId ?? createDraftId(`group-${condition.type}`),
       type: condition.type,
-      effect: condition.effect ?? "require",
+      effect: condition.groupEffect ?? condition.effect ?? "require",
       values: isScript ? [] : [...condition.values],
       input: isScript ? (condition.values[0] ?? "") : "",
     };
@@ -83,7 +94,8 @@ export function normalizeConditions(conditions: DraftCondition[]): FilterConditi
 
       return {
         type: condition.type,
-        ...(condition.effect === "exclude" ? { effect: condition.effect } : {}),
+        ...(condition.groupId ? { groupId: condition.groupId } : {}),
+        ...(condition.effect === "exclude" ? { groupEffect: condition.effect } : {}),
         values,
       } as FilterCondition;
     })
@@ -91,18 +103,74 @@ export function normalizeConditions(conditions: DraftCondition[]): FilterConditi
 }
 
 export function mergePersistableConditions(conditions: FilterCondition[]): FilterCondition[] {
-  const nonChatConditions = conditions.filter((condition) => condition.type !== "chat");
-  const chatValues = Array.from(
-    new Set(
-      conditions
-        .filter((condition) => condition.type === "chat")
-        .flatMap((condition) => condition.values),
-    ),
-  );
+  const merged: FilterCondition[] = [];
+  const handledChatGroups = new Set<string>();
 
-  return chatValues.length > 0
-    ? [...nonChatConditions, { type: "chat", values: chatValues }]
-    : nonChatConditions;
+  conditions.forEach((condition) => {
+    if (condition.type !== "chat") {
+      merged.push(condition);
+      return;
+    }
+
+    // 旧数据没有 groupId 时仍把多个会话条件合成一个 OR 范围。
+    const key = condition.groupId ? `group:${condition.groupId}` : "legacy-chat";
+    if (handledChatGroups.has(key)) return;
+    handledChatGroups.add(key);
+
+    const groupValues = conditions
+      .filter((candidate) => {
+        if (candidate.type !== "chat") return false;
+        if (condition.groupId) return candidate.groupId === condition.groupId;
+        return candidate.groupId === undefined;
+      })
+      .flatMap((candidate) => candidate.values);
+
+    merged.push({
+      type: "chat",
+      ...(condition.groupId ? { groupId: condition.groupId } : {}),
+      values: Array.from(new Set(groupValues)),
+    });
+  });
+
+  return merged;
+}
+
+export function groupDraftConditions(conditions: DraftCondition[]): DraftConditionGroup[] {
+  const groups: DraftConditionGroup[] = [];
+  const groupIndexes = new Map<string, number>();
+
+  conditions.forEach((condition) => {
+    const groupId = condition.groupId ?? condition.id;
+    const groupIndex = groupIndexes.get(groupId);
+
+    if (groupIndex === undefined) {
+      groupIndexes.set(groupId, groups.length);
+      groups.push({
+        id: groupId,
+        effect: condition.effect ?? "require",
+        conditions: [condition],
+      });
+      return;
+    }
+
+    groups[groupIndex]?.conditions.push(condition);
+  });
+
+  return groups;
+}
+
+export function getFilterConditionEffect(
+  condition: FilterCondition,
+): FilterConditionEffect {
+  return condition.groupEffect ?? condition.effect ?? "require";
+}
+
+export function countFilterConditionGroups(conditions: FilterCondition[]): number {
+  return new Set(
+    conditions.map((condition, index) =>
+      condition.groupId ? `group:${condition.groupId}` : `legacy:${index}`,
+    ),
+  ).size;
 }
 
 export function assertValidRegexConditions(conditions: FilterCondition[]): void {
@@ -179,7 +247,9 @@ export function deriveFilterName(
   if (contentCondition && contentValue) {
     if (contentCondition.type === "script") return "自定义代码规则";
 
-    const effectPrefix = contentCondition.effect === "exclude" ? "排除：" : "";
+    const effectPrefix = getFilterConditionEffect(contentCondition) === "exclude"
+      ? "排除："
+      : "";
     return truncateFilterName(
       contentCondition.type === "regex"
         ? `${effectPrefix}正则：${contentValue}`
@@ -200,23 +270,25 @@ export function describeFilterCondition(
   condition: FilterCondition,
   chats: JoinedChat[] = [],
 ): string {
+  const isExcluded = getFilterConditionEffect(condition) === "exclude";
+
   if (condition.type === "chat") {
     return `消息来自${formatQuotedList(resolveChatNames(condition.values, chats), "任一已加入会话")}`;
   }
 
   if (condition.type === "regex") {
     const description = `内容匹配${formatQuotedList(condition.values, "尚未填写的正则表达式")}`;
-    return condition.effect === "exclude" ? `排除${description}` : description;
+    return isExcluded ? `排除${description}` : description;
   }
 
   if (condition.type === "script") {
-    return condition.effect === "exclude"
+    return isExcluded
       ? "自定义代码返回 true 时排除"
       : "自定义代码返回 true";
   }
 
   const description = `内容包含${formatQuotedList(condition.values, "尚未填写的关键词")}`;
-  return condition.effect === "exclude" ? `排除${description}` : description;
+  return isExcluded ? `排除${description}` : description;
 }
 
 export function describeFilterRule(
@@ -224,5 +296,34 @@ export function describeFilterRule(
   chats: JoinedChat[] = [],
 ): string {
   if (conditions.length === 0) return "尚未定义命中条件";
-  return conditions.map((condition) => describeFilterCondition(condition, chats)).join("，并且");
+
+  const groups: FilterCondition[][] = [];
+  const groupIndexes = new Map<string, number>();
+  conditions.forEach((condition, index) => {
+    const key = condition.groupId ? `group:${condition.groupId}` : `legacy:${index}`;
+    const groupIndex = groupIndexes.get(key);
+    if (groupIndex === undefined) {
+      groupIndexes.set(key, groups.length);
+      groups.push([condition]);
+    } else {
+      groups[groupIndex]?.push(condition);
+    }
+  });
+
+  return groups
+    .map((group) => {
+      const descriptions = group.map((condition) =>
+        describeFilterCondition(
+          { ...condition, effect: undefined, groupEffect: undefined },
+          chats,
+        ),
+      );
+      const description = descriptions.length === 1
+        ? descriptions[0]
+        : `（${descriptions.join("，或者")}）`;
+      return getFilterConditionEffect(group[0]!) === "exclude"
+        ? `排除${description}`
+        : description;
+    })
+    .join("，并且");
 }

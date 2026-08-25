@@ -112,7 +112,8 @@ export async function previewFilterHistory(input: FilterPreviewInput): Promise<F
     totalLimit: scope.totalLimit,
     page: scope.page,
     pageSize: scope.pageSize,
-    sampleLimit: 0,
+    // 返回少量命中/排除样本，Web 可解释“为什么被排除”，不影响回填列表。
+    sampleLimit: 8,
   });
 
   return filterPreviewResponseSchema.parse({

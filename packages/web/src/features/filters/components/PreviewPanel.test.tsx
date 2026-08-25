@@ -119,4 +119,52 @@ describe("PreviewPanel", () => {
       Array.from(container.querySelectorAll("mark"), (element) => element.textContent),
     ).toEqual(["红包", "红包"]);
   });
+
+  it("shows one rejected sample and highlights the exclusion reason", () => {
+    const excludedSample = {
+      ...createPreviewMessage({
+        id: 2,
+        content: "红包活动已结束，感谢参与",
+        matchedKeyword: null,
+        matchEvidence: [
+          {
+            conditionIndex: 0,
+            type: "keyword" as const,
+            effect: "require" as const,
+            passed: true,
+            matchedValues: ["红包"],
+            matchedTexts: ["红包"],
+          },
+          {
+            conditionIndex: 1,
+            type: "keyword" as const,
+            effect: "exclude" as const,
+            passed: false,
+            matchedValues: ["已结束"],
+            matchedTexts: ["已结束"],
+          },
+        ],
+      }),
+      matched: false,
+    };
+    const { container } = render(
+      <PreviewPanel
+        previewEnabled
+        previewLoading={false}
+        previewStale={false}
+        previewError=""
+        previewMessages={[createPreviewMessage()]}
+        previewSamples={[excludedSample]}
+        previewSummary={{ scannedChats: 1, total: 1 }}
+        previewLimit="200"
+        onPreviewLimitChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/已排除/)).not.toBeNull();
+    expect(
+      Array.from(container.querySelectorAll("mark"), (element) => element.textContent),
+    ).toContain("已结束");
+    expect(screen.getByText("命中 1 处排除项")).not.toBeNull();
+  });
 });

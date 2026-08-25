@@ -3,6 +3,7 @@ import { messageContentLinksSchema } from "./messages.js";
 
 export const filterConditionTypeSchema = z.enum(["keyword", "chat", "regex", "script"]);
 export const filterConditionEffectSchema = z.enum(["require", "exclude"]);
+export const filterConditionGroupIdSchema = z.string().trim().min(1).max(120);
 
 export function isValidFilterRegexPattern(pattern: string): boolean {
   try {
@@ -17,13 +18,30 @@ export const filterConditionSchema = z
   .object({
     type: filterConditionTypeSchema,
     effect: filterConditionEffectSchema.optional(),
+    groupId: filterConditionGroupIdSchema.optional(),
+    groupEffect: filterConditionEffectSchema.optional(),
     values: z.array(z.string().trim().min(1)).min(1),
   })
   .superRefine((condition, ctx) => {
-    if (condition.type === "chat" && condition.effect === "exclude") {
+    if (
+      condition.effect !== undefined &&
+      condition.groupEffect !== undefined &&
+      condition.effect !== condition.groupEffect
+    ) {
       ctx.addIssue({
         code: "custom",
-        path: ["effect"],
+        path: ["groupEffect"],
+        message: "condition effect and group effect must be consistent",
+      });
+    }
+
+    if (
+      condition.type === "chat" &&
+      (condition.effect === "exclude" || condition.groupEffect === "exclude")
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: [condition.groupEffect === "exclude" ? "groupEffect" : "effect"],
         message: "chat conditions cannot be excluded",
       });
     }
@@ -59,7 +77,72 @@ export const filterConditionSchema = z
     });
   });
 
-export const filterConditionsSchema = z.array(filterConditionSchema).min(1);
+function refineFilterConditionGroups(
+  conditions: Array<z.infer<typeof filterConditionSchema>>,
+  ctx: z.RefinementCtx,
+): void {
+  const groups = new Map<
+    string,
+    {
+      effect: z.infer<typeof filterConditionEffectSchema>;
+      indexes: number[];
+      types: Set<z.infer<typeof filterConditionTypeSchema>>;
+    }
+  >();
+
+  conditions.forEach((condition, index) => {
+    // 没有 groupId 的旧条件各自成组，继续保持原来的逐条件 AND 语义。
+    const key = condition.groupId === undefined
+      ? `legacy:${index}`
+      : `group:${condition.groupId}`;
+    const effect = condition.groupEffect ?? condition.effect ?? "require";
+    const group = groups.get(key);
+
+    if (!group) {
+      groups.set(key, { effect, indexes: [index], types: new Set([condition.type]) });
+      return;
+    }
+
+    group.indexes.push(index);
+    group.types.add(condition.type);
+    if (group.effect !== effect) {
+      ctx.addIssue({
+        code: "custom",
+        path: [index, "groupEffect"],
+        message: "conditions in the same group must use the same effect",
+      });
+    }
+  });
+
+  const chatGroups: string[] = [];
+  for (const [key, group] of groups) {
+    if (!group.types.has("chat")) continue;
+    chatGroups.push(key);
+
+    if (group.types.size > 1) {
+      ctx.addIssue({
+        code: "custom",
+        path: [group.indexes[0] ?? 0, "groupId"],
+        message: "chat conditions cannot be mixed with content conditions in one group",
+      });
+    }
+  }
+
+  if (chatGroups.length > 1) {
+    const conflictingGroup = groups.get(chatGroups[1] ?? "");
+    ctx.addIssue({
+      code: "custom",
+      path: [conflictingGroup?.indexes[0] ?? 0, "groupId"],
+      message: "chat conditions must share one group",
+    });
+  }
+}
+
+const storedFilterConditionsSchema = z
+  .array(filterConditionSchema)
+  .superRefine(refineFilterConditionGroups);
+
+export const filterConditionsSchema = storedFilterConditionsSchema.min(1);
 
 export const filterForwardTargetIdsSchema = z.array(z.number().int().positive());
 export const filterEngagementTypeSchema = z.enum(["marked_read", "opened_telegram"]);
@@ -70,7 +153,7 @@ export const filterSchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
   systemKey: filterSystemKeySchema.nullable().default(null),
-  conditions: z.array(filterConditionSchema),
+  conditions: storedFilterConditionsSchema,
   enabled: z.boolean(),
   autoLocateUnreadNearRead: z.boolean(),
   forwardTargetIds: filterForwardTargetIdsSchema,
@@ -135,6 +218,11 @@ export const filterMatchEvidenceSchema = z.object({
   passed: z.boolean(),
   matchedValues: z.array(z.string()),
   matchedTexts: z.array(z.string()),
+  // 分组字段为可选，允许新版 Web 继续读取旧服务端的证据。
+  groupId: filterConditionGroupIdSchema.optional(),
+  groupIndex: z.number().int().nonnegative().optional(),
+  groupPassed: z.boolean().optional(),
+  conditionMatched: z.boolean().optional(),
 });
 
 export const liveChatMessageSchema = z.object({

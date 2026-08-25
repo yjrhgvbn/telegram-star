@@ -139,6 +139,58 @@ describe("filters contract", () => {
     ).toThrow();
   });
 
+  it("accepts two-level groups and rejects ambiguous group semantics", () => {
+    expect(
+      filterCreateInputSchema.parse({
+        name: "红包提醒",
+        conditions: [
+          { type: "keyword", groupId: "content", values: ["红包"] },
+          { type: "regex", groupId: "content", values: ["返佣.*300"] },
+          {
+            type: "keyword",
+            groupId: "excluded",
+            groupEffect: "exclude",
+            values: ["已结束"],
+          },
+        ],
+      }).conditions,
+    ).toEqual([
+      { type: "keyword", groupId: "content", values: ["红包"] },
+      { type: "regex", groupId: "content", values: ["返佣.*300"] },
+      {
+        type: "keyword",
+        groupId: "excluded",
+        groupEffect: "exclude",
+        values: ["已结束"],
+      },
+    ]);
+
+    expect(() =>
+      filterCreateInputSchema.parse({
+        name: "冲突分组",
+        conditions: [
+          { type: "keyword", groupId: "content", values: ["红包"] },
+          {
+            type: "regex",
+            groupId: "content",
+            groupEffect: "exclude",
+            values: ["广告"],
+          },
+        ],
+      }),
+    ).toThrow();
+
+    expect(() =>
+      filterCreateInputSchema.parse({
+        name: "混合来源",
+        conditions: [
+          { type: "chat", groupId: "mixed", values: ["1001"] },
+          { type: "keyword", groupId: "mixed", values: ["红包"] },
+        ],
+      }),
+    ).toThrow();
+  });
+
   it("accepts optional forward target bindings on create and update", () => {
     expect(
       filterCreateInputSchema.parse({

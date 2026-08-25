@@ -30,12 +30,16 @@ function FilterFormHarness({
   onAutoLocateChange,
   onToggleForwardTarget,
   onAddCondition,
+  onAddAlternative = vi.fn(),
+  onToggleGroupEffect = vi.fn(),
   conditions,
   onUpdateCondition = vi.fn(),
 }: {
   onAutoLocateChange: (value: boolean) => void;
   onToggleForwardTarget: (id: number) => void;
   onAddCondition: () => void;
+  onAddAlternative?: (groupId: string) => void;
+  onToggleGroupEffect?: (groupId: string) => void;
   conditions?: DraftCondition[];
   onUpdateCondition?: (
     id: string,
@@ -81,7 +85,10 @@ function FilterFormHarness({
       error=""
       onUpdateCondition={onUpdateCondition}
       onRemoveCondition={vi.fn()}
+      onRemoveGroup={vi.fn()}
+      onToggleGroupEffect={onToggleGroupEffect}
       onAppendValues={vi.fn()}
+      onAddAlternative={onAddAlternative}
       onAddCondition={onAddCondition}
     />
   );
@@ -121,7 +128,7 @@ describe("FilterForm", () => {
     expect(onToggleForwardTarget).toHaveBeenCalledWith(2);
 
     await user.click(
-      screen.getByRole("button", { name: "添加一个必须同时满足的条件" }),
+      screen.getByRole("button", { name: "添加必须条件" }),
     );
     expect(onAddCondition).toHaveBeenCalledTimes(1);
   });
@@ -145,7 +152,7 @@ describe("FilterForm", () => {
     expect(screen.getByText("来自任一会话")).not.toBeNull();
     expect(screen.getByText("未指定会话时，匹配全部会话")).not.toBeNull();
     expect(screen.queryByRole("button", { name: "删除消息来源条件" })).toBeNull();
-    expect(screen.getByRole("button", { name: "删除关键词条件" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "删除消息内容条件组" })).not.toBeNull();
     expect(screen.queryByRole("combobox", { name: /消息来源/ })).toBeNull();
 
     await user.click(
@@ -225,39 +232,27 @@ describe("FilterForm", () => {
     expect(screen.getByText(/可读取 message\.chatId 和 message\.content/)).not.toBeNull();
   });
 
-  it("toggles the condition effect from the left rail", async () => {
+  it("toggles the whole group effect from the left rail", async () => {
     const user = userEvent.setup();
-    const onUpdateCondition = vi.fn();
+    const onToggleGroupEffect = vi.fn();
 
     render(
       <FilterFormHarness
         onAutoLocateChange={vi.fn()}
         onToggleForwardTarget={vi.fn()}
         onAddCondition={vi.fn()}
-        onUpdateCondition={onUpdateCondition}
+        onToggleGroupEffect={onToggleGroupEffect}
       />,
     );
 
     const effectToggle = screen.getByRole("button", {
-      name: "当前为必须满足，点击切换为命中排除",
+      name: "当前为必须满足，点击切换为整组排除",
     });
     expect(effectToggle.getAttribute("aria-pressed")).toBe("false");
 
     await user.click(effectToggle);
 
-    const [conditionId, updater] = onUpdateCondition.mock.calls[0] as [
-      string,
-      (condition: DraftCondition) => DraftCondition,
-    ];
-    expect(conditionId).toBe("keyword-condition");
-    expect(
-      updater({
-        id: "keyword-condition",
-        type: "keyword",
-        values: ["将夜"],
-        input: "",
-      }).effect,
-    ).toBe("exclude");
+    expect(onToggleGroupEffect).toHaveBeenCalledWith("keyword-condition");
   });
 
   it("changes only the content type and preserves an exclusion effect", async () => {
@@ -286,7 +281,7 @@ describe("FilterForm", () => {
 
     expect(
       screen.getByRole("button", {
-        name: "当前为命中排除，点击切换为必须满足",
+        name: "当前为整组排除，点击切换为必须满足",
       }).getAttribute("aria-pressed"),
     ).toBe("true");
 
@@ -303,5 +298,91 @@ describe("FilterForm", () => {
       values: [],
       input: "",
     });
+  });
+
+  it("renders alternatives inside one group with an explicit OR divider", async () => {
+    const user = userEvent.setup();
+    const onAddAlternative = vi.fn();
+
+    render(
+      <FilterFormHarness
+        onAutoLocateChange={vi.fn()}
+        onToggleForwardTarget={vi.fn()}
+        onAddCondition={vi.fn()}
+        onAddAlternative={onAddAlternative}
+        conditions={[
+          {
+            id: "chat-condition",
+            groupId: "source-group",
+            type: "chat",
+            values: [],
+            input: "",
+          },
+          {
+            id: "keyword-condition",
+            groupId: "content-group",
+            type: "keyword",
+            values: ["红包"],
+            input: "",
+          },
+          {
+            id: "regex-condition",
+            groupId: "content-group",
+            type: "regex",
+            values: ["返佣.*300"],
+            input: "",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("或者")).not.toBeNull();
+    expect(screen.getAllByRole("combobox", { name: "消息内容匹配方式" })).toHaveLength(2);
+
+    await user.click(screen.getByRole("button", { name: "备选条件" }));
+    expect(onAddAlternative).toHaveBeenCalledWith("content-group");
+  });
+
+  it("keeps the alternative remove action beside the type selector on narrow screens", () => {
+    render(
+      <FilterFormHarness
+        onAutoLocateChange={vi.fn()}
+        onToggleForwardTarget={vi.fn()}
+        onAddCondition={vi.fn()}
+        conditions={[
+          {
+            id: "chat-condition",
+            groupId: "source-group",
+            type: "chat",
+            values: [],
+            input: "",
+          },
+          {
+            id: "keyword-condition",
+            groupId: "content-group",
+            type: "keyword",
+            values: ["红包"],
+            input: "",
+          },
+          {
+            id: "regex-condition",
+            groupId: "content-group",
+            type: "regex",
+            values: ["返佣.*300"],
+            input: "",
+          },
+        ]}
+      />,
+    );
+
+    const removeButtons = screen.getAllByRole("button", {
+      name: /删除.*备选条件/,
+    });
+    expect(removeButtons).toHaveLength(2);
+    for (const button of removeButtons) {
+      expect(button.className).toContain("col-start-2");
+      expect(button.className).toContain("sm:col-start-3");
+      expect(button.className).toContain("row-start-1");
+    }
   });
 });

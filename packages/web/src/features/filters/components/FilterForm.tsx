@@ -14,7 +14,8 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { ForwardTarget, JoinedChat } from "@/types";
 import type { DraftCondition } from "../types";
-import { ConditionEditor } from "./ConditionEditor";
+import { groupDraftConditions } from "../utils";
+import { ConditionGroupEditor } from "./ConditionGroupEditor";
 
 interface FilterFormProps {
   autoLocateUnreadNearRead: boolean;
@@ -30,7 +31,10 @@ interface FilterFormProps {
   error: string;
   onUpdateCondition: (id: string, updater: (condition: DraftCondition) => DraftCondition) => void;
   onRemoveCondition: (id: string) => void;
+  onRemoveGroup: (groupId: string) => void;
+  onToggleGroupEffect: (groupId: string) => void;
   onAppendValues: (id: string) => void;
+  onAddAlternative: (groupId: string) => void;
   onAddCondition: () => void;
 }
 
@@ -48,14 +52,19 @@ export function FilterForm({
   error,
   onUpdateCondition,
   onRemoveCondition,
+  onRemoveGroup,
+  onToggleGroupEffect,
   onAppendValues,
+  onAddAlternative,
   onAddCondition,
 }: FilterFormProps) {
-  const visibleConditions = [...conditions].sort(
-    (a, b) => Number(b.type === "chat") - Number(a.type === "chat"),
+  const visibleGroups = [...groupDraftConditions(conditions)].sort(
+    (a, b) =>
+      Number(b.conditions.every((condition) => condition.type === "chat")) -
+      Number(a.conditions.every((condition) => condition.type === "chat")),
   );
-  const primaryChatConditionId = visibleConditions.find(
-    (condition) => condition.type === "chat",
+  const primaryChatGroupId = visibleGroups.find((group) =>
+    group.conditions.every((condition) => condition.type === "chat"),
   )?.id;
 
   return (
@@ -82,17 +91,20 @@ export function FilterForm({
           ) : null}
 
           <div className="flex flex-col gap-2">
-            {visibleConditions.map((condition, index) => (
-              <ConditionEditor
-                key={condition.id}
-                condition={condition}
+            {visibleGroups.map((group, index) => (
+              <ConditionGroupEditor
+                key={group.id}
+                group={group}
                 index={index}
                 chats={chats}
                 chatsLoading={chatsLoading}
-                removable={condition.id !== primaryChatConditionId}
-                onUpdate={onUpdateCondition}
-                onRemove={onRemoveCondition}
+                removable={group.id !== primaryChatGroupId}
+                onUpdateCondition={onUpdateCondition}
+                onRemoveCondition={onRemoveCondition}
+                onRemoveGroup={onRemoveGroup}
+                onToggleEffect={onToggleGroupEffect}
                 onAppendValues={onAppendValues}
+                onAddAlternative={onAddAlternative}
               />
             ))}
           </div>
@@ -104,7 +116,7 @@ export function FilterForm({
             onClick={onAddCondition}
           >
             <Plus data-icon="inline-start" />
-            添加一个必须同时满足的条件
+            添加必须条件
           </Button>
         </CardContent>
       </Card>

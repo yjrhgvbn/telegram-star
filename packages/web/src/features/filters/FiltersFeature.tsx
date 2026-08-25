@@ -30,9 +30,11 @@ import type { DraftCondition } from "./types";
 import {
   assertValidRegexConditions,
   assertValidScriptConditions,
+  countFilterConditionGroups,
   createDraftCondition,
   createInitialDraftConditions,
   deriveFilterName,
+  groupDraftConditions,
   mergePersistableConditions,
   normalizeConditions,
   toDraftConditions,
@@ -104,6 +106,10 @@ export function FiltersFeature() {
   const suggestedName = useMemo(
     () => deriveFilterName(persistedConditions, chats),
     [chats, persistedConditions],
+  );
+  const persistedGroupCount = useMemo(
+    () => countFilterConditionGroups(persistedConditions),
+    [persistedConditions],
   );
   const currentConditionSignature = useMemo(
     () => JSON.stringify(persistedConditions),
@@ -224,6 +230,7 @@ export function FiltersFeature() {
         previewCandidate.request.perChatLimit !== debouncedPreviewRequest?.perChatLimit),
   );
   const previewMessages = previewQuery.data?.messages ?? [];
+  const previewSamples = previewQuery.data?.samples ?? [];
   const previewSummary = previewQuery.data
     ? {
         scannedChats: previewQuery.data.scannedChats,
@@ -335,6 +342,48 @@ export function FiltersFeature() {
 
   const addCondition = () => {
     setConditions((current) => [...current, createDraftCondition()]);
+    markDirty();
+  };
+
+  const addAlternative = (groupId: string) => {
+    setConditions((current) => {
+      const group = groupDraftConditions(current).find((item) => item.id === groupId);
+      if (!group || group.conditions.some((condition) => condition.type === "chat")) {
+        return current;
+      }
+
+      return [
+        ...current,
+        createDraftCondition("keyword", groupId, group.effect),
+      ];
+    });
+    markDirty();
+  };
+
+  const toggleGroupEffect = (groupId: string) => {
+    setConditions((current) => {
+      const group = groupDraftConditions(current).find((item) => item.id === groupId);
+      if (!group || group.conditions.some((condition) => condition.type === "chat")) {
+        return current;
+      }
+
+      const nextEffect = group.effect === "exclude" ? "require" : "exclude";
+      return current.map((condition) =>
+        (condition.groupId ?? condition.id) === groupId
+          ? { ...condition, effect: nextEffect }
+          : condition,
+      );
+    });
+    markDirty();
+  };
+
+  const removeConditionGroup = (groupId: string) => {
+    setConditions((current) => {
+      const remaining = current.filter(
+        (condition) => (condition.groupId ?? condition.id) !== groupId,
+      );
+      return remaining.length > 0 ? remaining : [createDraftCondition()];
+    });
     markDirty();
   };
 
@@ -596,7 +645,7 @@ export function FiltersFeature() {
           }
           description={
             selectedFilter
-              ? `${selectedFilter.enabled ? "正在监听" : "已停用"} · ${persistedConditions.length} 个条件`
+              ? `${selectedFilter.enabled ? "正在监听" : "已停用"} · ${persistedGroupCount} 个条件组`
               : name.trim()
                 ? "使用自定义名称 · 修改条件后自动预览"
                 : `${automaticNameDescription}，也可自定义`
@@ -660,7 +709,7 @@ export function FiltersFeature() {
           }
         />
 
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden xl:grid xl:grid-cols-[minmax(460px,1fr)_372px] xl:gap-3 xl:p-3">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden xl:grid xl:grid-cols-[minmax(520px,1fr)_460px] xl:gap-3 xl:p-3">
           <section className="min-h-0 min-w-0 flex-1 overflow-y-auto">
             <FilterForm
               autoLocateUnreadNearRead={autoLocateUnreadNearRead}
@@ -676,7 +725,10 @@ export function FiltersFeature() {
               error={error}
               onUpdateCondition={updateCondition}
               onRemoveCondition={removeCondition}
+              onRemoveGroup={removeConditionGroup}
+              onToggleGroupEffect={toggleGroupEffect}
               onAppendValues={appendConditionValues}
+              onAddAlternative={addAlternative}
               onAddCondition={addCondition}
             />
           </section>
@@ -688,6 +740,7 @@ export function FiltersFeature() {
             previewStale={previewStale}
             previewError={previewError}
             previewMessages={previewMessages}
+            previewSamples={previewSamples}
             previewSummary={previewSummary}
             previewLimit={previewLimit}
             onPreviewLimitChange={setPreviewLimit}

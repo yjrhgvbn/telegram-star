@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Filter as FilterModel, JoinedChat } from "@/types";
-import { describeFilterRule } from "../utils";
+import { countFilterConditionGroups, describeFilterRule } from "../utils";
 
 interface FilterLibraryProps {
   filters: FilterModel[];
@@ -115,7 +115,7 @@ export function FilterLibrary({
                       </span>
                     </span>
                     <span className="hidden shrink-0 text-right text-[11px] leading-4 text-muted-foreground sm:block">
-                      {filter.conditions.length} 个条件
+                      {countFilterConditionGroups(filter.conditions)} 个条件组
                       <br />
                       {valueCount} 个取值 · {filter.forwardTargetIds.length} 个通道
                     </span>

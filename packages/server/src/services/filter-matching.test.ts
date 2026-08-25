@@ -129,6 +129,13 @@ describe("filter matching", () => {
         { type: "chat", values: ["chat-2"] },
       ]),
     ).toBe(true);
+
+    expect(
+      hasConflictingChatConditions([
+        { type: "chat", groupId: "source", values: ["chat-1"] },
+        { type: "chat", groupId: "source", values: ["chat-2"] },
+      ]),
+    ).toBe(false);
   });
 
   it("round-trips exclusion and script conditions without changing legacy conditions", () => {
@@ -144,6 +151,64 @@ describe("filter matching", () => {
       { type: "script", values: ["return message.content.includes('300');"] },
     ]);
     expect(parseConditions(serialized)).toEqual(JSON.parse(serialized));
+  });
+
+  it("round-trips group metadata", () => {
+    const serialized = serializeConditions([
+      { type: "keyword", groupId: "content", values: [" 红包 "] },
+      { type: "regex", groupId: "content", values: [" 返佣.*300 "] },
+      {
+        type: "keyword",
+        groupId: "excluded",
+        groupEffect: "exclude",
+        values: [" 已结束 "],
+      },
+    ]);
+
+    expect(parseConditions(serialized)).toEqual([
+      { type: "keyword", groupId: "content", values: ["红包"] },
+      { type: "regex", groupId: "content", values: ["返佣.*300"] },
+      {
+        type: "keyword",
+        groupId: "excluded",
+        groupEffect: "exclude",
+        values: ["已结束"],
+      },
+    ]);
+  });
+
+  it("matches alternatives with OR, groups with AND, and exclusions with NOT", () => {
+    const conditions = [
+      { type: "keyword" as const, groupId: "content", values: ["红包"] },
+      { type: "regex" as const, groupId: "content", values: ["返佣.*300"] },
+      {
+        type: "keyword" as const,
+        groupId: "excluded",
+        groupEffect: "exclude" as const,
+        values: ["已结束", "已领完"],
+      },
+    ];
+
+    expect(
+      matchFilterConditions(
+        { chatId: "chat-1", content: "返佣最高可到 300，马上参加" },
+        conditions,
+      ),
+    ).toEqual({ matched: true, matchedKeyword: "返佣.*300" });
+
+    expect(
+      matchFilterConditions(
+        { chatId: "chat-1", content: "红包 300，活动已结束" },
+        conditions,
+      ),
+    ).toEqual({ matched: false, matchedKeyword: null });
+
+    expect(
+      matchFilterConditions(
+        { chatId: "chat-1", content: "只有数字 300，没有活动信息" },
+        conditions,
+      ),
+    ).toEqual({ matched: false, matchedKeyword: null });
   });
 
   it("rejects a message when any exclusion condition matches", () => {

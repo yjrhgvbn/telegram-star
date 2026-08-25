@@ -16,10 +16,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { HistoricalFilterPreviewMessage } from "@/types";
+import type {
+  HistoricalFilterPreviewMessage,
+  HistoricalFilterPreviewSample,
+} from "@/types";
 import {
   cleanPreviewContent,
   findPreviewHighlightRanges,
+  getPreviewExclusionHighlightTexts,
   getPreviewHighlightTexts,
   type PreviewHighlightRange,
 } from "../previewHighlight";
@@ -35,6 +39,7 @@ interface PreviewPanelProps {
   previewStale: boolean;
   previewError: string;
   previewMessages: HistoricalFilterPreviewMessage[];
+  previewSamples?: HistoricalFilterPreviewSample[];
   previewSummary: PreviewSummary | null;
   previewLimit: string;
   onPreviewLimitChange: (value: string) => void;
@@ -52,6 +57,7 @@ const scopeOptions = [
 function renderHighlightedContent(
   content: string,
   ranges: PreviewHighlightRange[],
+  excluded = false,
 ): ReactNode {
   if (ranges.length === 0) return content;
 
@@ -63,7 +69,12 @@ function renderHighlightedContent(
     nodes.push(
       <mark
         key={`${range.start}-${range.end}`}
-        className="rounded-sm bg-primary/20 px-0.5 font-semibold text-foreground ring-1 ring-primary/30"
+        className={cn(
+          "rounded-sm px-0.5 font-semibold text-foreground ring-1",
+          excluded
+            ? "bg-destructive/14 ring-destructive/25"
+            : "bg-primary/20 ring-primary/30",
+        )}
       >
         {content.slice(range.start, range.end)}
       </mark>,
@@ -89,20 +100,37 @@ function formatMessageDate(value: string): string {
 
 const PreviewMessageItem = memo(function PreviewMessageItem({
   message,
+  excluded = false,
 }: {
   message: HistoricalFilterPreviewMessage;
+  excluded?: boolean;
 }) {
   const content = cleanPreviewContent(message.content) || "媒体消息";
-  const highlightTexts = getPreviewHighlightTexts(message);
+  const highlightTexts = excluded
+    ? getPreviewExclusionHighlightTexts(message)
+    : getPreviewHighlightTexts(message);
   const highlightRanges = findPreviewHighlightRanges(content, highlightTexts);
   const messageDate = formatMessageDate(message.messageDate);
 
   return (
-    <article className="relative border-b border-border/72 py-3 pr-3 pl-8 [contain-intrinsic-size:0_116px] [content-visibility:auto] last:border-b-0">
-      <span className="absolute top-4 left-3 size-2 rounded-full bg-primary ring-4 ring-primary/12" />
+    <article
+      className={cn(
+        "relative border-b border-border/72 py-3 pr-3 pl-8 [contain-intrinsic-size:0_116px] [content-visibility:auto] last:border-b-0",
+        excluded && "bg-muted/32 text-muted-foreground",
+      )}
+    >
+      <span
+        className={cn(
+          "absolute top-4 left-3 size-2 rounded-full ring-4",
+          excluded
+            ? "bg-destructive/70 ring-destructive/10"
+            : "bg-primary ring-primary/12",
+        )}
+      />
       <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
         <span className="min-w-0 flex-1 truncate">
           {message.chatTitle}{messageDate ? ` · ${messageDate}` : ""}
+          {excluded ? <span className="text-destructive"> · 已排除</span> : null}
         </span>
         {message.telegramLink ? (
           <a
@@ -117,13 +145,15 @@ const PreviewMessageItem = memo(function PreviewMessageItem({
         ) : null}
       </div>
 
-      <p className="mt-1.5 line-clamp-5 text-sm leading-6 text-foreground/92">
-        {renderHighlightedContent(content, highlightRanges)}
+      <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-foreground/92">
+        {renderHighlightedContent(content, highlightRanges, excluded)}
       </p>
 
       <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
         <span className="min-w-0 flex-1 truncate">
-          {highlightRanges.length > 0
+          {excluded && highlightRanges.length > 0
+            ? `命中 ${highlightRanges.length} 处排除项`
+            : highlightRanges.length > 0
             ? `高亮 ${highlightRanges.length} 处 · ${highlightTexts.length} 个命中项`
             : message.matchedKeyword
               ? `匹配「${message.matchedKeyword}」`
@@ -143,6 +173,7 @@ export function PreviewPanel({
   previewStale,
   previewError,
   previewMessages,
+  previewSamples = [],
   previewSummary,
   previewLimit,
   onPreviewLimitChange,
@@ -152,6 +183,9 @@ export function PreviewPanel({
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const deferredMessages = useDeferredValue(previewMessages);
   const visibleMessages = deferredMessages.slice(0, visibleCount);
+  const excludedSample = previewSamples.find(
+    (sample) => !sample.matched && getPreviewExclusionHighlightTexts(sample).length > 0,
+  );
   const selectedScope =
     scopeOptions.find((option) => option.value === previewLimit) ?? scopeOptions[1];
 
@@ -305,7 +339,20 @@ export function PreviewPanel({
               </div>
             ) : (
               <div aria-live="polite">
-                {visibleMessages.map((message) => (
+                {visibleMessages.slice(0, 5).map((message) => (
+                  <PreviewMessageItem
+                    key={`${message.chatId}-${message.id}`}
+                    message={message}
+                  />
+                ))}
+                {excludedSample ? (
+                  <PreviewMessageItem
+                    key={`excluded-${excludedSample.chatId}-${excludedSample.id}`}
+                    message={excludedSample}
+                    excluded
+                  />
+                ) : null}
+                {visibleMessages.slice(5).map((message) => (
                   <PreviewMessageItem
                     key={`${message.chatId}-${message.id}`}
                     message={message}

@@ -3,6 +3,7 @@ import type { ForwardTarget, JoinedChat } from "@/types";
 import type { DraftCondition } from "../types";
 import {
   describeFilterCondition,
+  getFilterConditionEffect,
   mergePersistableConditions,
   normalizeConditions,
 } from "../utils";
@@ -36,6 +37,8 @@ export function RuleSummary({
 
   const chatTitleById = new Map(chats.map((chat) => [chat.id, chat.title]));
   const conditionTokens: SummaryToken[] = readableConditions.map((condition, index) => {
+    const isExcluded = getFilterConditionEffect(condition) === "exclude";
+
     if (condition.type === "chat") {
       const names = condition.values.map((value) => chatTitleById.get(value) ?? value);
       return {
@@ -50,8 +53,8 @@ export function RuleSummary({
         key: `${condition.type}-${index}`,
         label:
           condition.values.length === 1
-            ? `${condition.effect === "exclude" ? "排除表达式" : "表达式"}：${condition.values[0]}`
-            : `${condition.effect === "exclude" ? "排除表达式" : "表达式"}：${condition.values.length} 个`,
+            ? `${isExcluded ? "排除表达式" : "表达式"}：${condition.values[0]}`
+            : `${isExcluded ? "排除表达式" : "表达式"}：${condition.values.length} 个`,
         detail: describeFilterCondition(condition, chats),
       };
     }
@@ -59,7 +62,7 @@ export function RuleSummary({
     if (condition.type === "script") {
       return {
         key: `${condition.type}-${index}`,
-        label: condition.effect === "exclude" ? "代码：命中时排除" : "代码：自定义判断",
+        label: isExcluded ? "代码：命中时排除" : "代码：自定义判断",
         detail: describeFilterCondition(condition, chats),
       };
     }
@@ -68,8 +71,8 @@ export function RuleSummary({
       key: `${condition.type}-${index}`,
       label:
         condition.values.length === 1
-          ? `${condition.effect === "exclude" ? "排除词" : "关键词"}：${condition.values[0]}`
-          : `${condition.effect === "exclude" ? "排除词" : "关键词"}：${condition.values.length} 个`,
+          ? `${isExcluded ? "排除词" : "关键词"}：${condition.values[0]}`
+          : `${isExcluded ? "排除词" : "关键词"}：${condition.values.length} 个`,
       detail: describeFilterCondition(condition, chats),
     };
   });

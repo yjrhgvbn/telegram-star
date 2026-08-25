@@ -49,7 +49,7 @@ describe("filter form utils", () => {
     ]);
   });
 
-  it("stores one script source and preserves its exclusion effect", () => {
+  it("stores one script source and preserves its group exclusion effect", () => {
     expect(
       normalizeConditions([
         {
@@ -63,7 +63,7 @@ describe("filter form utils", () => {
     ).toEqual([
       {
         type: "script",
-        effect: "exclude",
+        groupEffect: "exclude",
         values: ["return message.content.includes('测试');"],
       },
     ]);
@@ -104,8 +104,8 @@ describe("filter form utils", () => {
       ]),
     ).toEqual([
       { type: "keyword", values: ["发布"] },
-      { type: "regex", values: ["v\\d+"] },
       { type: "chat", values: ["1001", "1002"] },
+      { type: "regex", values: ["v\\d+"] },
     ]);
   });
 
@@ -206,6 +206,43 @@ describe("filter form utils", () => {
     ).toBe(
       "内容包含「红包」，并且排除内容包含「已领完」或「广告」，并且自定义代码返回 true",
     );
+  });
+
+  it("keeps alternatives in one persisted OR group", () => {
+    expect(
+      normalizeConditions([
+        {
+          id: "keyword-1",
+          groupId: "content-group",
+          type: "keyword",
+          values: ["红包"],
+          input: "",
+        },
+        {
+          id: "regex-1",
+          groupId: "content-group",
+          type: "regex",
+          values: ["返佣.*300"],
+          input: "",
+        },
+      ]),
+    ).toEqual([
+      { type: "keyword", groupId: "content-group", values: ["红包"] },
+      { type: "regex", groupId: "content-group", values: ["返佣.*300"] },
+    ]);
+
+    expect(
+      describeFilterRule([
+        { type: "keyword", groupId: "content-group", values: ["红包"] },
+        { type: "regex", groupId: "content-group", values: ["返佣.*300"] },
+        {
+          type: "keyword",
+          groupId: "exclude-group",
+          groupEffect: "exclude",
+          values: ["已结束"],
+        },
+      ]),
+    ).toBe("（内容包含「红包」，或者内容匹配「返佣.*300」），并且排除内容包含「已结束」");
   });
 
 });

@@ -46,6 +46,24 @@ export function getPreviewHighlightTexts(
   return Array.from(unique.values()).sort((a, b) => b.length - a.length);
 }
 
+export function getPreviewExclusionHighlightTexts(
+  message: Pick<HistoricalFilterPreviewMessage, "matchEvidence">,
+): string[] {
+  const unique = new Map<string, string>();
+  const candidates = (message.matchEvidence ?? [])
+    .filter((evidence) => evidence.effect === "exclude" && !evidence.passed)
+    .flatMap((evidence) => evidence.matchedTexts);
+
+  for (const candidate of candidates) {
+    const normalized = cleanPreviewContent(candidate);
+    if (!normalized) continue;
+    const key = normalized.toLocaleLowerCase("zh-CN");
+    if (!unique.has(key)) unique.set(key, normalized);
+  }
+
+  return Array.from(unique.values()).sort((a, b) => b.length - a.length);
+}
+
 export function findPreviewHighlightRanges(
   content: string,
   highlightTexts: string[],

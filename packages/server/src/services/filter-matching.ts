@@ -287,6 +287,50 @@ export interface FilterEvaluationResult extends FilterMatchResult {
   evidence: FilterMatchEvidence[];
 }
 
+interface IndexedFilterCondition {
+  condition: FilterCondition;
+  conditionIndex: number;
+}
+
+interface FilterConditionGroup {
+  id?: string;
+  effect: NonNullable<FilterCondition["effect"]>;
+  members: IndexedFilterCondition[];
+}
+
+function getConditionEffect(
+  condition: FilterCondition,
+): NonNullable<FilterCondition["effect"]> {
+  return condition.groupEffect ?? condition.effect ?? "require";
+}
+
+function groupFilterConditions(conditions: FilterCondition[]): FilterConditionGroup[] {
+  const groups: FilterConditionGroup[] = [];
+  const groupIndexes = new Map<string, number>();
+
+  conditions.forEach((condition, conditionIndex) => {
+    // 未分组的旧条件必须各自成组，才能保持原有的逐条件 AND 语义。
+    const key = condition.groupId === undefined
+      ? `legacy:${conditionIndex}`
+      : `group:${condition.groupId}`;
+    const existingIndex = groupIndexes.get(key);
+
+    if (existingIndex === undefined) {
+      groupIndexes.set(key, groups.length);
+      groups.push({
+        ...(condition.groupId ? { id: condition.groupId } : {}),
+        effect: getConditionEffect(condition),
+        members: [{ condition, conditionIndex }],
+      });
+      return;
+    }
+
+    groups[existingIndex]?.members.push({ condition, conditionIndex });
+  });
+
+  return groups;
+}
+
 export function parseConditions(raw: string): FilterCondition[] {
   try {
     const parsed = JSON.parse(raw);
@@ -294,7 +338,7 @@ export function parseConditions(raw: string): FilterCondition[] {
       return [];
     }
 
-    return parsed
+    const conditions = parsed
       .filter((item) => item && typeof item === "object")
       .map((item) => {
         if (!isSupportedConditionType(item.type)) return null;
@@ -318,13 +362,49 @@ export function parseConditions(raw: string): FilterCondition[] {
           return null;
         }
 
+        if (
+          item.effect !== undefined &&
+          item.groupEffect !== undefined &&
+          item.effect !== item.groupEffect
+        ) {
+          return null;
+        }
+
+        const groupId = item.groupId === undefined
+          ? undefined
+          : typeof item.groupId === "string" && item.groupId.trim().length <= 120
+            ? item.groupId.trim() || null
+            : null;
+        const groupEffect = item.groupEffect === undefined || item.groupEffect === "require"
+          ? undefined
+          : isSupportedConditionEffect(item.groupEffect)
+            ? item.groupEffect
+            : null;
+        if (
+          groupId === null ||
+          groupEffect === null ||
+          (effect !== undefined && groupEffect !== undefined && effect !== groupEffect) ||
+          (getConditionEffect({
+            type: item.type,
+            ...(effect ? { effect } : {}),
+            ...(groupEffect ? { groupEffect } : {}),
+            values,
+          }) === "exclude" && !conditionHandlers[item.type].allowsExclude)
+        ) {
+          return null;
+        }
+
         return {
           type: item.type,
           ...(effect === "exclude" ? { effect } : {}),
+          ...(groupId ? { groupId } : {}),
+          ...(groupEffect === "exclude" ? { groupEffect } : {}),
           values: conditionHandlers[item.type].normalizeValues(values),
         };
       })
       .filter((item): item is FilterCondition => item !== null && item.values.length > 0);
+
+    return validateConditions(conditions).valid ? conditions : [];
   } catch {
     return [];
   }
@@ -335,6 +415,10 @@ export function serializeConditions(conditions: FilterCondition[]): string {
     conditions.map((condition) => ({
       type: condition.type,
       ...(condition.effect === "exclude" ? { effect: condition.effect } : {}),
+      ...(condition.groupId ? { groupId: condition.groupId.trim() } : {}),
+      ...(condition.groupEffect === "exclude"
+        ? { groupEffect: condition.groupEffect }
+        : {}),
       values: condition.values.map((value) => value.trim()).filter(Boolean),
     })),
   );
@@ -354,6 +438,30 @@ export function validateConditions(conditions: FilterCondition[]): { valid: bool
       return { valid: false, error: "condition.effect must be require or exclude" };
     }
 
+    if (
+      condition.groupEffect !== undefined &&
+      !isSupportedConditionEffect(condition.groupEffect)
+    ) {
+      return { valid: false, error: "condition.groupEffect must be require or exclude" };
+    }
+
+    if (
+      condition.groupId !== undefined &&
+      (typeof condition.groupId !== "string" ||
+        !condition.groupId.trim() ||
+        condition.groupId.trim().length > 120)
+    ) {
+      return { valid: false, error: "condition.groupId must be a non-empty string" };
+    }
+
+    if (
+      condition.effect !== undefined &&
+      condition.groupEffect !== undefined &&
+      condition.effect !== condition.groupEffect
+    ) {
+      return { valid: false, error: "condition effect and group effect must be consistent" };
+    }
+
     if (!Array.isArray(condition.values) || condition.values.length === 0) {
       return { valid: false, error: "condition.values must be a non-empty array" };
     }
@@ -363,7 +471,7 @@ export function validateConditions(conditions: FilterCondition[]): { valid: bool
     }
 
     const handler = conditionHandlers[condition.type];
-    if (condition.effect === "exclude" && !handler.allowsExclude) {
+    if (getConditionEffect(condition) === "exclude" && !handler.allowsExclude) {
       return { valid: false, error: `${condition.type} conditions cannot be excluded` };
     }
 
@@ -373,11 +481,44 @@ export function validateConditions(conditions: FilterCondition[]): { valid: bool
     }
   }
 
+  const groups = groupFilterConditions(conditions);
+  let chatGroupCount = 0;
+
+  for (const group of groups) {
+    if (group.members.some(({ condition }) => getConditionEffect(condition) !== group.effect)) {
+      return {
+        valid: false,
+        error: "conditions in the same group must use the same effect",
+      };
+    }
+
+    const types = new Set(group.members.map(({ condition }) => condition.type));
+    if (!types.has("chat")) continue;
+    chatGroupCount += 1;
+
+    if (types.size > 1) {
+      return {
+        valid: false,
+        error: "chat conditions cannot be mixed with content conditions in one group",
+      };
+    }
+  }
+
+  if (chatGroupCount > 1) {
+    return { valid: false, error: "chat conditions must share one group" };
+  }
+
   return { valid: true };
 }
 
 export function hasConflictingChatConditions(conditions: FilterCondition[]): boolean {
-  return conditions.filter((condition) => condition.type === "chat").length > 1;
+  const chatGroups = groupFilterConditions(conditions).filter((group) =>
+    group.members.some(({ condition }) => condition.type === "chat"),
+  );
+
+  return chatGroups.length > 1 || chatGroups.some((group) =>
+    group.members.some(({ condition }) => condition.type !== "chat"),
+  );
 }
 
 export function evaluateFilterConditions(
@@ -391,28 +532,37 @@ export function evaluateFilterConditions(
   let matchedKeyword: string | null = null;
   const evidence: FilterMatchEvidence[] = [];
 
-  for (const [conditionIndex, condition] of conditions.entries()) {
+  for (const [groupIndex, group] of groupFilterConditions(conditions).entries()) {
+    const groupEvidence: FilterMatchEvidence[] = [];
+    let groupMatched = false;
+    let groupMatchedKeyword: string | null = null;
+
     try {
-      const conditionMatch = conditionHandlers[condition.type].evaluate(input, condition);
-      const conditionMatched = condition.effect === "exclude"
-        ? !conditionMatch.matched
-        : conditionMatch.matched;
+      for (const { condition, conditionIndex } of group.members) {
+        const conditionMatch = conditionHandlers[condition.type].evaluate(input, condition);
+        groupMatched ||= conditionMatch.matched;
 
-      evidence.push({
-        conditionIndex,
-        type: condition.type,
-        effect: condition.effect ?? "require",
-        passed: conditionMatched,
-        matchedValues: conditionMatch.matchedValues,
-        matchedTexts: conditionMatch.matchedTexts,
-      });
+        if (conditionMatch.matched && conditionMatch.legacyMatchedText) {
+          groupMatchedKeyword ??= conditionMatch.legacyMatchedText;
+        }
 
-      if (!conditionMatched) {
-        return { matched: false, matchedKeyword: null, evidence };
-      }
-
-      if (condition.effect !== "exclude" && conditionMatch.legacyMatchedText) {
-        matchedKeyword ??= conditionMatch.legacyMatchedText;
+        groupEvidence.push({
+          conditionIndex,
+          type: condition.type,
+          effect: group.effect,
+          passed: group.effect === "exclude"
+            ? !conditionMatch.matched
+            : conditionMatch.matched,
+          matchedValues: conditionMatch.matchedValues,
+          matchedTexts: conditionMatch.matchedTexts,
+          ...(group.id
+            ? {
+                groupId: group.id,
+                groupIndex,
+                conditionMatched: conditionMatch.matched,
+              }
+            : {}),
+        });
       }
     } catch (error) {
       return {
@@ -421,6 +571,21 @@ export function evaluateFilterConditions(
         evidence,
         error: `自定义脚本执行失败：${getErrorMessage(error)}`,
       };
+    }
+
+    const groupPassed = group.effect === "exclude" ? !groupMatched : groupMatched;
+    evidence.push(
+      ...groupEvidence.map((item) =>
+        group.id ? { ...item, groupPassed } : item,
+      ),
+    );
+
+    if (!groupPassed) {
+      return { matched: false, matchedKeyword: null, evidence };
+    }
+
+    if (group.effect === "require" && groupMatchedKeyword) {
+      matchedKeyword ??= groupMatchedKeyword;
     }
   }
 

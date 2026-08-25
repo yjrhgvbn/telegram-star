@@ -2,10 +2,19 @@ import type { FilterConditionEffect, FilterConditionType } from "@/types";
 
 export type DraftCondition = {
   id: string;
+  /** 同一 groupId 的条件为 OR，不同组之间为 AND。 */
+  groupId?: string;
   type: FilterConditionType;
+  /** 编辑态的 effect 作用于整个组，保存时会写入 groupEffect。 */
   effect?: FilterConditionEffect;
   values: string[];
   input: string;
+};
+
+export type DraftConditionGroup = {
+  id: string;
+  effect: FilterConditionEffect;
+  conditions: DraftCondition[];
 };
 
 export type ConditionTypeDefinition = {
