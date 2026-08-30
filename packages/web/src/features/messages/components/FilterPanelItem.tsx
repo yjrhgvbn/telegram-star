@@ -74,8 +74,9 @@ function getFilterSubtitle(
 }
 
 /**
- * Browse mode intentionally keeps every row on one scanning line. Management
- * controls are injected only while the dedicated organize mode is active.
+ * Browse mode keeps every row on one scanning line and reserves the leading
+ * slot for one high-frequency action. Drag and placement controls stay in the
+ * dedicated organize mode.
  */
 function ListRow({
   active,
@@ -160,6 +161,9 @@ export function AllMessagesPanelItem({
   onSelect,
 }: AllMessagesPanelItemProps) {
   const activity = getFilterActivityPresentation(latestMessageAt, nowMs);
+  const leadingAction = managing ? dragHandle : (
+    <span className="size-10 shrink-0 lg:size-8" aria-hidden="true" />
+  );
   const moveAction = managing ? (
     <div className="flex shrink-0 items-center pr-2 lg:pr-1.5">
       <Button
@@ -183,7 +187,7 @@ export function AllMessagesPanelItem({
       active={selected}
       name="全部消息"
       subtitle={{ ...activity, prefix: activity.dateTime ? "最近消息" : null }}
-      leadingAction={dragHandle}
+      leadingAction={leadingAction}
       actions={moveAction}
       onSelect={onSelect}
     />
@@ -209,21 +213,24 @@ export function FilterPanelItem({
   const focusLabel = filter.isFocused
     ? `移出重点关注 ${filter.name}`
     : `设为重点关注 ${filter.name}`;
+  const focusAction = (
+    <Button
+      type="button"
+      variant={filter.isFocused && !managing ? "secondary" : "ghost"}
+      size={managing ? "icon-sm" : "icon-lg"}
+      className={cn(managing ? "size-9 lg:size-7" : "size-10 lg:size-8")}
+      aria-label={focusLabel}
+      aria-pressed={filter.isFocused}
+      title={focusLabel}
+      disabled={focusPending}
+      onClick={() => onSetFocused(filter.id, !filter.isFocused)}
+    >
+      <Star fill={filter.isFocused ? "currentColor" : "none"} />
+    </Button>
+  );
   const managementActions = managing ? (
     <div className="flex shrink-0 items-center gap-0.5 pr-2 lg:pr-1.5">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        className="size-9 lg:size-7"
-        aria-label={focusLabel}
-        aria-pressed={filter.isFocused}
-        title={focusLabel}
-        disabled={focusPending}
-        onClick={() => onSetFocused(filter.id, !filter.isFocused)}
-      >
-        <Star fill={filter.isFocused ? "currentColor" : "none"} />
-      </Button>
+      {focusAction}
 
       <Button
         type="button"
@@ -249,7 +256,7 @@ export function FilterPanelItem({
       name={filter.name}
       subtitle={subtitle}
       onSelect={() => onSelectFilter(String(filter.id))}
-      leadingAction={dragHandle}
+      leadingAction={managing ? dragHandle : focusAction}
       actions={managementActions}
     />
   );

@@ -146,6 +146,27 @@ describe("FilterPanel", () => {
     expect(tabs.className).toContain("h-9!");
   });
 
+  it("exposes focus toggles directly in the browse list", async () => {
+    const user = userEvent.setup();
+    const onSetFocused = vi.fn().mockResolvedValue(undefined);
+    renderPanel({
+      onSetFocused,
+      filters: [
+        createFilter(1, { name: "待关注" }),
+        createFilter(2, { name: "已关注", isFocused: true }),
+      ],
+    });
+
+    const addFocusButton = screen.getByRole("button", { name: "设为重点关注 待关注" });
+    const removeFocusButton = screen.getByRole("button", { name: "移出重点关注 已关注" });
+    expect(addFocusButton.getAttribute("aria-pressed")).toBe("false");
+    expect(removeFocusButton.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: "移动消息组 待关注" })).toBeNull();
+
+    await user.click(addFocusButton);
+    await waitFor(() => expect(onSetFocused).toHaveBeenCalledWith(1, true));
+  });
+
   it("replaces tabs with a same-height organize toolbar", async () => {
     const user = userEvent.setup();
     renderPanel();
@@ -346,7 +367,7 @@ describe("FilterPanel", () => {
 
     const ungroupedSection = screen.getByRole("heading", { name: "未分组" }).closest("section");
     expect(within(ungroupedSection!).getByRole("button", { name: /全部消息/ })).toBeTruthy();
-    expect(within(ungroupedSection!).getByRole("button", { name: /普通消息组/ })).toBeTruthy();
+    expect(within(ungroupedSection!).getByRole("button", { name: /^普通消息组/ })).toBeTruthy();
 
     await user.type(screen.getByRole("searchbox", { name: "搜索消息组" }), "普通");
     expect(within(ungroupedSection!).getByText("1")).toBeTruthy();
