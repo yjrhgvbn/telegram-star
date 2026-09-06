@@ -144,7 +144,8 @@ function ListRow({
       </div>
 
       {children}
-      <Separator className="mx-3 w-auto lg:mx-2.5" />
+      {/* Override the horizontal width variant so margins stay inside the row. */}
+      <Separator className="mx-3 data-horizontal:w-auto lg:mx-2.5" />
     </div>
   );
 }
