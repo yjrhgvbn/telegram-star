@@ -1,43 +1,132 @@
-import { useEffect } from "react";
-import { AlertCircle, Inbox } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { AlertCircle, LoaderCircle } from "lucide-react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
-import {
-  TargetEditor,
-  TargetList,
-  useForwardTargets,
-} from "@/features/notifications";
+import { Button } from "@/components/ui/button";
+import { TargetEditor, TargetList, useForwardTargets } from "@/features/notifications";
 import { NEW_FORWARD_TARGET_ID } from "@/features/notifications/types";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useFilters } from "@/hooks/useFilters";
-import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import "./NotificationsPage.css";
+
+const mobileQuery = "(max-width: 680px)";
+
+function subscribeViewport(onChange: () => void) {
+  const media = window.matchMedia(mobileQuery);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+}
 
 export function NotificationsPage() {
   const { targetId: routeTargetId } = useParams<{ targetId?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const mobile = useSyncExternalStore(
+    subscribeViewport,
+    () => window.matchMedia(mobileQuery).matches,
+    () => false,
+  );
   const { authStatus, authLoading, handleLoginSuccess } = useAuthStatus();
-  const { filters } = useFilters();
-  const forwardTargets = useForwardTargets();
-  const isTargetSelected = routeTargetId !== undefined;
+  const { filters, chats, loading: filtersLoading, error: filtersError, refresh: refreshFilters } = useFilters();
+  const forwardTargets = useForwardTargets({ autoSelect: false });
+  const [rootTargetId, setRootTargetId] = useState<string | null>(null);
+  // The first response establishes the root's selection. A background insertion
+  // must not replace that editor; only a removed selection needs a fallback.
+  const rootTarget = forwardTargets.targets.find((target) => String(target.id) === rootTargetId)
+    ?? forwardTargets.targets[0];
+  const resolvedRootId = rootTarget ? String(rootTarget.id) : null;
+  useEffect(() => {
+    if (resolvedRootId !== rootTargetId) setRootTargetId(resolvedRootId);
+  }, [resolvedRootId, rootTargetId]);
+  // The default detail does not rewrite /notifications. Keep it mounted while
+  // hidden on mobile so resizing cannot silently discard an edited form.
+  const selectedTargetId = routeTargetId ?? resolvedRootId;
+  const dirtyRef = useRef(false);
+  const busyRef = useRef(false);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [editorBusy, setEditorBusy] = useState(false);
+  const mountedRef = useRef(true);
+  const routeRef = useRef({ routeTargetId, selectedTargetId });
+  // Preserve identity across ordinary renders, but not across a history trip
+  // away and back to the same ID: an older save must not clear a newer draft.
+  if (routeRef.current.routeTargetId !== routeTargetId || routeRef.current.selectedTargetId !== selectedTargetId)
+    routeRef.current = { routeTargetId, selectedTargetId };
+  const pendingNavigation = useRef<(() => void) | null>(null);
+  const [confirmLeaving, setConfirmLeaving] = useState(false);
+  const [editorRevision, setEditorRevision] = useState(0);
+  const setDirty = useCallback((dirty: boolean) => {
+    dirtyRef.current = dirty;
+    setEditorDirty(dirty);
+  }, []);
+  const setBusy = useCallback((busy: boolean) => {
+    busyRef.current = busy;
+    setEditorBusy(busy);
+  }, []);
+  const clearPendingNavigation = useCallback(() => {
+    pendingNavigation.current = null;
+    setConfirmLeaving(false);
+  }, []);
+  useEffect(() => {
+    // Once another navigation wins, the previous dialog must not retain an
+    // action pointing at its abandoned destination. Editor/save identity stays intact.
+    clearPendingNavigation();
+  }, [location.key, clearPendingNavigation]);
+  const discardDraft = useCallback(() => {
+    clearPendingNavigation();
+    setDirty(false);
+    // Root and explicit detail URLs can resolve to the same mounted editor.
+    // A confirmed discard must reset it even when its target ID does not change.
+    setEditorRevision((current) => current + 1);
+    if (routeRef.current.selectedTargetId === NEW_FORWARD_TARGET_ID)
+      forwardTargets.setDraftTarget(null);
+  }, [forwardTargets.setDraftTarget, setDirty, clearPendingNavigation]);
+  const requestNavigation = useCallback((action: () => void) => {
+    if (busyRef.current) return;
+    if (dirtyRef.current) {
+      pendingNavigation.current = action;
+      setConfirmLeaving(true);
+    } else action();
+  }, []);
 
   useEffect(() => {
-    if (!routeTargetId) return;
-    if (routeTargetId === NEW_FORWARD_TARGET_ID) {
-      forwardTargets.addTarget();
-      return;
-    }
-    forwardTargets.setSelectedTargetId(routeTargetId);
-  }, [forwardTargets.addTarget, forwardTargets.setSelectedTargetId, routeTargetId]);
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
-  const handleAddTarget = () => {
-    forwardTargets.addTarget();
-    navigate(`/notifications/${NEW_FORWARD_TARGET_ID}`);
-  };
+  useEffect(() => {
+    const handleUnload = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, []);
 
-  const handleSelectTarget = (id: string) => {
-    forwardTargets.setSelectedTargetId(id);
-    navigate(`/notifications/${id}`);
-  };
+  useEffect(() => {
+    if (selectedTargetId === NEW_FORWARD_TARGET_ID) forwardTargets.addTarget();
+  }, [forwardTargets.addTarget, selectedTargetId]);
+
+  useEffect(() => {
+    if (selectedTargetId !== NEW_FORWARD_TARGET_ID && forwardTargets.selectedTargetId !== selectedTargetId)
+      forwardTargets.setSelectedTargetId(selectedTargetId);
+  }, [forwardTargets.setSelectedTargetId, forwardTargets.selectedTargetId, selectedTargetId]);
+
+  // Resolve the editor from the route or its default directly, rather than
+  // showing the hook's previous selection while synchronization runs.
+  const selectedTarget = selectedTargetId === NEW_FORWARD_TARGET_ID
+    ? forwardTargets.visibleTargets.find((target) => target.id === 0)
+    : forwardTargets.targets.find((target) => String(target.id) === selectedTargetId);
 
   return (
     <AppShell
@@ -45,79 +134,140 @@ export function NotificationsPage() {
       authStatus={authStatus}
       authLoading={authLoading}
       onLoginSuccess={handleLoginSuccess}
+      onNavigateRequest={requestNavigation}
+      navigationGuard={{ dirty: editorDirty, busy: editorBusy, onDiscard: discardDraft, onHistoryBlock: clearPendingNavigation }}
     >
-      <div className="flex min-h-0 flex-1 flex-col bg-background">
-        {forwardTargets.error ? (
-          <div className="flex shrink-0 items-center gap-2 border-b border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            <AlertCircle className="size-4 shrink-0" />
-            <span>{forwardTargets.error}</span>
-          </div>
-        ) : null}
-
-        <main
-          className={cn(
-            "flex min-h-0 min-w-0 flex-1 overflow-hidden lg:gap-3",
-            isTargetSelected ? "lg:p-3" : "p-3",
-          )}
+      <div className="forward-page">
+        <div
+          className="forward-workspace"
+          data-detail={routeTargetId !== undefined || undefined}
         >
-          <aside
-            className={cn(
-              "min-h-0 shrink-0 flex-col lg:overflow-hidden lg:rounded-xl lg:border lg:border-border lg:bg-card lg:shadow-[var(--workspace-panel-shadow)]",
-              isTargetSelected ? "hidden lg:flex lg:w-[244px]" : "flex w-full lg:w-[244px]",
-            )}
-          >
+          <aside className="forward-workspace__sidebar" hidden={mobile && routeTargetId !== undefined}>
             <TargetList
               targets={forwardTargets.visibleTargets}
-              selectedTargetId={forwardTargets.selectedTargetId}
+              selectedTargetId={mobile && routeTargetId === undefined ? null : selectedTargetId}
               loading={forwardTargets.loading}
-              onAdd={handleAddTarget}
-              onRefresh={forwardTargets.refresh}
-              onSelect={handleSelectTarget}
+              error={forwardTargets.error}
+              onRetry={forwardTargets.refresh}
+              onAdd={() => {
+                if (routeTargetId !== NEW_FORWARD_TARGET_ID)
+                  requestNavigation(() => {
+                    forwardTargets.addTarget();
+                    navigate(`/notifications/${NEW_FORWARD_TARGET_ID}`);
+                  });
+              }}
+              onSelect={(id) => {
+                if (id === selectedTargetId) {
+                  if (routeTargetId === undefined && !busyRef.current)
+                    navigate(`/notifications/${id}`);
+                  return;
+                }
+                requestNavigation(() => navigate(`/notifications/${id}`));
+              }}
             />
           </aside>
-
-          <div
-            className={cn(
-              "min-h-0 min-w-0 flex-1 overflow-hidden bg-card lg:rounded-xl lg:border lg:shadow-[var(--workspace-panel-shadow)]",
-              isTargetSelected ? "flex" : "hidden lg:flex",
-            )}
+          <main
+            className="forward-workspace__detail"
+            hidden={mobile && routeTargetId === undefined}
+            inert={mobile && routeTargetId === undefined}
           >
-            {forwardTargets.selectedTarget ? (
+            {mobile && selectedTarget && forwardTargets.error ? (
+              <div className="forward-page__error" role="alert">
+                <span>通道读取失败：{forwardTargets.error}</span>
+                <Button variant="ghost" size="sm" onClick={forwardTargets.refresh}>重试读取通道</Button>
+              </div>
+            ) : null}
+            {selectedTarget ? (
               <TargetEditor
-                key={forwardTargets.selectedTarget.id || "new"}
-                target={forwardTargets.selectedTarget}
+                key={`${selectedTarget.id || "new"}-${editorRevision}`}
+                target={selectedTarget}
                 allFilters={filters}
-                onBack={() => navigate("/notifications")}
+                chats={chats}
+                filtersLoading={filtersLoading}
+                filtersError={filtersError}
+                onRetryFilters={refreshFilters}
+                onBack={() => requestNavigation(() => navigate("/notifications"))}
                 onDraftChange={forwardTargets.setDraftTarget}
+                onDirtyChange={setDirty}
+                onBusyChange={setBusy}
                 onSave={async (target, data) => {
+                  const origin = routeRef.current;
                   const saved = await forwardTargets.saveTarget(target, data);
-                  navigate(`/notifications/${saved.id}`, { replace: target.id === 0 });
+                  if (
+                    mountedRef.current &&
+                    routeRef.current === origin &&
+                    routeRef.current.selectedTargetId ===
+                    (target.id === 0 ? NEW_FORWARD_TARGET_ID : String(target.id))
+                  ) {
+                    setDirty(false);
+                    if (target.id === 0)
+                      navigate(`/notifications/${saved.id}`, { replace: true });
+                  }
                   return saved;
                 }}
                 onDelete={async (target) => {
+                  const origin = routeRef.current;
                   await forwardTargets.deleteTarget(target);
-                  navigate("/notifications", { replace: true });
+                  if (
+                    mountedRef.current &&
+                    routeRef.current === origin &&
+                    routeRef.current.selectedTargetId ===
+                    (target.id === 0 ? NEW_FORWARD_TARGET_ID : String(target.id))
+                  ) {
+                    setDirty(false);
+                    if (origin.routeTargetId !== undefined)
+                      navigate("/notifications", { replace: true });
+                  }
                 }}
                 onTest={forwardTargets.testTarget}
               />
             ) : (
-              <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-                <div className="flex max-w-sm flex-col items-center gap-3 text-center">
-                  <span className="grid size-12 place-items-center rounded-xl bg-muted text-muted-foreground">
-                    <Inbox className="size-5" />
-                  </span>
-                  <div>
-                    <h2 className="text-sm font-semibold">选择一个转发通道</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      从左侧打开现有通道，或在列表底部创建新的消息目的地。
-                    </p>
-                  </div>
-                </div>
+              <div className="forward-page__empty" role="status">
+                {forwardTargets.loading ? (
+                  <>
+                    <LoaderCircle className="size-4 animate-spin" />
+                    读取通道中
+                  </>
+                ) : forwardTargets.error ? (
+                  <>
+                    <AlertCircle className="size-4" />
+                    <span>通道读取失败：{forwardTargets.error}</span>
+                    <Button variant="outline" size="sm" onClick={forwardTargets.refresh}>重试读取通道</Button>
+                  </>
+                ) : routeTargetId ? (
+                  "该通道不存在，请选择其他通道"
+                ) : (
+                  "新建一个转发通道"
+                )}
               </div>
             )}
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
+      <AlertDialog open={confirmLeaving} onOpenChange={setConfirmLeaving}>
+        <AlertDialogContent className="forward-theme" size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>放弃未保存的修改？</AlertDialogTitle>
+            <AlertDialogDescription>
+              离开后，当前通道未保存的修改将不会保留。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>继续编辑</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const action = pendingNavigation.current;
+                pendingNavigation.current = null;
+                setConfirmLeaving(false);
+                discardDraft();
+                action?.();
+              }}
+            >
+              放弃修改
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }

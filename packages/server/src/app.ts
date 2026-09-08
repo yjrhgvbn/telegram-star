@@ -13,6 +13,7 @@ import { configRoutes } from "./modules/config/config.routes.js";
 import { filterRoutes } from "./modules/filters/filters.routes.js";
 import { filterGroupRoutes } from "./modules/filter-groups/filter-groups.routes.js";
 import { messageRoutes } from "./modules/messages/messages.routes.js";
+import { messageAvatarRoutes } from "./modules/messages/messageAvatar.routes.js";
 import { forwardTargetsRoutes } from "./modules/forward-targets/forward-targets.routes.js";
 import { mediaRoutes } from "./modules/media/media.routes.js";
 import { healthRoutes } from "./modules/health/health.routes.js";
@@ -22,7 +23,7 @@ interface CreateAppOptions {
   serveStatic?: boolean;
 }
 
-type QuietRequestKind = "client-heartbeat" | "media-thumb" | "message-events";
+type QuietRequestKind = "client-heartbeat" | "media-thumb" | "message-avatar" | "message-events";
 
 const SLOW_QUIET_REQUEST_MS = 2_000;
 
@@ -35,6 +36,7 @@ export function getQuietRequestKind(url: string): QuietRequestKind | null {
   const path = url.split("?", 1)[0];
   if (/^\/api\/clients\/[^/]+\/heartbeat$/.test(path)) return "client-heartbeat";
   if (/^\/api\/media\/[^/]+\/[^/]+\/thumb$/.test(path)) return "media-thumb";
+  if (/^\/api\/messages\/[^/]+\/avatar$/.test(path)) return "message-avatar";
   if (path === "/api/messages/events") return "message-events";
   return null;
 }
@@ -79,6 +81,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   await app.register(filterRoutes);
   await app.register(filterGroupRoutes, { prefix: "/api/filter-groups" });
   await app.register(messageRoutes);
+  await app.register(messageAvatarRoutes);
   await app.register(forwardTargetsRoutes, { prefix: "/api/forward-targets" });
   await app.register(mediaRoutes);
 }
@@ -152,7 +155,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       request.log.warn(payload, "Quiet request was slow");
       return;
     }
-    if (reply.statusCode >= 400 && !(requestKind === "media-thumb" && reply.statusCode === 404)) {
+    const expectedMissingImage = (requestKind === "media-thumb" || requestKind === "message-avatar") &&
+      reply.statusCode === 404;
+    if (reply.statusCode >= 400 && !expectedMissingImage) {
       request.log.warn(payload, "Quiet request was rejected");
     }
   });

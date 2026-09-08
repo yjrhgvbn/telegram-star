@@ -1,264 +1,62 @@
 import type { ReactNode } from "react";
-import { FolderInput, Star } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { selectableItemVariants } from "@/components/ui/selectable-item";
-import { Separator } from "@/components/ui/separator";
+import { ALL_MESSAGES_SYSTEM_KEY } from "@telegram-star/shared/contracts/filters";
 import { cn } from "@/lib/utils";
 import type { Filter } from "@/types";
-import {
-  getFilterActivityPresentation,
-  type FilterActivityPresentation,
-} from "../utils/filterActivity";
-
-interface FilterSubtitle extends FilterActivityPresentation {
-  prefix: string | null;
-}
-
-interface ListRowProps {
-  active: boolean;
-  enabled?: boolean;
-  focused?: boolean;
-  name: string;
-  subtitle: FilterSubtitle;
-  onSelect: () => void;
-  leadingAction?: ReactNode;
-  actions?: ReactNode;
-  children?: ReactNode;
-}
+import { getFilterActivityPresentation } from "../utils/filterActivity";
 
 interface Props {
   filter: Filter;
   selectedFilterId: string;
   nowMs: number;
-  preferEngagement: boolean;
-  managing: boolean;
-  focusPending: boolean;
-  placementPending: boolean;
-  organizing: boolean;
-  dragHandle?: ReactNode;
+  latestMessageAt?: string | null;
+  actions?: ReactNode;
   onSelectFilter: (id: string) => void;
-  onSetFocused: (id: number, isFocused: boolean) => void;
-  onToggleOrganize: (id: number) => void;
-}
-
-interface AllMessagesPanelItemProps {
-  latestMessageAt: string | null;
-  managing: boolean;
-  nowMs: number;
-  organizing: boolean;
-  placementPending: boolean;
-  selected: boolean;
-  dragHandle?: ReactNode;
-  onMove: () => void;
-  onSelect: () => void;
-}
-
-function getFilterSubtitle(
-  filter: Filter,
-  nowMs: number,
-  preferEngagement: boolean,
-): FilterSubtitle {
-  if (preferEngagement && filter.lastEngagedAt && filter.lastEngagementType) {
-    return {
-      ...getFilterActivityPresentation(filter.lastEngagedAt, nowMs),
-      prefix: filter.lastEngagementType === "marked_read" ? "标记已读" : "打开 Telegram",
-    };
-  }
-
-  const activity = getFilterActivityPresentation(filter.latestMessageAt, nowMs);
-  return {
-    ...activity,
-    prefix: activity.dateTime ? "最近消息" : null,
-  };
-}
-
-/**
- * Browse mode keeps every row on one scanning line and reserves the leading
- * slot for one high-frequency action. Drag and placement controls stay in the
- * dedicated organize mode.
- */
-function ListRow({
-  active,
-  enabled = true,
-  focused = false,
-  name,
-  subtitle,
-  onSelect,
-  leadingAction,
-  actions,
-  children,
-}: ListRowProps) {
-  return (
-    <div
-      className={cn(
-        "group relative w-full rounded-none",
-        selectableItemVariants({
-          kind: "current",
-          selected: active,
-          surface: "flat",
-        }),
-        !enabled && "opacity-60",
-      )}
-    >
-      <div className="flex min-h-11 items-center lg:min-h-10">
-        {leadingAction}
-
-        <button
-          type="button"
-          aria-current={active ? "true" : undefined}
-          className={cn(
-            "flex min-h-11 min-w-0 flex-1 items-center gap-1.5 pr-5 text-left lg:min-h-10 lg:gap-2 lg:pr-2.5",
-            leadingAction ? "pl-0.5 lg:pl-0" : "pl-2.5 lg:pl-2.5",
-          )}
-          onClick={onSelect}
-        >
-          {!leadingAction ? (
-            <span className="flex size-3 shrink-0 items-center justify-center" aria-hidden="true">
-              {focused ? <span className="size-1.5 rounded-full bg-primary" /> : null}
-            </span>
-          ) : null}
-
-          <span
-            className={cn(
-              "min-w-0 flex-1 truncate text-sm font-normal text-foreground",
-              (active || focused) && "font-medium",
-            )}
-          >
-            {name}
-          </span>
-
-          {!enabled ? <Badge variant="outline">停用</Badge> : null}
-
-          <span className="max-w-20 shrink-0 truncate text-xs tabular-nums text-muted-foreground">
-            {subtitle.prefix ? <span className="sr-only">{subtitle.prefix}，</span> : null}
-            {subtitle.dateTime ? (
-              <time dateTime={subtitle.dateTime} title={subtitle.exactTime ?? undefined}>
-                {subtitle.label}
-              </time>
-            ) : subtitle.label}
-          </span>
-        </button>
-
-        {actions}
-      </div>
-
-      {children}
-      {/* Override the horizontal width variant so margins stay inside the row. */}
-      <Separator className="mx-3 data-horizontal:w-auto lg:mx-2.5" />
-    </div>
-  );
-}
-
-export function AllMessagesPanelItem({
-  latestMessageAt,
-  managing,
-  nowMs,
-  organizing,
-  placementPending,
-  selected,
-  dragHandle,
-  onMove,
-  onSelect,
-}: AllMessagesPanelItemProps) {
-  const activity = getFilterActivityPresentation(latestMessageAt, nowMs);
-  const leadingAction = managing ? dragHandle : (
-    <span className="size-10 shrink-0 lg:size-8" aria-hidden="true" />
-  );
-  const moveAction = managing ? (
-    <div className="flex shrink-0 items-center pr-2 lg:pr-1.5">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        className="size-9 lg:size-7"
-        aria-label="移动消息组 全部消息"
-        aria-expanded={organizing}
-        title="移动消息组 全部消息"
-        disabled={placementPending}
-        onClick={onMove}
-      >
-        <FolderInput />
-      </Button>
-    </div>
-  ) : null;
-
-  return (
-    <ListRow
-      active={selected}
-      name="全部消息"
-      subtitle={{ ...activity, prefix: activity.dateTime ? "最近消息" : null }}
-      leadingAction={leadingAction}
-      actions={moveAction}
-      onSelect={onSelect}
-    />
-  );
 }
 
 export function FilterPanelItem({
   filter,
   selectedFilterId,
   nowMs,
-  preferEngagement,
-  managing,
-  focusPending,
-  placementPending,
-  organizing,
-  dragHandle,
+  latestMessageAt,
+  actions,
   onSelectFilter,
-  onSetFocused,
-  onToggleOrganize,
 }: Props) {
-  const active = selectedFilterId === String(filter.id);
-  const subtitle = getFilterSubtitle(filter, nowMs, preferEngagement);
-  const focusLabel = filter.isFocused
-    ? `移出重点关注 ${filter.name}`
-    : `设为重点关注 ${filter.name}`;
-  const focusAction = (
-    <Button
-      type="button"
-      variant={filter.isFocused && !managing ? "secondary" : "ghost"}
-      size={managing ? "icon-sm" : "icon-lg"}
-      className={cn(managing ? "size-9 lg:size-7" : "size-10 lg:size-8")}
-      aria-label={focusLabel}
-      aria-pressed={filter.isFocused}
-      title={focusLabel}
-      disabled={focusPending}
-      onClick={() => onSetFocused(filter.id, !filter.isFocused)}
-    >
-      <Star fill={filter.isFocused ? "currentColor" : "none"} />
-    </Button>
+  const system = filter.systemKey === ALL_MESSAGES_SYSTEM_KEY;
+  const selectedId = system ? "" : String(filter.id);
+  const selected = selectedFilterId === selectedId;
+  const activity = getFilterActivityPresentation(
+    latestMessageAt === undefined ? filter.latestMessageAt : latestMessageAt,
+    nowMs,
   );
-  const managementActions = managing ? (
-    <div className="flex shrink-0 items-center gap-0.5 pr-2 lg:pr-1.5">
-      {focusAction}
-
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        className="size-9 lg:size-7"
-        aria-label={`移动消息组 ${filter.name}`}
-        aria-expanded={organizing}
-        title={`移动消息组 ${filter.name}`}
-        disabled={placementPending}
-        onClick={() => onToggleOrganize(filter.id)}
-      >
-        <FolderInput />
-      </Button>
-    </div>
-  ) : null;
 
   return (
-    <ListRow
-      active={active}
-      enabled={filter.enabled}
-      focused={filter.isFocused}
-      name={filter.name}
-      subtitle={subtitle}
-      onSelect={() => onSelectFilter(String(filter.id))}
-      leadingAction={managing ? dragHandle : focusAction}
-      actions={managementActions}
-    />
+    <div
+      className={cn("message-filter-row", selected && "is-selected", !system && !filter.enabled && "is-paused")}
+      data-filter-id={filter.id}
+    >
+      <button
+        type="button"
+        className="message-filter-select"
+        aria-current={selected ? "page" : undefined}
+        data-panel-focus={`filter-${filter.id}`}
+        onClick={() => onSelectFilter(selectedId)}
+      >
+        <span className="message-filter-name" title={!system && !filter.enabled ? "监听已停用，历史消息仍可查看" : undefined}>{filter.name}</span>
+        {!system && !filter.enabled ? <span className="sr-only">，监听已停用</span> : null}
+        {activity.dateTime ? (
+          <time
+            className="message-filter-updated"
+            dateTime={activity.dateTime}
+            title={activity.exactTime ?? undefined}
+            aria-label={`最新消息：${activity.exactTime ?? activity.label}`}
+          >
+            {activity.label}
+          </time>
+        ) : (
+          <span className="message-filter-updated is-empty">暂无消息</span>
+        )}
+      </button>
+      {actions}
+    </div>
   );
 }

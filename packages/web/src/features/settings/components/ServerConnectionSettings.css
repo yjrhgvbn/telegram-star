@@ -1,0 +1,243 @@
+.settings-theme .server-connection-settings {
+  width: 100%;
+  max-width: 740px;
+}
+
+.settings-theme .server-connection-label-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 17px;
+}
+
+.settings-theme .server-connection-label-row h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settings-theme .server-connection-label-row > span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.settings-theme .server-connection-mode {
+  display: inline-flex;
+  max-width: 100%;
+  gap: 5px;
+  padding: 4px;
+  border-radius: 9px;
+  background: var(--background);
+}
+
+.settings-theme .server-connection-mode > button {
+  min-height: 36px;
+  min-width: 86px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms;
+}
+
+.settings-theme .server-connection-mode > button:hover {
+  background: var(--secondary);
+}
+
+.settings-theme .server-connection-mode > button[data-pressed] {
+  background: var(--accent);
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.settings-theme .server-connection-mode > button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.settings-theme .server-connection-field {
+  margin-top: 25px;
+}
+
+.settings-theme .server-connection-field > label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.settings-theme .server-connection-address-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.settings-theme .server-connection-address-row > input,
+.settings-theme .server-connection-current-site {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  min-height: 42px;
+}
+
+.settings-theme .server-connection-current-site {
+  display: flex;
+  align-items: center;
+  padding: 10px 13px;
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.settings-theme .server-connection-test {
+  height: auto;
+  min-height: 42px;
+  padding-inline: 17px;
+  border-radius: 8px;
+}
+
+.settings-theme .server-connection-note,
+.settings-theme .server-connection-input-error {
+  margin: 9px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.settings-theme .server-connection-input-error {
+  color: var(--destructive);
+}
+
+.settings-theme .server-connection-result {
+  margin-top: 20px;
+  padding: 13px 15px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.settings-theme .server-connection-result[data-tone="success"] {
+  background: color-mix(in srgb, var(--success) 7%, var(--card));
+  color: var(--success);
+}
+
+.settings-theme .server-connection-result[data-tone="pending"] {
+  background: var(--background);
+  color: var(--muted-foreground);
+}
+
+.settings-theme .server-connection-result[data-tone="error"] {
+  background: color-mix(in srgb, var(--destructive) 7%, var(--card));
+  color: var(--destructive);
+}
+
+.settings-theme .server-connection-result-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.settings-theme .server-connection-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-theme .server-connection-status > svg {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+}
+
+.settings-theme .server-connection-details-toggle .connection-details-open,
+.settings-theme .server-connection-details-toggle[data-panel-open] .connection-details-closed {
+  display: none;
+}
+
+.settings-theme .server-connection-details-toggle[data-panel-open] .connection-details-open {
+  display: inline;
+}
+
+.settings-theme .server-connection-details-toggle[data-panel-open] > svg {
+  transform: rotate(180deg);
+}
+
+.settings-theme .server-connection-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  margin: 13px 0 0;
+  padding-left: 25px;
+  font-size: 12px;
+}
+
+.settings-theme .server-connection-facts > div {
+  display: flex;
+  gap: 9px;
+  min-width: 0;
+}
+
+.settings-theme .server-connection-facts dt {
+  opacity: .85;
+  flex-shrink: 0;
+}
+
+.settings-theme .server-connection-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 680px) {
+  .settings-theme .server-connection-mode > button {
+    min-height: 38px;
+    padding-inline: 14px;
+  }
+
+  .settings-theme .server-connection-field {
+    margin-top: 24px;
+  }
+
+  .settings-theme .server-connection-address-row {
+    flex-wrap: wrap;
+  }
+
+  .settings-theme .server-connection-address-row > input,
+  .settings-theme .server-connection-current-site {
+    flex: 1 1 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .settings-theme .server-connection-test {
+    min-height: 40px;
+    margin-top: 2px;
+  }
+
+  .settings-theme .server-connection-result {
+    padding: 11px 12px;
+  }
+
+  .settings-theme .server-connection-result-line {
+    gap: 6px;
+  }
+
+  .settings-theme .server-connection-facts {
+    flex-direction: column;
+    gap: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-theme .server-connection-mode > button {
+    transition: none;
+  }
+}

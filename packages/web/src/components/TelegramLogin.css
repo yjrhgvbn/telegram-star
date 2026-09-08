@@ -1,0 +1,27 @@
+.telegram-login[data-slot="dialog-content"] {
+  width: min(420px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  padding: 24px;
+  gap: 20px;
+}
+
+.telegram-login__brand { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+.telegram-login__brand img { width: 32px; height: 32px; border-radius: 8px; }
+.telegram-login__steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.telegram-login__steps li { padding: 5px 9px; border-radius: 6px; color: var(--muted-foreground); font-size: 12px; }
+.telegram-login__steps li[aria-current="step"] { background: var(--accent); color: var(--foreground); font-weight: 600; }
+.telegram-login__form { display: flex; flex-direction: column; gap: 16px; }
+.telegram-login__field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.telegram-login__field > label { font-size: 13px; font-weight: 550; }
+.telegram-login__field > p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted-foreground); }
+.telegram-login__field [data-slot="input"] { min-height: 40px; }
+.telegram-login__form > [data-slot="button"] { min-height: 40px; }
+.telegram-login__error { margin: 0; padding: 10px 12px; border-radius: 8px; background: color-mix(in oklab, var(--destructive) 8%, var(--card)); color: var(--destructive); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+
+@media (max-width: 680px) {
+  .telegram-login[data-slot="dialog-content"] { padding: 20px; }
+  .telegram-login__field [data-slot="input"] { font-size: 16px; }
+  .telegram-login__form > [data-slot="button"] { min-height: 44px; }
+}

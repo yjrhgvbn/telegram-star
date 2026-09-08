@@ -1,4 +1,4 @@
-export type MessageScrollAlign = "center" | "end";
+export type MessageScrollAlign = "start" | "center" | "end";
 
 export interface MessageScrollTarget {
   index: number;
@@ -12,6 +12,7 @@ export interface MessagePositionItem {
 export function getInitialMessageScrollTarget<T extends MessagePositionItem>(
   messages: T[],
   anchorId: number | null,
+  order: "asc" | "desc" = "asc",
 ): MessageScrollTarget | null {
   if (messages.length === 0) return null;
 
@@ -21,5 +22,6 @@ export function getInitialMessageScrollTarget<T extends MessagePositionItem>(
 
   return anchorIndex >= 0
     ? { index: anchorIndex, align: "center" }
-    : { index: messages.length - 1, align: "end" };
+    : order === "desc" ? { index: 0, align: "start" }
+      : { index: messages.length - 1, align: "end" };
 }

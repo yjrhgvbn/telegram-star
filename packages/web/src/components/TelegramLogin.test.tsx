@@ -110,4 +110,67 @@ describe("TelegramLogin", () => {
     expect(loginSpy).toHaveBeenNthCalledWith(1, "+8613800138000", "54321", undefined);
     expect(loginSpy).toHaveBeenNthCalledWith(2, "+8613800138000", "54321", "secret-pass");
   });
+
+  it("keeps keyboard focus inside authorization and ignores accidental dismissal", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">背景操作</button>
+        <TelegramLogin authStatus={createAuthStatus()} onLoginSuccess={vi.fn()} />
+      </>,
+      { wrapper: createQueryWrapper() },
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "连接 Telegram" });
+    const phoneInput = screen.getByLabelText("手机号码");
+    await waitFor(() => expect(document.activeElement).toBe(phoneInput));
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "发送验证码" }));
+    await user.tab();
+    await waitFor(() => expect(document.activeElement).toBe(phoneInput));
+    await user.tab({ shift: true });
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+
+    await user.keyboard("{Escape}");
+    await user.click(document.querySelector<HTMLElement>('[data-slot="dialog-overlay"]')!);
+    expect(screen.getByRole("dialog", { name: "连接 Telegram" })).toBe(dialog);
+    expect(screen.queryByRole("button", { name: "关闭" })).toBeNull();
+  });
+
+  it("preserves the code on login failure and locks stage navigation while submitting", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(api.auth, "sendCode").mockResolvedValue({ status: "sent" });
+    let finishLogin!: () => void;
+    vi.spyOn(api.auth, "login").mockImplementation(() => new Promise((resolve) => {
+      finishLogin = () => resolve({ status: "error", error: "验证码无效，请重新输入" });
+    }));
+    render(
+      <TelegramLogin authStatus={createAuthStatus()} onLoginSuccess={vi.fn()} />,
+      { wrapper: createQueryWrapper() },
+    );
+
+    await user.type(screen.getByLabelText("手机号码"), "+8613800138000{Enter}");
+    const codeInput = await screen.findByLabelText("验证码") as HTMLInputElement;
+    await waitFor(() => expect(document.activeElement).toBe(codeInput));
+    await user.type(codeInput, "54321{Enter}");
+    const back = screen.getByRole("button", { name: "返回修改手机号" }) as HTMLButtonElement;
+    expect(codeInput.disabled).toBe(true);
+    expect(back.disabled).toBe(true);
+    await user.click(back);
+    expect(screen.queryByLabelText("手机号码")).toBeNull();
+
+    finishLogin();
+    const error = await screen.findByRole("alert");
+    expect(error.textContent).toBe("验证码无效，请重新输入");
+    expect(codeInput.value).toBe("54321");
+    expect(codeInput.disabled).toBe(false);
+    expect(codeInput.getAttribute("aria-invalid")).toBe("true");
+    expect(codeInput.getAttribute("aria-describedby")?.split(" ")).toContain(error.id);
+
+    await user.click(back);
+    const phoneInput = screen.getByLabelText("手机号码") as HTMLInputElement;
+    expect(phoneInput.value).toBe("+8613800138000");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(document.activeElement).toBe(phoneInput);
+  });
 });

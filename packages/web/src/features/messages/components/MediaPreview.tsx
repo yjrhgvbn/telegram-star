@@ -8,13 +8,15 @@ import {
   MapPin,
   BarChart3,
   User,
-  Play,
+  ExternalLink,
   Sticker,
 } from "lucide-react";
 import { getMediaThumbUrl } from "@/shared/api/url";
 import type { Message } from "@/types";
 import { useClientExternalLink } from "@/shared/runtime/ClientShellBridgeProvider";
 import { rememberTelegramJumpMessageId } from "../utils/messageNavigation";
+import { getVisualMediaRatio, parseMessageMediaExtra } from "../utils/mediaPreviewMetadata";
+import "./MediaPreview.css";
 
 interface Props {
   message: Message;
@@ -31,21 +33,15 @@ function formatSize(bytes: number | null): string {
 
 /** 格式化时长 */
 function formatDuration(seconds: number | null): string {
-  if (seconds == null || seconds <= 0) return "";
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return "";
+  const wholeSeconds = Math.floor(seconds);
+  const m = Math.floor(wholeSeconds / 60);
+  const s = wholeSeconds % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 /** 解析 mediaExtra JSON 安全地 */
-function parseExtra(extra: string | null): Record<string, unknown> {
-  if (!extra) return {};
-  try {
-    return JSON.parse(extra);
-  } catch {
-    return {};
-  }
-}
+const parseExtra = parseMessageMediaExtra;
 
 function getMessageThumbUrl(message: Message): string {
   return getMediaThumbUrl(message.chatId, message.telegramMessageId);
@@ -65,6 +61,10 @@ function PhotoPreview({ message }: Props) {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -83,11 +83,11 @@ function PhotoPreview({ message }: Props) {
     ? `data:image/jpeg;base64,${message.mediaThumbBase64}`
     : null;
 
-  const extra = parseExtra(message.mediaExtra);
+  const ratio = getVisualMediaRatio(message.mediaExtra);
   // Reserve the estimator's fallback height when metadata is unavailable so
   // the row does not grow after the thumbnail finishes loading.
-  const aspectStyle = extra.w && extra.h
-    ? { aspectRatio: `${extra.w}/${extra.h}` }
+  const aspectStyle = ratio
+    ? { aspectRatio: String(ratio) }
     : { height: 240 };
 
   return (
@@ -123,8 +123,8 @@ function PhotoPreview({ message }: Props) {
   );
 }
 
-/** 视频：缩略图 + 播放按钮叠层 + 时长标签 */
-function VideoPreview({ message }: Props) {
+/** 附件在 Telegram 中打开，不提供站内播放。入口与静态占位互斥。 */
+function VideoPreview({ message, canOpen }: Props & { canOpen: boolean }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
   const thumbSrc = getMessageThumbUrl(message);
@@ -132,13 +132,17 @@ function VideoPreview({ message }: Props) {
     ? `data:image/jpeg;base64,${message.mediaThumbBase64}`
     : null;
 
-  const extra = parseExtra(message.mediaExtra);
-  const aspectStyle = extra.w && extra.h
-    ? { aspectRatio: `${extra.w}/${extra.h}` }
+  const ratio = getVisualMediaRatio(message.mediaExtra);
+  const aspectStyle = ratio
+    ? { aspectRatio: String(ratio) }
     : { height: 240 };
 
   return (
-    <div className="media-preview media-preview--video" style={aspectStyle}>
+    <div
+      className="media-preview media-preview--video"
+      data-has-thumbnail={loaded || Boolean(strippedSrc) ? "true" : "false"}
+      style={aspectStyle}
+    >
       {strippedSrc && !loaded && (
         <img src={strippedSrc} alt="" className="media-preview__stripped" aria-hidden="true" />
       )}
@@ -152,14 +156,20 @@ function VideoPreview({ message }: Props) {
           loading="lazy"
         />
       )}
-      {error && !strippedSrc && (
-        <div className="media-preview__fallback">
-          <Video className="size-8 text-muted-foreground" />
+      {!loaded && !strippedSrc && !canOpen && (
+        <div className="media-preview__video-placeholder">
+          <Video aria-hidden="true" />
+          <span>{message.mediaType === "gif" ? "动图附件" : "视频附件"}</span>
         </div>
       )}
-      <div className="media-preview__play-overlay">
-        <Play className="size-6" fill="currentColor" />
-      </div>
+      {canOpen && (
+        <div className="media-preview__open-overlay" aria-hidden="true">
+          <span className="media-preview__open-affordance">
+            <ExternalLink />
+            <span>在 Telegram 查看</span>
+          </span>
+        </div>
+      )}
       {message.mediaDuration != null && message.mediaDuration > 0 && (
         <span className="media-preview__duration">
           {formatDuration(message.mediaDuration)}
@@ -282,13 +292,24 @@ function PollPreview({ message }: Props) {
   );
 }
 
+function VisualMediaMetadata({ message }: Props) {
+  const size = formatSize(message.mediaFileSize);
+  if (!message.mediaFileName && !size) return null;
+  return (
+    <div className="media-preview__metadata">
+      {message.mediaFileName ? <span className="media-preview__name" title={message.mediaFileName}>{message.mediaFileName}</span> : null}
+      {size ? <span>{size}</span> : null}
+    </div>
+  );
+}
+
 /** 根据 mediaType 渲染对应的预览组件 */
 export function MediaPreview({ message, onOpenTelegram }: Props) {
   const handleExternalLink = useClientExternalLink();
 
   if (!message.mediaType) return null;
 
-  const link = message.telegramLink;
+  const link = message.telegramLink?.trim();
   const wrapWithLink = (content: React.ReactNode) =>
     link ? (
       <a
@@ -297,6 +318,7 @@ export function MediaPreview({ message, onOpenTelegram }: Props) {
         rel="noopener noreferrer"
         className="media-preview__link"
         title="在 Telegram 中查看"
+        aria-label="在 Telegram 打开附件"
         onClick={(event) =>
           handleExternalLink(event, link, () => {
             rememberTelegramJumpMessageId(message.id);
@@ -315,9 +337,8 @@ export function MediaPreview({ message, onOpenTelegram }: Props) {
       return wrapWithLink(<PhotoPreview message={message} />);
     case "video":
     case "videoNote":
-      return wrapWithLink(<VideoPreview message={message} />);
     case "gif":
-      return wrapWithLink(<VideoPreview message={message} />);
+      return <>{wrapWithLink(<VideoPreview message={message} canOpen={Boolean(link)} />)}<VisualMediaMetadata message={message} /></>;
     case "sticker":
       return wrapWithLink(<StickerPreview message={message} />);
     case "document":

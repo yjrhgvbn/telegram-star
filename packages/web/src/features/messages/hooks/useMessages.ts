@@ -2,6 +2,7 @@ import { useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { queryKeys } from "@/shared/query/queryKeys";
+import { getApiBaseUrl } from "@/shared/api/url";
 import type { Filter, Message, MessageStats } from "@/types";
 import { useMessageEvents } from "./useMessageEvents";
 import {
@@ -16,9 +17,11 @@ export interface UseMessagesReturn {
   hasOlder: boolean;           // 是否有更旧的消息可加载
   hasNewer: boolean;           // 是否有更新的消息可加载
   loading: boolean;            // 初始加载中
+  error: string | null;
   loadingOlder: boolean;       // 向上加载更旧消息中
   loadingNewer: boolean;       // 向下加载更新消息中
   anchorId: number | null;     // 初始定位锚点消息 ID（null 时默认滚底）
+  restoredAnchorId: number | null;
   hasPendingNew: boolean;      // SSE 推送了新消息但用户不在底部，需显示 badge
   loadOlder: () => void;       // 触发加载更旧消息（prepend）
   loadNewer: () => void;       // 触发加载更新消息（append）
@@ -37,9 +40,11 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
     hasOlder,
     hasNewer,
     loading,
+    error,
     loadingOlder,
     loadingNewer,
     anchorId,
+    restoredAnchorId,
     hasPendingNew,
     loadOlder,
     loadNewer,
@@ -68,7 +73,11 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
   });
 
   const toggleRead = useCallback(async (id: number) => {
+    const serverKey = getApiBaseUrl();
     const updated = await api.messages.toggleRead(id);
+    // A request started before switching servers cannot update equal IDs in
+    // the new server's list or invalidate its cached activity.
+    if (serverKey !== getApiBaseUrl()) return;
     setMessageReadState(id, updated.isRead);
     void queryClient.invalidateQueries({ queryKey: queryKeys.messages.stats });
     if (updated.isRead) invalidateFilterActivity();
@@ -109,9 +118,11 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
     hasOlder,
     hasNewer,
     loading,
+    error,
     loadingOlder,
     loadingNewer,
     anchorId,
+    restoredAnchorId,
     hasPendingNew,
     loadOlder,
     loadNewer,

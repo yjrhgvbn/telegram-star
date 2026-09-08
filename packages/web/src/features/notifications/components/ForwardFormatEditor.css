@@ -1,0 +1,236 @@
+.forward-format-workspace {
+  container: forward-format / inline-size;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.forward-format-layout {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.forward-format-pane-switch,
+.forward-format-presets {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.forward-format-pane-switch {
+  flex-shrink: 0;
+  margin: 14px 20px 0;
+}
+
+.forward-format-pane-switch > button,
+.forward-format-presets > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  background: transparent;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.forward-format-pane-switch > button:hover,
+.forward-format-presets > button:hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.forward-format-pane-switch > button[data-pressed],
+.forward-format-presets > button[data-pressed] {
+  color: var(--foreground);
+  background: var(--secondary);
+  font-weight: 600;
+}
+
+.forward-format-pane-switch > button:focus-visible,
+.forward-format-presets > button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.forward-format-presets > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.forward-format-editor,
+.forward-format-preview {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 24px 28px 32px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.forward-format-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.forward-format-preset-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  min-height: 36px;
+}
+
+.forward-format-custom {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.forward-format-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.forward-format-field > span,
+.forward-format-variables > h3,
+.forward-format-preview > h3 {
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.forward-format-field > input,
+.forward-format-field > textarea {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", "PingFang SC", monospace;
+  font-size: 14px;
+  line-height: 1.8;
+  border-radius: 8px;
+}
+
+.forward-format-field > input {
+  height: 42px;
+  padding-inline: 13px;
+}
+
+.forward-format-field > textarea {
+  min-height: 200px;
+  padding: 12px 13px;
+}
+
+.forward-format-variables > h3 {
+  margin-bottom: 10px;
+}
+
+.forward-format-variables > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.forward-format-variables button {
+  min-height: 34px;
+  border-radius: 5px;
+}
+
+.forward-format-preview > h3 {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  margin-bottom: 24px;
+}
+
+.forward-format-preview-label {
+  margin-bottom: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.forward-format-preview-title {
+  margin-bottom: 26px;
+  font-size: 20px;
+  font-weight: 550;
+  line-height: 1.55;
+}
+
+.forward-format-preview-body {
+  font-size: 14px;
+  line-height: 1.9;
+}
+
+.forward-format-preview-title,
+.forward-format-preview-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.forward-format-layout[data-pane="editor"] > .forward-format-preview,
+.forward-format-layout[data-pane="preview"] > .forward-format-editor {
+  display: none;
+}
+
+/* Use the available detail width, including a collapsed sidebar, instead of viewport guesses. */
+@container forward-format (min-width: 860px) {
+  .forward-format-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+
+  .forward-format-pane-switch {
+    display: none;
+  }
+
+  .forward-format-layout[data-pane] > .forward-format-editor {
+    display: flex;
+  }
+
+  .forward-format-layout[data-pane] > .forward-format-preview {
+    display: block;
+    border-left: 1px solid var(--border);
+  }
+}
+
+@container forward-format (max-width: 480px) {
+  .forward-format-editor,
+  .forward-format-preview {
+    padding: 18px 16px 24px;
+  }
+
+  .forward-format-editor {
+    gap: 20px;
+  }
+
+  .forward-format-pane-switch {
+    margin-inline: 16px;
+  }
+
+  .forward-format-pane-switch > button,
+  .forward-format-presets > button,
+  .forward-format-variables button {
+    min-height: 40px;
+  }
+
+  .forward-format-field > input,
+  .forward-format-field > textarea {
+    font-size: 16px;
+  }
+
+  .forward-format-field > textarea {
+    min-height: 180px;
+  }
+}

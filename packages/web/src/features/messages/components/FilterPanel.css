@@ -1,0 +1,68 @@
+/* These surfaces belong to the messages feature. Other tabs keep their theme. */
+.message-filter-panel {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--message-sidebar, #f8f9fa);
+}
+
+.message-filter-scroll { min-height: 0; flex: 1; }
+.message-filter-items { display: flex; flex-direction: column; gap: 3px; padding: 0 14px 24px; }
+.message-filter-loading { display: flex; flex-direction: column; gap: 7px; padding: 2px 4px; }
+.message-filter-section { display: flex; min-width: 0; flex-direction: column; margin: 12px 0 4px; }
+.message-filter-section.is-independent { margin: 0; }
+.message-filter-section-heading { display: flex; align-items: center; min-height: 35px; }
+.message-filter-section-toggle { display: flex; min-width: 0; flex: 1; align-items: center; gap: 6px; min-height: 35px; padding: 6px 7px; border: 0; background: none; color: var(--muted-foreground); text-align: left; }
+.message-filter-section-toggle h3 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 550; line-height: 20px; }
+.message-filter-section-toggle > svg { width: 13px; height: 13px; flex-shrink: 0; }
+.message-filter-directory-items { padding-left: 8px; }
+.message-filter-row { display: flex; align-items: center; min-width: 0; min-height: 44px; margin: 3px 0; border-radius: 7px; transition: background-color .15s; }
+@media (hover: hover) and (pointer: fine) {
+  .message-filter-row:hover { background: var(--muted); }
+}
+.message-filter-row.is-selected { background: var(--accent); }
+.message-filter-select { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; min-height: 44px; padding: 10px 8px 10px 12px; border: 0; border-radius: 7px; background: transparent; color: var(--foreground); text-align: left; }
+.message-filter-select:focus-visible, .message-filter-section-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.message-filter-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 400; }
+.message-filter-row.is-selected .message-filter-name { color: var(--message-action); font-weight: 600; }
+.message-filter-row.is-paused .message-filter-name { opacity: .65; }
+.message-filter-updated { max-width: 105px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); font-size: 11px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.message-filter-updated.is-empty { opacity: .78; }
+.message-filter-menu-trigger { margin-right: 4px; color: var(--muted-foreground); }
+.message-filter-empty-directory { margin: 4px 12px 9px; color: var(--muted-foreground); font-size: 12px; line-height: 24px; }
+.message-filter-empty { margin: 16px 10px; color: var(--muted-foreground); font-size: 13px; line-height: 1.8; }
+.message-filter-error { margin: 5px 8px 8px; color: var(--destructive); font-size: 12px; line-height: 1.6; }
+
+/* This local Popover implementation owns its overlay stacking and neutral theme. */
+.message-filter-popover-positioner { z-index: 50; }
+.message-filter-popover { width: 252px; max-width: calc(100vw - 24px); max-height: min(440px, var(--available-height)); overflow-y: auto; overscroll-behavior: contain; padding: 6px; border: 1px solid var(--border); border-radius: var(--menu-radius); background: var(--popover); color: var(--popover-foreground); box-shadow: var(--menu-shadow); outline: none; }
+.message-filter-popover-heading { display: flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 1px 3px 8px; }
+.message-filter-popover-heading h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); font-size: 12px; font-weight: 500; line-height: 20px; }
+.message-filter-popover-heading button { color: var(--muted-foreground); }
+.message-filter-menu-content, .message-filter-menu-options { display: flex; flex-direction: column; gap: 1px; }
+.message-filter-popover .message-filter-menu-item { justify-content: space-between; min-height: var(--menu-item-height); height: auto; width: 100%; padding: 7px 10px; border-radius: 5px; font-size: 13px; font-weight: 400; line-height: 20px; text-align: left; }
+.message-filter-menu-item > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-filter-menu-content > [data-slot="separator"] { margin: 5px 6px; width: auto; }
+.message-filter-name-form { padding: 5px 5px 4px; }
+.message-filter-name-form input { height: 36px; border-radius: 6px; font-size: 13px; }
+.message-filter-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.message-filter-delete-description { margin: 4px 8px 2px; font-size: 13px; line-height: 1.7; color: var(--muted-foreground); }
+
+@media (max-width: 680px) {
+  .message-filter-panel { background: var(--card); }
+  .message-filter-items { padding: 0 14px 22px; }
+  .message-filter-select, .message-filter-row { min-height: 50px; }
+  .message-filter-select { padding: 13px 9px 13px 12px; }
+  .message-filter-name { font-size: 15px; }
+  .message-filter-updated { font-size: 12px; }
+  .message-filter-menu-trigger { width: 34px; height: 40px; }
+  .message-filter-section-toggle { min-height: 39px; }
+  .message-filter-section-toggle h3 { font-size: 13px; }
+  .message-filter-popover { width: 264px; padding: 7px; border-radius: 11px; }
+  .message-filter-popover-heading { min-height: 34px; }
+  .message-filter-popover .message-filter-menu-item { min-height: 42px; padding: 10px; font-size: 14px; }
+  .message-filter-name-form input { height: 41px; font-size: 16px; }
+  .message-filter-form-actions button { min-height: 36px; }
+}

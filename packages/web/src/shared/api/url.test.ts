@@ -4,6 +4,7 @@ import {
   getApiUrl,
   getMediaThumbUrl,
   getMessageEventsUrl,
+  getMessageAvatarUrl,
 } from "./url";
 
 describe("api url builder", () => {
@@ -32,6 +33,10 @@ describe("api url builder", () => {
     );
     expect(getMediaThumbUrl(1, 2, "https://example.com/api")).toBe(
       "https://example.com/api/media/1/2/thumb",
+    );
+    expect(getMessageAvatarUrl(42, "")).toBe("/api/messages/42/avatar");
+    expect(getMessageAvatarUrl(42, "https://example.com/app/api")).toBe(
+      "https://example.com/app/api/messages/42/avatar",
     );
   });
 });

@@ -1,14 +1,11 @@
-import {
-  Bell,
-  CloudDownload,
-  ExternalLink,
-  LoaderCircle,
-  RefreshCw,
-  RotateCcw,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
+import { LoaderCircle } from "lucide-react";
+import type { ClientDevice } from "@/types";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import {
+  buildClientDeviceName,
+  detectClientRuntime,
+} from "@/shared/runtime/clientRuntime";
 import {
   useDesktopBridge,
   type DesktopBridgeCommand,
@@ -17,261 +14,147 @@ import {
   useMobileBridge,
   type MobileBridgeCommand,
 } from "@/shared/runtime/mobileBridge";
-import { SettingsItem } from "./SettingsSection";
+import "./SettingsDevices.css";
 
-interface DesktopAction {
-  command: DesktopBridgeCommand;
-  label: string;
-  icon: typeof RefreshCw;
-  enabled: boolean;
-  variant?: "secondary" | "outline" | "destructive";
+type DeviceDescription = Pick<ClientDevice, "type" | "os" | "appVersion">;
+
+const runtimeLabels = {
+  web: "浏览器",
+  pwa: "PWA",
+  desktop: "桌面客户端",
+  mobile: "手机客户端",
+};
+const osLabels = {
+  macos: "macOS",
+  windows: "Windows",
+  linux: "Linux",
+  ios: "iOS",
+  android: "Android",
+};
+
+export function describeClientDevice(device: DeviceDescription): string {
+  return [
+    device.os ? osLabels[device.os] : null,
+    runtimeLabels[device.type],
+    device.appVersion ? `v${device.appVersion}` : null,
+  ].filter(Boolean).join(" · ");
 }
 
-interface MobileAction {
-  command: MobileBridgeCommand;
+interface LocalAction {
+  command: DesktopBridgeCommand | MobileBridgeCommand;
   label: string;
-  icon: typeof RefreshCw;
   enabled: boolean;
-  variant?: "secondary" | "outline" | "destructive";
+  run: () => Promise<unknown>;
 }
 
 function getCurrentPageUrl(): string | undefined {
-  if (typeof window === "undefined") return undefined;
-  return window.location.href;
+  return typeof window === "undefined" ? undefined : window.location.href;
 }
 
-export function ClientRuntimeSettings() {
+export function ClientRuntimeSettings({ device, onNavigateRequest }: {
+  device?: ClientDevice;
+  onNavigateRequest?: (action: () => void) => void;
+}) {
+  const [runtime] = useState(() => detectClientRuntime());
+  const [actionError, setActionError] = useState<string | null>(null);
   const desktopBridge = useDesktopBridge();
   const mobileBridge = useMobileBridge();
-  const desktopCapabilities = desktopBridge.capabilities;
-  const mobileCapabilities = mobileBridge.capabilities;
+  const desktopCapabilities = desktopBridge.available ? desktopBridge.capabilities : null;
+  const mobileCapabilities = mobileBridge.available ? mobileBridge.capabilities : null;
+  const bridge = desktopCapabilities ? desktopBridge : mobileCapabilities ? mobileBridge : null;
+  // A hosted page can detect its iframe as a browser; the native bridge is the
+  // authoritative source for the surrounding client's available actions.
+  const currentType = desktopCapabilities
+    ? "desktop"
+    : mobileCapabilities ? "mobile" : device?.type ?? runtime.type;
+  const currentRuntime = { ...runtime, type: currentType };
+  const name = device?.name.trim() || buildClientDeviceName(currentRuntime);
+  const description = describeClientDevice({
+    type: currentType,
+    os: device?.os ?? runtime.os,
+    appVersion: device?.appVersion ?? runtime.appVersion,
+  });
 
-  if (desktopBridge.available && desktopCapabilities) {
-    const actions: DesktopAction[] = [
-      {
-        command: "reload",
-        label: "刷新页面",
-        icon: RefreshCw,
-        enabled: desktopCapabilities.reload,
-        variant: "secondary",
-      },
-      {
-        command: "open-external",
-        label: "浏览器打开",
-        icon: ExternalLink,
-        enabled: desktopCapabilities.openExternal,
-        variant: "outline",
-      },
-      {
-        command: "test-notification",
-        label: "通知测试",
-        icon: Bell,
-        enabled: desktopCapabilities.nativeNotification,
-        variant: "outline",
-      },
-      {
-        command: "check-update",
-        label: "检查更新",
-        icon: CloudDownload,
-        enabled: desktopCapabilities.appUpdater,
-        variant: "outline",
-      },
-      {
-        command: "switch-server",
-        label: "切换服务器",
-        icon: RotateCcw,
-        enabled: desktopCapabilities.switchServer,
-        variant: "destructive",
-      },
-    ];
-
-    async function runDesktopAction(command: DesktopBridgeCommand) {
-      await desktopBridge.sendCommand(command, {
-        url: command === "open-external" ? getCurrentPageUrl() : undefined,
-      });
-    }
-
-    return (
-      <SettingsItem
-        title="桌面能力"
-        description="当前窗口由 Tauri 桌面壳承载时可用。"
-        meta={
-          <Badge variant="secondary" className="h-6 px-2">
-            桌面壳已连接
-          </Badge>
-        }
-      >
-        <div className="flex min-w-0 flex-col gap-2">
-          <div className="flex flex-wrap gap-1.5">
-            <Badge variant="outline" className="h-6 px-2">
-              桌面 WebView
-            </Badge>
-            {desktopCapabilities.tray && (
-              <Badge variant="outline" className="h-6 px-2">
-                托盘菜单
-              </Badge>
-            )}
-            {desktopCapabilities.appUpdater && (
-              <Badge variant="outline" className="h-6 px-2">
-                应用更新
-              </Badge>
-            )}
-            {desktopCapabilities.nativeNotification && (
-              <Badge variant="outline" className="h-6 px-2">
-                系统通知
-              </Badge>
-            )}
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {actions
-              .filter((action) => action.enabled)
-              .map((action) => {
-                const Icon = action.icon;
-                const pending = desktopBridge.pendingCommand === action.command;
-                return (
-                  <Button
-                    key={action.command}
-                    type="button"
-                    size="sm"
-                    variant={action.variant}
-                    className="justify-start"
-                    disabled={Boolean(desktopBridge.pendingCommand)}
-                    onClick={() => {
-                      void runDesktopAction(action.command);
-                    }}
-                  >
-                    {pending ? (
-                      <LoaderCircle className="animate-spin" data-icon="inline-start" />
-                    ) : (
-                      <Icon data-icon="inline-start" />
-                    )}
-                    {action.label}
-                  </Button>
-                );
-              })}
-          </div>
-
-          {desktopBridge.lastResult && (
-            <div
-              className={cn(
-                "rounded-lg px-3 py-2 text-sm",
-                desktopBridge.lastResult.ok
-                  ? "bg-primary/10 text-primary"
-                  : "bg-destructive/10 text-destructive",
-              )}
-              role="status"
-            >
-              {desktopBridge.lastResult.message}
-            </div>
-          )}
-        </div>
-      </SettingsItem>
-    );
-  }
-
-  if (!mobileBridge.available || !mobileCapabilities) return null;
-
-  const mobileActions: MobileAction[] = [
-    {
-      command: "reload",
-      label: "刷新页面",
-      icon: RefreshCw,
-      enabled: mobileCapabilities.reload,
-      variant: "secondary",
-    },
-    {
-      command: "open-external",
-      label: "浏览器打开",
-      icon: ExternalLink,
-      enabled: mobileCapabilities.openExternal,
-      variant: "outline",
-    },
-    {
-      command: "switch-server",
-      label: "切换服务器",
-      icon: RotateCcw,
-      enabled: mobileCapabilities.switchServer,
-      variant: "destructive",
-    },
-  ];
-
-  async function runMobileAction(command: MobileBridgeCommand) {
-    await mobileBridge.sendCommand(command, {
+  let actions: LocalAction[] = [];
+  if (desktopCapabilities) {
+    const run = (command: DesktopBridgeCommand) => desktopBridge.sendCommand(command, {
       url: command === "open-external" ? getCurrentPageUrl() : undefined,
     });
+    actions = [
+      { command: "reload", label: "重新加载", enabled: desktopCapabilities.reload, run: () => run("reload") },
+      { command: "open-external", label: "浏览器打开", enabled: desktopCapabilities.openExternal, run: () => run("open-external") },
+      { command: "test-notification", label: "测试系统通知", enabled: desktopCapabilities.nativeNotification, run: () => run("test-notification") },
+      { command: "check-update", label: "检查更新", enabled: desktopCapabilities.appUpdater, run: () => run("check-update") },
+      { command: "switch-server", label: "更换客户端站点", enabled: desktopCapabilities.switchServer, run: () => run("switch-server") },
+    ];
+  } else if (mobileCapabilities) {
+    const run = (command: MobileBridgeCommand) => mobileBridge.sendCommand(command, {
+      url: command === "open-external" ? getCurrentPageUrl() : undefined,
+    });
+    actions = [
+      { command: "reload", label: "重新加载", enabled: mobileCapabilities.reload, run: () => run("reload") },
+      { command: "open-external", label: "浏览器打开", enabled: mobileCapabilities.openExternal, run: () => run("open-external") },
+      { command: "switch-server", label: "更换客户端站点", enabled: mobileCapabilities.switchServer, run: () => run("switch-server") },
+    ];
+  }
+  const availableActions = actions.filter((action) => action.enabled);
+  const lastResult = bridge?.lastResult;
+
+  async function runAction(action: LocalAction) {
+    if (bridge?.pendingCommand) return;
+    setActionError(null);
+    try {
+      await action.run();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "操作失败，请重试。");
+    }
   }
 
   return (
-    <SettingsItem
-      title="移动能力"
-      description="当前窗口由手机端轻壳承载时可用。"
-      meta={
-        <Badge variant="secondary" className="h-6 px-2">
-          移动壳已连接
-        </Badge>
-      }
-    >
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex flex-wrap gap-1.5">
-          <Badge variant="outline" className="h-6 px-2">
-            移动 WebView
-          </Badge>
-          {mobileCapabilities.deviceRegistration && (
-            <Badge variant="outline" className="h-6 px-2">
-              设备注册
-            </Badge>
-          )}
-          {mobileCapabilities.openExternal && (
-            <Badge variant="outline" className="h-6 px-2">
-              系统外链
-            </Badge>
-          )}
+    <section className="settings-runtime" aria-label="当前设备">
+      <div className="settings-runtime__heading">
+        <div className="settings-runtime__name">
+          <h2>{name}</h2>
+          <span>当前设备</span>
         </div>
-
-        <div className="flex flex-wrap gap-2">
-          {mobileActions
-            .filter((action) => action.enabled)
-            .map((action) => {
-              const Icon = action.icon;
-              const pending = mobileBridge.pendingCommand === action.command;
-              return (
-                <Button
-                  key={action.command}
-                  type="button"
-                  size="sm"
-                  variant={action.variant}
-                  className="justify-start"
-                  disabled={Boolean(mobileBridge.pendingCommand)}
-                  onClick={() => {
-                    void runMobileAction(action.command);
-                  }}
-                >
-                  {pending ? (
-                    <LoaderCircle className="animate-spin" data-icon="inline-start" />
-                  ) : (
-                    <Icon data-icon="inline-start" />
-                  )}
-                  {action.label}
-                </Button>
-              );
-            })}
-        </div>
-
-        {mobileBridge.lastResult && (
-          <div
-            className={cn(
-              "rounded-lg px-3 py-2 text-sm",
-              mobileBridge.lastResult.ok
-                ? "bg-primary/10 text-primary"
-                : "bg-destructive/10 text-destructive",
-            )}
-            role="status"
-          >
-            {mobileBridge.lastResult.message}
-          </div>
-        )}
+        <p className="settings-runtime__description">{description}</p>
       </div>
-    </SettingsItem>
+      {availableActions.length > 0 ? (
+        <div className="settings-runtime__actions" aria-label="本机操作">
+          {availableActions.map((action) => (
+            <Button
+              key={action.command}
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={Boolean(bridge?.pendingCommand)}
+              title={action.command === "switch-server" ? "返回客户端连接设置，更换加载的站点" : undefined}
+              onClick={() => {
+                const execute = () => { void runAction(action); };
+                // Reload and switching the native host both replace this page.
+                // Let its owner protect unsaved settings before either command.
+                if (onNavigateRequest && (action.command === "reload" || action.command === "switch-server")) {
+                  onNavigateRequest(execute);
+                } else execute();
+              }}
+            >
+              {bridge?.pendingCommand === action.command ? (
+                <LoaderCircle className="animate-spin" data-icon="inline-start" />
+              ) : null}
+              {action.label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+      {actionError || lastResult ? (
+        <p
+          className="settings-runtime__feedback"
+          data-error={Boolean(actionError || !lastResult?.ok) || undefined}
+          role={actionError || !lastResult?.ok ? "alert" : "status"}
+        >
+          {actionError || lastResult?.message}
+        </p>
+      ) : null}
+    </section>
   );
 }

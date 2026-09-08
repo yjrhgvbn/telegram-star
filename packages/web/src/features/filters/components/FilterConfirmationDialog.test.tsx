@@ -19,6 +19,7 @@ describe("FilterConfirmationDialog", () => {
     );
 
     expect(screen.getByRole("alertdialog").textContent).toContain("删除规则“重要消息”？");
+    expect(screen.getByRole("button", { name: "取消" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "删除规则" }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
@@ -37,9 +38,9 @@ describe("FilterConfirmationDialog", () => {
     );
 
     expect(screen.getByRole("alertdialog").textContent).toContain(
-      "返回上一页后，当前页面中的修改将不会保留。",
+      "尚未保存的规则修改将不会保留。",
     );
-    await user.click(screen.getByRole("button", { name: "取消" }));
+    await user.click(screen.getByRole("button", { name: "继续编辑" }));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

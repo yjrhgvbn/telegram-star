@@ -19,6 +19,10 @@ export function getMessageEventsUrl(serverUrl = getRuntimeServerUrl()): string {
   return getApiUrl("/messages/events", serverUrl);
 }
 
+export function getMessageAvatarUrl(messageId: number, serverUrl = getRuntimeServerUrl()): string {
+  return getApiUrl(`/messages/${messageId}/avatar`, serverUrl);
+}
+
 export function getMediaThumbUrl(
   chatId: number | string,
   telegramMessageId: number | string,

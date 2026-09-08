@@ -49,7 +49,7 @@ export const filterGroupOrderInputSchema = z
 export const filterPlacementInputSchema = z
   .object({
     manualGroupId: z.number().int().positive().nullable(),
-    // 省略表示追加到目标分组末尾；拖拽时传入精确落点。
+    // 省略表示追加到目标分组末尾；排序时指定目标位置。
     targetIndex: z.number().int().nonnegative().optional(),
   })
   .strict();

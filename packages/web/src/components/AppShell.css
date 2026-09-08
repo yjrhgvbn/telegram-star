@@ -1,0 +1,52 @@
+/* The neutral palette is global; workspaces add only their semantic accents. */
+.app-layout {
+  --app-navigation-active: #3569a8;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--background);
+  color: var(--foreground);
+}
+.app-layout__loading { display: flex; align-items: center; justify-content: center; gap: .75rem; flex: 1; font-size: .875rem; }
+.app-layout__header { display: flex; flex: 0 0 4rem; align-items: stretch; background: #fff; border-bottom: 1px solid #e6e8ec; color: #272b32; }
+.app-layout__brand { display: flex; flex: 0 0 var(--workspace-sidebar-width); align-items: center; gap: .7rem; padding: 0 var(--workspace-inline); color: inherit; text-decoration: none; font-size: 1.2rem; font-weight: 650; letter-spacing: -.035em; }
+.app-layout__brand img { flex: 0 0 auto; }
+.app-navigation { display: flex; align-items: stretch; gap: .5rem; }
+.app-navigation button { display: flex; position: relative; min-width: 4.8rem; align-items: center; justify-content: center; border: 0; background: transparent; color: #68717e; font-size: .875rem; }
+/* Touch WebViews can retain synthetic hover across navigation. Keep selection
+   immediate, and reserve hover feedback for an actual pointing device. */
+@media (hover: hover) and (pointer: fine) {
+  .app-navigation button:hover { color: #272b32; background: #f8f9fa; }
+}
+.app-navigation button[aria-current="page"] { color: var(--app-navigation-active); font-weight: 600; }
+.app-navigation button:focus-visible { outline: 2px solid var(--app-navigation-active); outline-offset: -4px; }
+.app-navigation button[aria-current="page"]::after { content: ""; position: absolute; height: 2px; bottom: 0; left: 1rem; right: 1rem; background: currentColor; }
+.app-navigation svg { display: none; }
+.app-layout__body { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+
+/* Messages use semantic accents without changing the neutral save controls on
+   other pages. Keep these on the theme so message portals inherit them too. */
+.message-theme {
+  --message-action: #3569a8;
+  --message-action-hover: #285586;
+  --message-action-soft: #eef4fc;
+  --message-selection: #edf4fc;
+  --message-success-soft: #edf7f2;
+  --ring: var(--message-action);
+}
+
+@media (max-width: 680px) {
+  .app-layout { padding-top: env(safe-area-inset-top, 0px); }
+  .app-layout__header { display: contents; }
+  .app-layout__brand { display: none; }
+  /* Keep the stable maximum where supported, but reserve at least the current
+     inset when a browser only exposes safe-area-inset-bottom. */
+  .app-layout__body { position: fixed; inset: env(safe-area-inset-top, 0px) 0 var(--app-bottom-obstruction); }
+  .app-navigation { position: fixed; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); inset-inline: 0; bottom: calc(env(safe-area-inset-bottom, 0px) - var(--app-safe-area-max-bottom)); height: calc(var(--app-mobile-nav-height) + var(--app-safe-area-max-bottom)); padding-bottom: var(--app-safe-area-max-bottom); gap: 0; z-index: 40; background: #fff; border-top: 1px solid #e6e8ec; }
+  .app-navigation::after { position: absolute; content: ""; top: 100%; inset-inline: 0; height: env(safe-area-inset-bottom, 0px); background: #fff; pointer-events: none; }
+  .app-navigation button { min-width: 0; flex-direction: column; gap: .25rem; font-size: .6875rem; }
+  .app-navigation svg { display: block; width: 1.25rem; height: 1.25rem; stroke-width: 1.65; }
+  .app-navigation button[aria-current="page"]::after { display: none; }
+}

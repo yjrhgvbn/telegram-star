@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { Field } from "@base-ui/react/field";
 import { useQueryClient } from "@tanstack/react-query";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { queryKeys } from "@/shared/query/queryKeys";
 import { api } from "../api/client";
 import type { AuthStatus } from "../types";
+import "./TelegramLogin.css";
 
 interface Props {
   authStatus: AuthStatus;
@@ -26,6 +27,9 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const fieldId = useId();
+  const errorId = `${fieldId}-error`;
+  const firstInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setTelegramConfigured(authStatus.telegramConfigured);
@@ -39,9 +43,19 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
     }
   }, [telegramConfigured, step]);
 
+  useEffect(() => {
+    // Each authorization stage replaces its controls; keep keyboard users at
+    // the next input instead of leaving focus on the removed submit button.
+    firstInputRef.current?.focus({ preventScroll: true });
+  }, [step]);
+
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!apiId.trim() || !apiHash.trim()) return;
+    if (loading) return;
+    if (!apiId.trim() || !apiHash.trim()) {
+      setError("请输入 Telegram API ID 和 API Hash");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -52,11 +66,12 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
         },
       });
       queryClient.setQueryData(queryKeys.config.status, nextConfig);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.config.status });
       void queryClient.invalidateQueries({ queryKey: queryKeys.auth.status });
       setTelegramConfigured(true);
       setStep("phone");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "保存配置失败，请重试");
     } finally {
       setLoading(false);
     }
@@ -64,14 +79,18 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phone.trim()) return;
+    if (loading) return;
+    if (!phone.trim()) {
+      setError("请输入手机号码");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       await api.auth.sendCode(phone.trim());
       setStep("code");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "发送验证码失败，请重试");
     } finally {
       setLoading(false);
     }
@@ -79,7 +98,11 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) return;
+    if (loading) return;
+    if (!code.trim()) {
+      setError("请输入验证码");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -89,10 +112,10 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
       } else if (result.status === "success") {
         onLoginSuccess();
       } else {
-        setError(result.error || "Login failed");
+        setError(result.error || "登录失败，请重试");
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "登录失败，请重试");
     } finally {
       setLoading(false);
     }
@@ -100,7 +123,11 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password.trim()) return;
+    if (loading) return;
+    if (!password.trim()) {
+      setError("请输入两步验证密码");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -108,10 +135,10 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
       if (result.status === "success") {
         onLoginSuccess();
       } else {
-        setError(result.error || "Login failed");
+        setError(result.error || "验证失败，请重试");
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "验证失败，请重试");
     } finally {
       setLoading(false);
     }
@@ -119,115 +146,156 @@ export function TelegramLogin({ authStatus, onLoginSuccess }: Props) {
 
   if (authStatus.authorized) return null;
 
+  const inputState = {
+    required: true,
+    disabled: loading,
+    "aria-invalid": Boolean(error),
+    "aria-describedby": error ? errorId : undefined,
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/22 px-4 backdrop-blur-md">
-      <Card className="w-full max-w-md animate-in border-border bg-card shadow-xl fade-in-0 zoom-in-95">
-        <CardHeader className="text-center">
-          <img src="/icons/icon.svg" alt="" className="mx-auto mb-2 size-11 rounded-xl shadow-sm" />
-          <CardTitle className="text-xl">Telegram Star</CardTitle>
-          <CardDescription>连接 Telegram，开始运行你的消息规则</CardDescription>
-        </CardHeader>
+    <Dialog
+      open
+      disablePointerDismissal
+      onOpenChange={(_open, details) => details.cancel()}
+    >
+      <DialogContent
+        className="telegram-login"
+        showCloseButton={false}
+        initialFocus={firstInputRef}
+      >
+        <div className="telegram-login__brand">
+          <img src="/icons/icon.svg" alt="" />
+          <span>Telegram Star</span>
+        </div>
+        <DialogHeader>
+          <DialogTitle>连接 Telegram</DialogTitle>
+          <DialogDescription>连接账号，开始运行你的消息规则。</DialogDescription>
+        </DialogHeader>
 
-        <CardContent className="flex flex-col gap-4">
-          {error && <div className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+        <ol className="telegram-login__steps" aria-label="登录步骤">
+          {([
+            ["config", "配置"],
+            ["phone", "手机号"],
+            ["code", "验证码"],
+            ["password", "两步验证"],
+          ] as const).map(([value, label]) => (
+            <li key={value} aria-current={step === value ? "step" : undefined}>
+              {label}
+            </li>
+          ))}
+        </ol>
 
-          {step === "config" && (
-            <form onSubmit={handleSaveConfig} className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm text-muted-foreground">Telegram API ID</label>
-                <Input
-                  inputMode="numeric"
-                  placeholder="123456"
-                  value={apiId}
-                  onChange={(e) => setApiId(e.target.value)}
-                  autoFocus
-                />
-                <p className="text-xs text-muted-foreground">可在 my.telegram.org/apps 获取</p>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm text-muted-foreground">Telegram API Hash</label>
-                <Input
-                  type="password"
-                  placeholder="请输入 API Hash"
-                  value={apiHash}
-                  onChange={(e) => setApiHash(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">保存到本地 SQLite 数据库，不会在状态接口返回明文</p>
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "保存中..." : "保存配置"}
-              </Button>
-            </form>
-          )}
+        {error ? <p id={errorId} role="alert" className="telegram-login__error">{error}</p> : null}
 
-          {step === "phone" && (
-            <form onSubmit={handleSendCode} className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm text-muted-foreground">手机号码</label>
-                <Input
-                  type="tel"
-                  placeholder="+86 13800138000"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  autoFocus
-                />
-                <p className="text-xs text-muted-foreground">请输入完整的国际格式手机号</p>
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "发送中..." : "发送验证码"}
-              </Button>
-            </form>
-          )}
+        {step === "config" && (
+          <form onSubmit={handleSaveConfig} className="telegram-login__form" aria-busy={loading}>
+            <Field.Root className="telegram-login__field" invalid={Boolean(error)} disabled={loading}>
+              <Field.Label htmlFor={`${fieldId}-api-id`}>Telegram API ID</Field.Label>
+              <Input
+                {...inputState}
+                ref={firstInputRef}
+                id={`${fieldId}-api-id`}
+                inputMode="numeric"
+                placeholder="123456"
+                value={apiId}
+                onChange={(e) => { setApiId(e.target.value); setError(""); }}
+              />
+              <Field.Description>可在 my.telegram.org/apps 获取</Field.Description>
+            </Field.Root>
+            <Field.Root className="telegram-login__field" invalid={Boolean(error)} disabled={loading}>
+              <Field.Label htmlFor={`${fieldId}-api-hash`}>Telegram API Hash</Field.Label>
+              <Input
+                {...inputState}
+                id={`${fieldId}-api-hash`}
+                type="password"
+                placeholder="请输入 API Hash"
+                value={apiHash}
+                onChange={(e) => { setApiHash(e.target.value); setError(""); }}
+              />
+              <Field.Description>保存到当前服务器，状态接口不返回明文。</Field.Description>
+            </Field.Root>
+            <Button type="submit" size="lg" disabled={loading}>
+              {loading ? "保存中..." : "保存配置"}
+            </Button>
+          </form>
+        )}
 
-          {step === "code" && (
-            <form onSubmit={handleLogin} className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm text-muted-foreground">验证码</label>
-                <Input
-                  type="text"
-                  placeholder="12345"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  autoFocus
-                />
-                <p className="text-xs text-muted-foreground">请输入你在 Telegram 收到的验证码</p>
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "登录中..." : "登录"}
-              </Button>
-              <Button type="button" variant="ghost" className="w-full" onClick={() => setStep("phone")}>
-                返回修改手机号
-              </Button>
-            </form>
-          )}
+        {step === "phone" && (
+          <form onSubmit={handleSendCode} className="telegram-login__form" aria-busy={loading}>
+            <Field.Root className="telegram-login__field" invalid={Boolean(error)} disabled={loading}>
+              <Field.Label htmlFor={`${fieldId}-phone`}>手机号码</Field.Label>
+              <Input
+                {...inputState}
+                ref={firstInputRef}
+                id={`${fieldId}-phone`}
+                type="tel"
+                autoComplete="tel"
+                placeholder="+86 13800138000"
+                value={phone}
+                onChange={(e) => { setPhone(e.target.value); setError(""); }}
+              />
+              <Field.Description>请输入完整的国际格式手机号</Field.Description>
+            </Field.Root>
+            <Button type="submit" size="lg" disabled={loading}>
+              {loading ? "发送中..." : "发送验证码"}
+            </Button>
+          </form>
+        )}
 
-          {step === "password" && (
-            <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm text-muted-foreground">两步验证密码</label>
-                <Input
-                  type="password"
-                  placeholder="请输入你的两步验证密码"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoFocus
-                />
-                <p className="text-xs text-muted-foreground">你的账号已开启两步验证</p>
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "验证中..." : "确认"}
-              </Button>
-            </form>
-          )}
+        {step === "code" && (
+          <form onSubmit={handleLogin} className="telegram-login__form" aria-busy={loading}>
+            <Field.Root className="telegram-login__field" invalid={Boolean(error)} disabled={loading}>
+              <Field.Label htmlFor={`${fieldId}-code`}>验证码</Field.Label>
+              <Input
+                {...inputState}
+                ref={firstInputRef}
+                id={`${fieldId}-code`}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="12345"
+                value={code}
+                onChange={(e) => { setCode(e.target.value); setError(""); }}
+              />
+              <Field.Description>请输入你在 Telegram 收到的验证码</Field.Description>
+            </Field.Root>
+            <Button type="submit" size="lg" disabled={loading}>
+              {loading ? "登录中..." : "登录"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="lg"
+              disabled={loading}
+              onClick={() => { setStep("phone"); setError(""); }}
+            >
+              返回修改手机号
+            </Button>
+          </form>
+        )}
 
-          <div className="flex items-center justify-center gap-2 pt-1">
-            <Badge variant={step === "config" ? "default" : "secondary"} className="rounded-full px-2.5">配置</Badge>
-            <Badge variant={step === "phone" ? "default" : "secondary"} className="rounded-full px-2.5">手机号</Badge>
-            <Badge variant={step === "code" ? "default" : "secondary"} className="rounded-full px-2.5">验证码</Badge>
-            <Badge variant={step === "password" ? "default" : "secondary"} className="rounded-full px-2.5">2FA</Badge>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+        {step === "password" && (
+          <form onSubmit={handlePasswordSubmit} className="telegram-login__form" aria-busy={loading}>
+            <Field.Root className="telegram-login__field" invalid={Boolean(error)} disabled={loading}>
+              <Field.Label htmlFor={`${fieldId}-password`}>两步验证密码</Field.Label>
+              <Input
+                {...inputState}
+                ref={firstInputRef}
+                id={`${fieldId}-password`}
+                type="password"
+                autoComplete="current-password"
+                placeholder="请输入你的两步验证密码"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(""); }}
+              />
+              <Field.Description>你的账号已开启两步验证</Field.Description>
+            </Field.Root>
+            <Button type="submit" size="lg" disabled={loading}>
+              {loading ? "验证中..." : "确认"}
+            </Button>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,16 +1,12 @@
-import {
-  AlertCircle,
-  CheckCircle2,
-  LoaderCircle,
-  RotateCcw,
-  Wifi,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Collapsible } from "@base-ui/react/collapsible";
+import { Field } from "@base-ui/react/field";
+import { Toggle } from "@base-ui/react/toggle";
+import { ToggleGroup } from "@base-ui/react/toggle-group";
+import { AlertCircle, CheckCircle2, ChevronDown, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import { SettingsItem } from "./SettingsSection";
 import type { useServerConnectionSettings } from "../hooks/useServerConnectionSettings";
+import "./ServerConnectionSettings.css";
 
 type ServerConnectionSettingsState = ReturnType<typeof useServerConnectionSettings>;
 
@@ -19,121 +15,121 @@ export function ServerConnectionSettings({
 }: {
   settings: ServerConnectionSettingsState;
 }) {
-  const StatusIcon = settings.connectionError
-    ? AlertCircle
-    : settings.connectionState === "checking"
-      ? LoaderCircle
-      : settings.health
-        ? CheckCircle2
-        : Wifi;
-  const hasConnectionFeedback = settings.notice || settings.connectionError || settings.health;
+  const custom = settings.connectionMode === "custom";
+  const telegram = settings.health?.telegram;
+  const telegramStatus = !telegram?.configured
+    ? "未配置"
+    : !telegram.authorized
+      ? "未登录"
+      : telegram.connected
+        ? "已连接"
+        : "未连接";
 
   return (
-    <>
-      <SettingsItem
-        title="服务器地址"
-        description="服务器根地址；留空时使用当前站点的 /api。"
+    <section className="server-connection-settings" aria-label="服务器连接设置">
+      <div className="server-connection-label-row">
+        <h2 id="connection-mode-label">连接方式</h2>
+        <span>仅当前客户端</span>
+      </div>
+      <ToggleGroup
+        aria-labelledby="connection-mode-label"
+        className="server-connection-mode"
+        value={[settings.connectionMode]}
+        onValueChange={(values) => {
+          const mode = values[0];
+          if (mode === "same" || mode === "custom") settings.setConnectionMode(mode);
+        }}
       >
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
-            <label htmlFor="server-url" className="sr-only">
-              后端地址
-            </label>
+        <Toggle value="same">使用当前站点</Toggle>
+        <Toggle value="custom">自定义地址</Toggle>
+      </ToggleGroup>
+
+      <Field.Root className="server-connection-field" invalid={Boolean(settings.inputError)}>
+        <Field.Label htmlFor="server-url">
+          {custom ? "服务器地址" : "当前站点"}
+        </Field.Label>
+        <div className="server-connection-address-row">
+          {custom ? (
             <Input
               id="server-url"
+              type="url"
               value={settings.serverUrlInput}
               onChange={(event) => settings.setServerUrlInput(event.target.value)}
-              placeholder="https://star.example.com"
-              className="h-10 min-w-0 flex-1 bg-card font-mono"
+              placeholder="https://your-server.example.com"
+              autoComplete="off"
+              spellCheck={false}
+              aria-invalid={Boolean(settings.inputError)}
+              aria-describedby="connection-note"
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              onClick={settings.testConnection}
-              disabled={settings.checking}
-            >
-              {settings.checking ? (
-                <LoaderCircle className="animate-spin" data-icon="inline-start" />
-              ) : (
-                <Wifi data-icon="inline-start" />
-              )}
-              {settings.checking ? "测试中" : "测试连接"}
-            </Button>
-          </div>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            输入服务器根地址，不需要附加 <span className="font-mono">/api</span>。
-          </p>
-        </div>
-      </SettingsItem>
-
-      <SettingsItem title="请求路径" description="确认保存值与输入框当前代表的连接模式。">
-        <dl className="border-y border-border text-sm">
-          <div className="flex min-h-11 items-center justify-between gap-4 border-b border-border py-2">
-            <dt className="text-muted-foreground">当前保存</dt>
-            <dd className="min-w-0 truncate font-mono font-medium text-foreground">
-              {settings.currentLabel}
-            </dd>
-          </div>
-          <div className="flex min-h-11 items-center justify-between gap-4 py-2">
-            <dt className="text-muted-foreground">待使用模式</dt>
-            <dd className="min-w-0 truncate font-medium text-foreground">
-              {settings.modeLabel}
-            </dd>
-          </div>
-        </dl>
-      </SettingsItem>
-
-      <SettingsItem title="连接检查" description="测试只检查可达性，不会自动保存地址。">
-        <div
-          className={cn(
-            "flex min-h-10 items-start gap-2 text-sm",
-            settings.connectionError ? "text-destructive" : "text-muted-foreground",
-            settings.health && "text-primary",
+          ) : (
+            <output id="server-url" className="server-connection-current-site">
+              {window.location.origin}
+            </output>
           )}
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="server-connection-test"
+            onClick={settings.testConnection}
+            disabled={settings.checking}
+          >
+            {settings.checking ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : null}
+            {settings.checking ? "测试中…" : "测试连接"}
+          </Button>
+        </div>
+        {settings.inputError ? (
+          <Field.Error match className="server-connection-input-error" role="alert">
+            {settings.inputError}
+          </Field.Error>
+        ) : null}
+        <Field.Description id="connection-note" className="server-connection-note">
+          {custom
+            ? "保存后，此客户端将连接到这个服务器。"
+            : "跟随当前站点连接，无需另填地址。"}
+        </Field.Description>
+      </Field.Root>
+
+      {settings.health ? (
+        <Collapsible.Root className="server-connection-result" data-tone="success">
+          <div className="server-connection-result-line">
+            <span className="server-connection-status" role="status">
+              <CheckCircle2 aria-hidden="true" />
+              连接正常
+            </span>
+            <Collapsible.Trigger
+              render={<Button type="button" variant="ghost" size="sm" />}
+              className="server-connection-details-toggle"
+            >
+              <span className="connection-details-closed">查看详情</span>
+              <span className="connection-details-open">收起详情</span>
+              <ChevronDown data-icon="inline-end" />
+            </Collapsible.Trigger>
+          </div>
+          <Collapsible.Panel>
+            <dl className="server-connection-facts">
+              <div><dt>服务器版本</dt><dd>{settings.health.serverVersion}</dd></div>
+              <div><dt>API 版本</dt><dd>{settings.health.apiVersion}</dd></div>
+              <div><dt>Telegram</dt><dd>{telegramStatus}</dd></div>
+            </dl>
+          </Collapsible.Panel>
+        </Collapsible.Root>
+      ) : settings.checking || settings.connectionError ? (
+        <div
+          className="server-connection-result"
+          data-tone={settings.connectionError ? "error" : "pending"}
           role="status"
         >
-          <StatusIcon
-            className={cn(
-              "mt-0.5 size-4 shrink-0",
-              settings.connectionState === "checking" && "animate-spin",
+          <span className="server-connection-status">
+            {settings.checking ? (
+              <LoaderCircle className="animate-spin" aria-hidden="true" />
+            ) : (
+              <AlertCircle aria-hidden="true" />
             )}
-          />
-          <div className="min-w-0">
-            <div>
-              {settings.connectionError ||
-                settings.notice ||
-                (hasConnectionFeedback ? "连接正常" : "尚未进行连接测试")}
-            </div>
-            {settings.health ? (
-              <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
-                <Badge variant="outline" className="h-6 px-2">
-                  API {settings.health.apiVersion}
-                </Badge>
-                <Badge variant="outline" className="h-6 px-2">
-                  Telegram {settings.health.telegram.connected ? "已连接" : "未连接"}
-                </Badge>
-              </div>
-            ) : null}
-          </div>
+            {settings.connectionError || "正在检查服务器…"}
+          </span>
         </div>
-      </SettingsItem>
-
-      <SettingsItem
-        title="恢复同源"
-        description="清空自定义地址，保存后重新通过当前站点的 /api 请求后端。"
-      >
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          onClick={() => settings.setServerUrlInput("")}
-          disabled={!settings.serverUrlInput}
-        >
-          <RotateCcw data-icon="inline-start" />
-          恢复同源模式
-        </Button>
-      </SettingsItem>
-    </>
+      ) : null}
+    </section>
   );
 }

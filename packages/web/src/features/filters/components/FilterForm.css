@@ -1,0 +1,48 @@
+.rule-form { min-width:0; }
+/* Give the complete matching task a surface, even when it contains one condition. */
+.rule-form__conditions { min-width:0; padding:18px 18px 12px; border-radius:10px; background:#f4f7fb; }
+.rule-form__conditions>h2 { margin:0 0 16px; font-size:16px; line-height:24px; font-weight:600; }
+.rule-form__groups { display:flex; min-width:0; flex-direction:column; gap:10px; }
+.rule-form__error { margin:0 0 14px; color:var(--destructive); font-size:13px; line-height:21px; }
+.rule-form__add-actions { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 0; }
+.rule-form__add-actions button { min-height:36px; padding-inline:6px; color:var(--rule-logic); }
+.rule-form__add-actions button+button { color:var(--rule-exclude); }
+.rule-form__settings { margin-top:24px; }
+.rule-setting { border-bottom:1px solid color-mix(in srgb, var(--border) 65%, transparent); }
+.rule-setting>summary { display:flex; align-items:center; gap:8px; min-height:46px; color:var(--muted-foreground); font-size:13px; cursor:pointer; list-style:none; }
+.rule-setting>summary:hover, .rule-setting[open]>summary { color:var(--foreground); }
+.rule-setting>summary::-webkit-details-marker { display:none; }
+.rule-setting>summary>span:first-child { flex:1; min-width:0; }
+.rule-setting>summary>svg { width:14px; height:14px; flex:none; color:var(--muted-foreground); }
+.rule-setting[open]>summary>svg { transform:rotate(180deg); }
+.rule-setting>summary:focus-visible { outline:2px solid var(--ring); outline-offset:2px; border-radius:4px; }
+.rule-setting__value { max-width:50%; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted-foreground); font-size:12px; }
+.rule-setting__body { padding:4px 0 16px; }
+.rule-setting__toggle { display:flex; align-items:center; justify-content:space-between; gap:16px; font-size:13px; }
+.rule-notification-options { display:flex; flex-wrap:wrap; gap:4px 18px; }
+.rule-notification-options label { display:flex; align-items:center; gap:8px; min-height:36px; font-size:13px; cursor:pointer; }
+.rule-notification-options input { width:16px; height:16px; accent-color:var(--primary); }
+.rule-setting__loading { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted-foreground); }
+.rule-setting__note, .rule-form__impact { margin-top:10px; font-size:12px; line-height:20px; color:var(--muted-foreground); }
+.rule-form__impact { margin-top:14px; }
+@media(max-width:680px) {
+  .rule-form__conditions { padding:14px 12px 10px; border-radius:8px; }
+  .rule-form__conditions>h2 { margin-bottom:14px; }
+  .rule-form__settings { margin-top:20px; }
+  .rule-form__add-actions { gap:2px; }
+  .rule-form__add-actions button { min-height:40px; }
+  .rule-setting>summary { min-height:48px; }
+}
+/* Retain the established field width on narrow phones while framing the group. */
+@media(max-width:380px) {
+  .rule-form__conditions { margin-inline:-8px; padding-inline:8px; }
+}
+/* Reuse the existing backfill form and validators in this disclosure. */
+.rule-history__body { padding:0 0 16px; }
+.rule-history__body>div>div { padding:8px 0 14px; }
+.rule-history__body [data-slot=tabs-list] { height:36px; border-radius:7px; }
+.rule-history__body [data-slot=tabs-trigger] { border-radius:5px; font-size:13px; }
+.rule-history__body label { min-height:36px; padding-block:5px; }
+.rule-history__body label span { font-size:13px; }
+.rule-history__body p { font-size:12px; line-height:20px; }
+.rule-history__body input { font-size:14px; }

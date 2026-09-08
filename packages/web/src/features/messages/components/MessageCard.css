@@ -1,79 +1,83 @@
 .message-card {
-  --message-card-resting-background: var(--card);
-
-  border-color: color-mix(in oklab, var(--border) 76%, transparent);
-  transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    color 180ms ease;
-}
-
-.message-card[data-read-state="unread"] {
-  --message-card-resting-background: color-mix(in oklab, var(--primary) 6%, var(--card));
-
-  background-color: var(--message-card-resting-background);
+  --message-row-background: var(--card);
+  container: message-card / inline-size;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  padding: 20px 0 24px;
+  background: var(--message-row-background);
   color: var(--foreground);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
 }
-
-.message-card[data-read-state="unread"]:hover {
-  background-color: color-mix(in oklab, var(--primary) 8%, var(--card));
+.message-card__main, .message-card__text, .message-card__media { min-width: 0; }
+.message-card__leading { padding-top: 1px; }
+.message-card__avatar { position: relative; display: flex; width: 32px; height: 32px; align-items: center; justify-content: center; overflow: hidden; border-radius: 50%; background: var(--muted); color: var(--muted-foreground); font-size: 11px; font-weight: 600; }
+.message-card__avatar-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
+.message-card__avatar-image.is-loaded { opacity: 1; }
+.message-card__selection { display: flex; align-items: center; justify-content: center; min-height: 44px; margin-top: -8px; cursor: pointer; }
+.message-card__selection input { width: 18px; height: 18px; accent-color: var(--message-action); }
+.message-card__selection input:focus-visible { outline: 2px solid var(--message-action); outline-offset: 3px; }
+.message-card__header { display: grid; grid-template-columns: minmax(0, 1fr) max-content 44px; align-items: center; gap: 4px 12px; min-height: 24px; margin-bottom: 12px; font-size: 12px; line-height: 20px; }
+.message-card__identity { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.message-card__source { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--foreground); font-size: 13px; font-weight: 600; }
+.message-card__status { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; height: 22px; padding-inline: 6px; border-radius: 4px; background: var(--message-action-soft); color: var(--message-action); font-size: 11px; font-weight: 600; line-height: 18px; white-space: nowrap; }
+.message-card__status svg { width: 12px; height: 12px; stroke-width: 2.5; }
+.message-card[data-read-state="read"] .message-card__status { background: var(--message-success-soft); color: var(--success); }
+.message-card__time { color: var(--muted-foreground); white-space: nowrap; }
+.message-card__sender { grid-column: 1 / -1; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); }
+.message-card__content { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 12px; }
+.message-card__text { width: 100%; max-width: 800px; }
+.message-card__body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 24px; color: var(--foreground); }
+.message-card__body strong { font-weight: 600; }
+.message-card__ellipsis { color: var(--muted-foreground); }
+.message-card__expand { min-height: 36px; margin: 4px 0 0 -8px; }
+.message-card__media { width: 100%; max-width: 420px; }
+.message-card .media-preview--photo, .message-card .media-preview--video { min-height: 80px; max-height: 280px; border: 0; border-radius: 8px; background: var(--muted); }
+.message-card .media-preview--photo img, .message-card .media-preview--video img { max-height: 280px; }
+.message-card .media-preview__fallback { min-height: 0; height: 100%; background: var(--muted); }
+.message-card .media-preview--file, .message-card .media-preview--audio, .message-card .media-preview--contact, .message-card .media-preview--geo, .message-card .media-preview--poll, .message-card .media-preview--unknown { min-height: 64px; background: var(--muted); border: 0; border-radius: 8px; }
+.message-card .media-preview__file-icon, .message-card .media-preview__audio-icon { background: var(--secondary); color: var(--secondary-foreground); }
+.message-card .media-preview__metadata { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; color: var(--muted-foreground); font-size: 11px; line-height: 18px; }
+.message-card .media-preview__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.message-card__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-top: 16px; }
+.message-card__action, .message-card__more { min-height: 44px; }
+.message-card__more { width: 44px; min-width: 44px; margin-block: -10px; }
+.message-card__feedback { margin: 8px 0 0; font-size: 12px; line-height: 18px; color: var(--muted-foreground); }
+.message-card[data-selected="true"] { --message-row-background: var(--message-selection); }
+.message-card__complete { color: var(--message-action); font-weight: 600; }
+.message-card__complete:is(:hover, :focus-visible, :active):not(:disabled) { background: var(--message-action-soft); color: var(--message-action-hover); }
+.message-card[data-read-state="read"] .message-card__complete { --ring: var(--success); color: var(--success); }
+.message-card[data-read-state="read"] .message-card__complete:is(:hover, :focus-visible, :active):not(:disabled) { background: var(--message-success-soft); color: var(--success); }
+.message-card__complete-icon circle { fill: currentColor; }
+.message-card__complete-icon path { stroke: var(--card); }
+/* State is explicit at both ends of a long message without fading its content.
+   The 22px label fits the existing header, so completion does not move rows. */
+.message-card[data-anchor="true"] { animation: message-card-anchor-highlight 1s ease-out; }
+.message-card-menu { min-width: 184px; padding: 5px; border: 1px solid var(--border); border-radius: 9px; background: var(--popover); color: var(--popover-foreground); box-shadow: 0 8px 24px color-mix(in oklab, var(--foreground) 12%, transparent); outline: none; }
+.message-card-menu__item { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 12px; font-size: 13px; border-radius: 5px; cursor: pointer; outline: none; }
+.message-card-menu__item svg { width: 16px; height: 16px; }
+.message-card-menu__item[data-highlighted] { background: var(--accent); color: var(--accent-foreground); }
+.message-card-menu__item[data-disabled] { opacity: .45; cursor: default; }
+@container message-card (min-width: 700px) {
+  .message-card__content--visual:has(.message-card__text) { grid-template-columns: minmax(0, 1fr) clamp(280px, 28cqi, 360px); gap: 32px; }
 }
-
-.message-card[data-read-state="read"] {
-  --message-card-resting-background: color-mix(in oklab, var(--card) 90%, var(--muted));
-
-  background-color: var(--message-card-resting-background);
-  color: color-mix(in oklab, var(--foreground) 86%, transparent);
-}
-
-.message-card[data-read-state="read"]:hover {
-  background-color: color-mix(in oklab, var(--card) 96%, var(--muted));
-}
-
-.message-card[data-read-state="unread"] .message-card__title {
-  color: var(--foreground);
-  font-weight: 600;
-}
-
-.message-card[data-read-state="read"] .message-card__title {
-  color: color-mix(in oklab, var(--foreground) 76%, transparent);
-}
-
-.message-card[data-read-state="unread"] .message-card__sender {
-  color: color-mix(in oklab, var(--foreground) 78%, transparent);
-}
-
-.message-card[data-read-state="read"] .message-card__sender {
-  color: color-mix(in oklab, var(--foreground) 62%, transparent);
-}
-
-.message-card[data-read-state="unread"] .message-card__body {
-  color: color-mix(in oklab, var(--foreground) 94%, transparent);
-}
-
-.message-card[data-read-state="read"] .message-card__body {
-  color: color-mix(in oklab, var(--foreground) 76%, transparent);
-}
-
-/* Briefly reveal the automatic-position target, then return it to its normal read state. */
-.message-card[data-anchor="true"] {
-  animation: message-card-anchor-highlight 1s ease-out;
-}
-
 @keyframes message-card-anchor-highlight {
-  0%,
-  18% {
-    background-color: color-mix(in oklab, var(--primary) 14%, var(--card));
-  }
-
-  100% {
-    background-color: var(--message-card-resting-background);
-  }
+  0%, 18% { background: var(--message-selection); }
+  100% { background: var(--message-row-background); }
 }
-
+@media (max-width: 639px) {
+  .message-card { grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 18px 0 24px; }
+  .message-card__avatar { width: 28px; height: 28px; font-size: 10px; }
+  .message-card__header { gap: 4px 9px; }
+  .message-card__identity { gap: 6px; }
+  .message-card__source { max-width: 100%; }
+  .message-card__actions { gap: 4px; }
+  .message-card__action { padding-inline: 8px; font-size: 12px; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .message-card[data-anchor="true"] {
-    animation-duration: 600ms;
-  }
+  .message-card[data-anchor="true"] { animation: none; }
 }

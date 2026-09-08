@@ -1,12 +1,11 @@
-import {
-  clearCache as clearPretextCache,
-  measureLineStats,
-  prepareWithSegments,
-} from "@chenglou/pretext";
+import { clearCache as clearPretextCache, measureLineStats, prepareWithSegments } from "@chenglou/pretext";
 import type { Message } from "@/types";
+import { getMessageContentPreview } from "./messageContentPreview";
+import { getVisualMediaRatio } from "./mediaPreviewMetadata";
 
-export type MessageHeightEstimateInput = Pick<Message, "content" | "mediaType" | "mediaExtra">;
-
+export type MessageHeightEstimateInput = Pick<Message, "content" | "mediaType" | "mediaExtra"> & Partial<Pick<Message,
+  "contentLinks" | "mediaFileName" | "mediaFileSize" | "chatTitle" | "senderName" | "telegramLink"
+>>;
 export interface MessageHeightEstimateOptions {
   containerWidth?: number;
   viewportWidth?: number;
@@ -14,144 +13,65 @@ export interface MessageHeightEstimateOptions {
 }
 
 const DEFAULT_CONTAINER_WIDTH = 400;
-const DEFAULT_VIEWPORT_WIDTH = 1024;
-const MAX_MESSAGE_LIST_WIDTH = 980;
+const MAX_MESSAGE_TEXT_WIDTH = 800;
 const MOBILE_BREAKPOINT = 640;
-const MIN_CONTENT_WIDTH = 100;
-const TEXT_PREVIEW_LIMIT = 360;
-const TEXT_LINE_HEIGHT = 22;
-const CONTENT_BLOCK_GAP = 10;
+const TEXT_LINE_HEIGHT = 24;
+const MESSAGE_TEXT_FONT = '14px "Geist Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"';
 
-// This font string must stay in sync with the app's global message text font.
-// Even small drift here shows up as virtual-scroll compensation errors.
-const MESSAGE_TEXT_FONT =
-  '14px "Geist Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"';
-
-/**
- * Estimate one rendered message-card height for TanStack Virtual.
- *
- * The estimator mirrors CSS chrome, media blocks and text wrapping. It is kept
- * pure so scroll compensation can be covered by fast tests without mounting the
- * virtual list.
- */
-export function estimateMessageItemHeight(
-  message: MessageHeightEstimateInput,
-  options: MessageHeightEstimateOptions = {},
-): number {
-  const viewportWidth = options.viewportWidth ?? DEFAULT_VIEWPORT_WIDTH;
-  const containerWidth = getMessageListEstimateWidth(options.containerWidth);
+/** Mirrors MessageCard's container query, media sizing and footer actions. The
+ * measured virtual row replaces this estimate after expansion or media loading. */
+export function estimateMessageItemHeight(message: MessageHeightEstimateInput, options: MessageHeightEstimateOptions = {}): number {
+  const viewportWidth = options.viewportWidth ?? 1024;
   const isMobile = viewportWidth < MOBILE_BREAKPOINT;
-
-  // Base height includes card chrome, header, action row and sub-pixel spacing.
-  const fixedBaseHeight = isMobile ? 168.35 : 122.66;
-  const horizontalPadding = isMobile ? 48 : 56;
-  const availableWidth = Math.max(MIN_CONTENT_WIDTH, containerWidth - horizontalPadding);
-
-  let height = fixedBaseHeight;
-  let variableBlocks = 0;
-
-  const mediaHeight = estimateMediaHeight(message, availableWidth);
-  if (mediaHeight > 0) {
-    variableBlocks++;
-    height += mediaHeight;
-  }
-
-  const textHeight = estimateTextHeight(message.content, availableWidth, options.measureLineCount);
-  if (textHeight > 0) {
-    variableBlocks++;
-    height += textHeight;
-  }
-
-  return height + variableBlocks * CONTENT_BLOCK_GAP;
+  const listWidth = getMessageListEstimateWidth(options.containerWidth);
+  // Horizontal gutters belong to the list; the article adds no second inset.
+  const gutter = viewportWidth <= 680 ? 14 : viewportWidth <= 900 ? 18 : 24;
+  const queryWidth = Math.max(100, listWidth - gutter * 2);
+  const mainWidth = Math.max(80, queryWidth - (isMobile ? 38 : 44));
+  const hasText = Boolean(message.content.trim());
+  const visual = ["photo", "video", "videoNote", "gif"].includes(message.mediaType || "");
+  const parallel = queryWidth >= 700 && visual && hasText;
+  // 28cqi is relative to the whole article, including its avatar column.
+  const mediaWidth = parallel ? Math.min(360, Math.max(280, queryWidth * 0.28)) : Math.min(420, mainWidth);
+  const textWidth = Math.min(MAX_MESSAGE_TEXT_WIDTH, parallel ? Math.max(80, mainWidth - mediaWidth - 32) : mainWidth);
+  const textHeight = estimateTextHeight(message, textWidth, options.measureLineCount);
+  const mediaHeight = estimateMediaHeight(message, mediaWidth);
+  const bodyHeight = parallel ? Math.max(textHeight, mediaHeight) : textHeight + mediaHeight + (hasText && mediaHeight ? 12 : 0);
+  const source = message.chatTitle || message.senderName || "Telegram";
+  const senderLine = message.senderName && message.senderName !== source ? 20 : 0;
+  // Padding + separator + source header + header gap + action gap + 44px actions.
+  const fixedHeight = (isMobile ? 42 : 44) + 1 + 24 + senderLine + 12 + 16 + 44;
+  const wrappedActions = message.telegramLink && mainWidth < 250 ? 48 : 0;
+  return fixedHeight + bodyHeight + wrappedActions;
 }
 
-/**
- * The rendered message column is capped at 980px. Keeping the same cap in the
- * estimator prevents wide desktop layouts from underestimating wrapped text.
- */
 export function getMessageListEstimateWidth(containerWidth?: number): number {
-  if (containerWidth === undefined || !Number.isFinite(containerWidth) || containerWidth <= 0) {
-    return DEFAULT_CONTAINER_WIDTH;
-  }
-
-  return Math.min(containerWidth, MAX_MESSAGE_LIST_WIDTH);
+  if (containerWidth === undefined || !Number.isFinite(containerWidth) || containerWidth <= 0) return DEFAULT_CONTAINER_WIDTH;
+  return containerWidth;
 }
-
-/** Clear font metrics after the webfont becomes ready. */
-export function clearMessageHeightEstimateCache() {
-  clearPretextCache();
-}
+export function clearMessageHeightEstimateCache() { clearPretextCache(); }
 
 function estimateMediaHeight(message: MessageHeightEstimateInput, availableWidth: number): number {
-  switch (message.mediaType) {
-    case "photo":
-    case "video":
-    case "videoNote":
-    case "gif":
-      return estimateVisualMediaHeight(message.mediaExtra, availableWidth);
-    case "sticker":
-      return 160;
-    case "document":
-    case "audio":
-    case "voice":
-    case "contact":
-    case "geo":
-    case "poll":
-      return 54;
-    default:
-      return 0;
-  }
-}
-
-function estimateVisualMediaHeight(mediaExtra: string | null, availableWidth: number): number {
-  const extra = parseMediaExtra(mediaExtra);
-  const width = Number(extra.w);
-  const height = Number(extra.h);
-
-  if (width > 0 && height > 0) {
-    return Math.min(360, Math.max(80, (availableWidth * height) / width));
-  }
-
-  return 240;
-}
-
-function parseMediaExtra(mediaExtra: string | null): Record<string, unknown> {
-  if (!mediaExtra) return {};
-
-  try {
-    const parsed = JSON.parse(mediaExtra);
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function estimateTextHeight(
-  content: string,
-  availableWidth: number,
-  measureLineCount = measureParagraphLineCount,
-): number {
-  const trimmedContent = content.trim();
-  if (!trimmedContent) return 0;
-
-  const previewText =
-    trimmedContent.slice(0, TEXT_PREVIEW_LIMIT) +
-    (trimmedContent.length > TEXT_PREVIEW_LIMIT ? "..." : "");
-
-  let totalLines = 0;
-  for (const paragraph of previewText.split("\n")) {
-    if (!paragraph) {
-      totalLines += 1;
-      continue;
+  if (!message.mediaType) return 0;
+  if (["photo", "video", "videoNote", "gif"].includes(message.mediaType)) {
+    const ratio = getVisualMediaRatio(message.mediaExtra);
+    let height = ratio ? Math.min(280, Math.max(80, availableWidth / ratio)) : 240;
+    if (message.mediaType !== "photo") {
+      const metadataLines = Number(Boolean(message.mediaFileName)) + Number(Boolean(message.mediaFileSize && message.mediaFileSize > 0));
+      if (metadataLines) height += 8 + metadataLines * 18 + (metadataLines - 1) * 2;
     }
-
-    totalLines += Math.max(1, measureLineCount(paragraph, availableWidth));
+    return height;
   }
-
-  return totalLines * TEXT_LINE_HEIGHT;
+  return message.mediaType === "sticker" ? 160 : 64;
 }
-
+function estimateTextHeight(message: MessageHeightEstimateInput, availableWidth: number, measureLineCount = measureParagraphLineCount): number {
+  if (!message.content.trim()) return 0;
+  const preview = getMessageContentPreview(message.content, message.contentLinks);
+  let totalLines = 0;
+  const text = preview.text + (preview.truncated ? "…" : "");
+  for (const paragraph of text.split("\n")) totalLines += paragraph ? Math.max(1, measureLineCount(paragraph, availableWidth)) : 1;
+  return totalLines * TEXT_LINE_HEIGHT + (preview.truncated ? 40 : 0);
+}
 function measureParagraphLineCount(paragraph: string, availableWidth: number): number {
-  const prepared = prepareWithSegments(paragraph, MESSAGE_TEXT_FONT);
-  return measureLineStats(prepared, availableWidth).lineCount;
+  return measureLineStats(prepareWithSegments(paragraph, MESSAGE_TEXT_FONT), availableWidth).lineCount;
 }

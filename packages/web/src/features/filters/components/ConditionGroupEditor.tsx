@@ -1,14 +1,12 @@
-import { ArrowUpDown, Plus, Trash2 } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
+import { Menu } from "@base-ui/react/menu";
+import { ArrowUpDown, MoreHorizontal, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { JoinedChat } from "@/types";
-import {
-  conditionTypeDefinitions,
-  type DraftCondition,
-  type DraftConditionGroup,
-} from "../types";
+import type { DraftCondition, DraftConditionGroup } from "../types";
 import { ConditionEditor } from "./ConditionEditor";
+import "./RulesConditions.css";
 
 interface ConditionGroupEditorProps {
   group: DraftConditionGroup;
@@ -29,7 +27,6 @@ interface ConditionGroupEditorProps {
 
 export function ConditionGroupEditor({
   group,
-  index,
   chats,
   chatsLoading,
   removable,
@@ -40,99 +37,53 @@ export function ConditionGroupEditor({
   onAppendValues,
   onAddAlternative,
 }: ConditionGroupEditorProps) {
+  const groupRef = useRef<HTMLElement>(null);
+  const previousIdsRef = useRef(group.conditions.map((condition) => condition.id));
+  const pendingFocusRef = useRef<string | null>(null);
+  const menuFocusRef = useRef<string | null>(null);
   const isChatGroup = group.conditions.every((condition) => condition.type === "chat");
   const isExcluded = group.effect === "exclude";
-  const subject = isChatGroup
-    ? "消息来源"
-    : group.conditions.every(
-        (condition) => conditionTypeDefinitions[condition.type].subject === "消息内容",
-      )
-      ? "消息内容"
-      : "备选条件";
-  const railLabel = isExcluded ? "排除" : index === 0 ? "当" : "并且";
+  const firstCondition = group.conditions[0];
   const effectToggleLabel = isExcluded
     ? "当前为整组排除，点击切换为必须满足"
     : "当前为必须满足，点击切换为整组排除";
 
-  return (
-    <section className="grid grid-cols-[48px_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-card/94">
-      <div className="border-r border-border bg-muted/55">
-        {isChatGroup ? (
-          <span className="flex h-full min-h-12 items-center justify-center px-1 text-xs font-semibold tracking-wide text-primary">
-            {railLabel}
-          </span>
-        ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="h-full min-h-12 w-full cursor-pointer flex-col gap-1 rounded-none px-0 py-0 transition-colors hover:bg-muted/85 has-data-[icon=inline-end]:px-0 focus-visible:ring-inset"
-            aria-label={effectToggleLabel}
-            aria-pressed={isExcluded}
-            title={effectToggleLabel}
-            onClick={() => onToggleEffect(group.id)}
-          >
-            <span
-              className={cn(
-                "text-xs font-semibold tracking-wide transition-colors",
-                isExcluded ? "text-destructive" : "text-primary",
-              )}
-            >
-              {railLabel}
-            </span>
-            <ArrowUpDown
-              data-icon="inline-end"
-              aria-hidden="true"
-              className={cn(
-                "opacity-50 sm:hidden",
-                isExcluded ? "text-destructive/70" : "text-muted-foreground",
-              )}
-            />
-          </Button>
-        )}
-      </div>
+  const findConditionInput = (id: string) => {
+    const row = Array.from(
+      groupRef.current?.querySelectorAll<HTMLElement>("[data-condition-id]") ?? [],
+    ).find((element) => element.dataset.conditionId === id);
+    // Base UI Select also renders a hidden input; target only the value editor.
+    return row?.querySelector<HTMLElement>("input[data-slot='input'], textarea")
+      ?? row?.querySelector<HTMLElement>("button");
+  };
 
-      <div className="min-w-0 p-3">
-        <div className="flex min-h-6 items-center justify-between gap-3">
-          <h3 className="text-[13px] font-semibold">{subject}</h3>
-          <div className="flex shrink-0 items-center gap-0.5">
-            {!isChatGroup ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="text-primary"
-                onClick={() => onAddAlternative(group.id)}
-              >
-                <Plus data-icon="inline-start" />
-                备选条件
-              </Button>
-            ) : null}
-            {removable ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => onRemoveGroup(group.id)}
-                aria-label={`删除${subject}条件组`}
-                title="删除条件组"
-              >
-                <Trash2 />
-              </Button>
-            ) : null}
-          </div>
-        </div>
+  useLayoutEffect(() => {
+    const previousIds = previousIdsRef.current;
+    const added = group.conditions.find((condition) => !previousIds.includes(condition.id));
+    const focusId = pendingFocusRef.current ?? added?.id;
+    if (focusId) findConditionInput(focusId)?.focus();
+    pendingFocusRef.current = null;
+    previousIdsRef.current = group.conditions.map((condition) => condition.id);
+  }, [group.conditions]);
 
-        <div className="mt-2 flex flex-col">
+  const removeCondition = (id: string, fromMenu = false) => {
+    const index = group.conditions.findIndex((condition) => condition.id === id);
+    const next = group.conditions[index + 1] ?? group.conditions[index - 1];
+    pendingFocusRef.current = next?.id ?? null;
+    // Menu dismissal normally restores its trigger; a deleted row should instead
+    // continue editing the surviving sibling selected above.
+    if (fromMenu) menuFocusRef.current = next?.id ?? null;
+    onRemoveCondition(id);
+  };
+
+  if (isChatGroup) {
+    return (
+      <section ref={groupRef} className="rules-condition-source" aria-label="消息来源" data-rule-group-id={group.id} tabIndex={-1}>
+        <span className="rules-condition-source__label">消息来源</span>
+        <div className="rules-condition-source__fields">
           {group.conditions.map((condition, conditionIndex) => (
-            <div key={condition.id}>
-              {conditionIndex > 0 ? (
-                <div className="flex h-8 items-center gap-3 pr-8 text-[11px] text-muted-foreground">
-                  <Separator className="flex-1" />
-                  <span>或者</span>
-                  <Separator className="flex-1" />
-                </div>
-              ) : null}
+            <div key={condition.id} className="rules-condition-source__item">
+              {conditionIndex > 0 ? <span className="rules-condition-relation">或</span> : null}
               <ConditionEditor
                 condition={condition}
                 groupEffect={group.effect}
@@ -140,7 +91,104 @@ export function ConditionGroupEditor({
                 chatsLoading={chatsLoading}
                 removable={group.conditions.length > 1}
                 onUpdate={onUpdateCondition}
-                onRemove={onRemoveCondition}
+                onRemove={removeCondition}
+                onAppendValues={onAppendValues}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      ref={groupRef}
+      className={cn("rules-condition-group", isExcluded && "rules-condition-group--exclude")}
+      aria-label={isExcluded ? "排除条件组" : "必须满足的条件组"}
+      data-rule-group-id={group.id}
+      tabIndex={-1}
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        className="rules-condition-group__rail"
+        aria-label={effectToggleLabel}
+        aria-pressed={isExcluded}
+        title={effectToggleLabel}
+        onClick={() => onToggleEffect(group.id)}
+      >
+        <span>{isExcluded ? "排除" : "并且"}</span>
+        <ArrowUpDown data-icon="inline-end" aria-hidden="true" />
+      </Button>
+
+      <div className="rules-condition-group__content">
+        <div className="rules-condition-group__toolbar">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="rules-condition-group__add"
+            aria-label="添加条件"
+            onClick={() => onAddAlternative(group.id)}
+          >
+            <Plus data-icon="inline-start" />条件
+          </Button>
+          {removable || group.conditions.length > 1 ? (
+            <Menu.Root onOpenChange={(open) => { if (open) menuFocusRef.current = null; }}>
+              <Menu.Trigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="rules-condition-group__more"
+                    aria-label="条件组操作"
+                  />
+                }
+              >
+                <MoreHorizontal />
+              </Menu.Trigger>
+              <Menu.Portal>
+                <Menu.Positioner className="rules-menu-positioner" align="end" sideOffset={5}>
+                  <Menu.Popup
+                    className="rules-theme rules-condition-menu"
+                    finalFocus={() => menuFocusRef.current ? findConditionInput(menuFocusRef.current) : true}
+                  >
+                    <Menu.Group>
+                      {group.conditions.length > 1 && firstCondition ? (
+                        <Menu.Item onClick={() => removeCondition(firstCondition.id, true)}>
+                          <X aria-hidden="true" />删除首项条件
+                        </Menu.Item>
+                      ) : null}
+                      {removable ? (
+                        <Menu.Item className="rules-condition-menu__danger" onClick={() => onRemoveGroup(group.id)}>
+                          <Trash2 aria-hidden="true" />删除条件组
+                        </Menu.Item>
+                      ) : null}
+                    </Menu.Group>
+                  </Menu.Popup>
+                </Menu.Positioner>
+              </Menu.Portal>
+            </Menu.Root>
+          ) : null}
+        </div>
+
+        <div className="rules-condition-group__body">
+          {group.conditions.map((condition, conditionIndex) => (
+            <div key={condition.id} className="rules-condition-line">
+              <span className="rules-condition-relation" aria-hidden={conditionIndex === 0}>
+                {conditionIndex > 0 ? "或" : null}
+              </span>
+              <ConditionEditor
+                condition={condition}
+                groupEffect={group.effect}
+                chats={chats}
+                chatsLoading={chatsLoading}
+                removable={conditionIndex > 0}
+                onUpdate={onUpdateCondition}
+                onRemove={removeCondition}
                 onAppendValues={onAppendValues}
               />
             </div>

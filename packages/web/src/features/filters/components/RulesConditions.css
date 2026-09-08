@@ -1,0 +1,124 @@
+/* The rail communicates group scope; small controls own their editing affordance. */
+.rules-condition-group,
+.rules-condition-source {
+  --rules-condition-rail: #f0f5fc;
+  --rules-condition-relation: #446389;
+  --rules-condition-action: #2563b4;
+  --rules-condition-exclude: #956419;
+  --rules-condition-exclude-bg: #fcf6ec;
+}
+
+.rules-condition-group {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: stretch;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+.rules-condition-group:focus-visible,
+.rules-condition-source:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+
+.rules-condition-group__rail {
+  flex-direction: column;
+  align-self: stretch;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  min-height: 48px;
+  padding: 8px 2px;
+  border: 0;
+  border-radius: 7px 0 0 7px;
+  background: var(--rules-condition-rail);
+  color: var(--rules-condition-relation);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.rules-condition-group__rail:hover { background: #e5eefb; color: var(--rules-condition-relation); }
+.rules-condition-group--exclude .rules-condition-group__rail { background: var(--rules-condition-exclude-bg); color: var(--rules-condition-exclude); }
+.rules-condition-group--exclude .rules-condition-group__rail:hover { background: #f6ead4; }
+.rules-condition-group__rail:focus-visible { outline: 2px solid var(--ring); outline-offset: -3px; box-shadow: none; }
+.rules-condition-group__content { position: relative; min-width: 0; padding: 12px 10px; container: rules-condition-editor / inline-size; }
+.rules-condition-group__body { display: grid; gap: 8px; min-width: 0; }
+.rules-condition-group__toolbar { position: absolute; top: 12px; right: 10px; display: flex; align-items: center; gap: 2px; height: 36px; }
+.rules-condition-group__add { height: 36px; padding: 0 6px; gap: 4px; border-radius: 5px; color: var(--rules-condition-action); font-size: 13px; }
+.rules-condition-group__add:hover { background: #edf4fd; color: #174e94; }
+.rules-condition-group__more { width: 28px; height: 36px; border-radius: 5px; color: var(--muted-foreground); }
+.rules-condition-group__more:hover,
+.rules-condition-group__more[aria-expanded="true"] { background: var(--muted); color: var(--foreground); }
+.rules-condition-line { display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 4px; align-items: start; min-width: 0; }
+/* Reserve the OR column only when the group has alternatives to align. */
+.rules-condition-line:only-child { grid-template-columns: minmax(0, 1fr); }
+.rules-condition-line:only-child > .rules-condition-relation { display: none; }
+.rules-condition-line:first-child { padding-right: 90px; }
+.rules-condition-relation { display: flex; align-items: center; justify-content: center; height: 36px; color: var(--rules-condition-action); font-size: 13px; font-weight: 600; line-height: 20px; }
+.rules-condition-entry { display: grid; grid-template-columns: 110px minmax(0, 1fr) 26px; align-items: start; gap: 8px; min-width: 0; }
+.rules-condition-line:first-child .rules-condition-entry { grid-template-columns: 110px minmax(0, 1fr); }
+.rules-condition-type { width: 100%; min-width: 0; height: 36px; padding: 0 8px; border: 1px solid var(--input); border-radius: 6px; background: var(--card); color: var(--foreground); font-size: 13px; }
+.rules-condition-type:hover { background: var(--muted); }
+.rules-condition-type [data-slot="select-value"] { overflow: hidden; }
+.rules-condition-values { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; min-height: 36px; padding: 2px 0; }
+.rules-condition-choice { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
+.rules-condition-value-or { flex: none; padding: 0 2px; color: var(--muted-foreground); font-size: 12px; font-weight: 400; }
+.rules-condition-token { min-width: 0; max-width: 100%; height: auto; gap: 2px; padding: 2px 3px 2px 8px; border: 0; border-radius: 5px; background: var(--secondary); color: var(--secondary-foreground); font-size: 14px; font-weight: 400; line-height: 24px; }
+.rules-condition-token__text { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.rules-condition-token__remove { flex: none; width: 22px; height: 24px; color: var(--muted-foreground); }
+.rules-condition-token__remove:hover { background: var(--accent); color: var(--foreground); }
+.rules-condition-input { flex: 0 1 108px; min-width: 100px; width: 108px; max-width: 100%; height: 32px; padding: 0 4px; border: 0; border-bottom: 1px dashed var(--ring); border-radius: 0; background: transparent; font-size: 13px; line-height: 24px; box-shadow: none; }
+.rules-condition-input::placeholder { color: var(--muted-foreground); opacity: 1; }
+.rules-condition-input:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-bottom-color: transparent; border-radius: 4px; box-shadow: none; }
+.rules-condition-input[aria-invalid="true"] { border-bottom-color: var(--destructive); }
+.rules-condition-script { min-height: 80px; padding: 7px 8px; border: 1px solid var(--input); border-radius: 6px; background: var(--card); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 20px; }
+.rules-condition-remove { width: 26px; height: 36px; margin: 0; border-radius: 5px; color: var(--muted-foreground); }
+.rules-condition-remove:hover { background: color-mix(in oklab, var(--destructive) 8%, transparent); color: var(--destructive); }
+.rules-condition-error { grid-column: 1 / -1; min-width: 0; margin: -2px 0 0; color: var(--destructive); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+
+/* Keep the existing search dialog and multi-selection trigger intact. */
+.rules-condition-source { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 0 0 4px; }
+.rules-condition-source__label { flex: none; display: flex; align-items: center; min-height: 36px; color: var(--foreground); font-size: 13px; font-weight: 550; }
+.rules-condition-source__fields { flex: 1; min-width: 0; max-width: 460px; display: grid; gap: 8px; }
+.rules-condition-source__item { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.rules-condition-entry--source { display: flex; flex: 1; align-items: flex-start; gap: 8px; min-width: 0; }
+.rules-condition-source__picker { flex: 1; min-width: 0; }
+
+.rules-condition-menu { width: 174px; max-width: var(--available-width); max-height: var(--available-height); overflow: auto; padding: 4px; border: 1px solid var(--border); border-radius: var(--menu-radius); background: var(--popover); color: var(--popover-foreground); box-shadow: var(--menu-shadow); outline: none; }
+.rules-condition-menu [role="menuitem"] { display: flex; align-items: center; gap: 8px; min-height: var(--menu-item-height); padding: 7px 10px; border-radius: 5px; font-size: 13px; line-height: 20px; white-space: nowrap; cursor: default; outline: none; }
+.rules-condition-menu [role="menuitem"] svg { flex: none; width: 15px; height: 15px; }
+.rules-condition-menu [role="menuitem"][data-highlighted] { background: var(--muted); }
+.rules-condition-menu [role="menuitem"].rules-condition-menu__danger { color: var(--destructive); }
+.rules-condition-menu [role="menuitem"].rules-condition-menu__danger[data-highlighted] { background: color-mix(in oklab, var(--destructive) 8%, transparent); }
+
+/* Container width, rather than viewport width, decides when fields wrap. */
+@container rules-condition-editor (max-width: 490px) {
+  .rules-condition-line:first-child { padding-right: 0; }
+  .rules-condition-entry,
+  .rules-condition-line:first-child .rules-condition-entry { grid-template-columns: minmax(0, 1fr) 28px; gap: 5px; }
+  .rules-condition-type { grid-column: 1; grid-row: 1; width: 110px; max-width: 100%; }
+  .rules-condition-line:first-child .rules-condition-type { max-width: calc(100% - 60px); }
+  .rules-condition-values,
+  .rules-condition-script { grid-column: 1 / -1; }
+  .rules-condition-remove { grid-column: 2; grid-row: 1; }
+}
+
+@media (max-width: 680px) {
+  .rules-condition-group { grid-template-columns: 40px minmax(0, 1fr); }
+  .rules-condition-group__content { padding: 10px 8px; }
+  .rules-condition-group__toolbar { top: 10px; right: 8px; height: 44px; }
+  .rules-condition-group__add { height: 44px; padding-inline: 4px; font-size: 14px; }
+  .rules-condition-type { height: 44px; padding-inline: 6px; font-size: 14px; }
+  .rules-condition-relation { height: 44px; }
+  .rules-condition-token { padding-left: 6px; }
+  .rules-condition-token__remove { width: 24px; height: 28px; }
+  .rules-condition-input { height: 36px; min-width: 116px; flex-basis: 126px; font-size: 16px; }
+  .rules-condition-remove,
+  .rules-condition-group__more { width: 44px; height: 44px; }
+  .rules-condition-entry,
+  .rules-condition-line:first-child .rules-condition-entry { grid-template-columns: minmax(0, 1fr) 44px; }
+  .rules-condition-line:first-child .rules-condition-type { max-width: 110px; }
+  .rules-condition-menu [role="menuitem"] { min-height: var(--menu-item-height); font-size: 14px; }
+  .rules-condition-script { font-size: 16px; }
+}

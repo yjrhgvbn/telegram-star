@@ -1,128 +1,107 @@
 // @vitest-environment jsdom
-import { useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AppConfigStatus } from "@telegram-star/shared/contracts/config";
 import { SERVER_CONFIG_STORAGE_KEY } from "@/shared/runtime/serverConfig";
 import { createQueryWrapper } from "@/test/queryTestUtils";
-import { SETTINGS_FORM_ID, SettingsForm } from "./SettingsForm";
+import { useSettingsForm } from "../hooks/useSettingsForm";
+import { useServerConnectionSettings } from "../hooks/useServerConnectionSettings";
+import { SettingsForm } from "./SettingsForm";
 
-type SettingsFormState = ComponentProps<typeof SettingsForm>["settings"];
-
-function SettingsFormHarness({
-  onSubmit,
-}: {
-  onSubmit: (state: { apiId: string; apiHash: string; thumbIndex: number }) => void;
-}) {
-  const [apiId, setApiId] = useState("12345");
-  const [apiHash, setApiHash] = useState("");
-  const [thumbIndex, setThumbIndex] = useState(1);
-
-  const settings: SettingsFormState = {
-    status: {
-      telegramConfigured: true,
-      telegramConfigSource: "database",
-      databaseConfigured: true,
-      apiId: 12345,
-      apiHashMasked: "ab***cd",
-    },
-    mediaStatus: {
-      thumbIndex,
-      thumbQuality: thumbIndex === 2 ? "high" : thumbIndex === 0 ? "low" : "medium",
-    },
-    telegramAuthorized: true,
-    apiId,
-    apiHash,
-    thumbIndex,
-    loading: false,
-    saving: false,
-    dirty: apiId !== "12345" || apiHash.length > 0 || thumbIndex !== 1,
-    telegramDirty: apiId !== "12345" || apiHash.length > 0,
-    mediaDirty: thumbIndex !== 1,
-    error: null,
-    notice: null,
-    invalidItems: [],
-    statusSummary: { title: "当前没有失效项", tone: "valid" },
-    loadStatus: vi.fn(),
-    resetDraft: vi.fn(),
-    handleSave: (event: FormEvent) => {
-      event.preventDefault();
-      onSubmit({ apiId, apiHash, thumbIndex });
-    },
-    setApiId,
-    setApiHash,
-    setThumbIndex,
-  };
-
-  return <SettingsForm settings={settings} />;
+const apiMocks = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn() }));
+vi.mock("@/api/client", () => ({ api: { config: apiMocks } }));
+vi.mock("../hooks/useClientDevices", () => ({
+  useClientDevices: () => ({ devices: [], currentClientId: "test-browser", deletingId: null, loading: false, refreshing: false, error: null, refresh: vi.fn(), deleteDevice: vi.fn() }),
+}));
+const config: AppConfigStatus = {
+  telegram: { telegramConfigured: true, telegramConfigSource: "database", databaseConfigured: true, apiId: 12345, apiHashMasked: "ab***cd" },
+  media: { thumbIndex: 1, thumbQuality: "medium" },
+};
+function Harness() {
+  const settings = useSettingsForm({ telegramAuthorized: true });
+  const connection = useServerConnectionSettings();
+  return <SettingsForm settings={settings} connection={connection} />;
 }
-
-function mockClientDevicesFetch() {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockResolvedValue(
-      new Response(JSON.stringify([]), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    ),
-  );
+function renderSettings(section = "telegram") {
+  const Wrapper = createQueryWrapper();
+  render(<Wrapper><MemoryRouter initialEntries={[`/settings/${section}`]}><Routes>
+    <Route path="/settings" element={<Harness />} />
+    <Route path="/settings/:sectionId" element={<Harness />} />
+  </Routes></MemoryRouter></Wrapper>);
 }
+function category(name: string) { return within(screen.getByRole("navigation", { name: "设置分类" })).getByRole("button", { name }); }
+
+beforeEach(() => {
+  apiMocks.get.mockReset().mockResolvedValue(config);
+  apiMocks.update.mockReset().mockImplementation(async (data) => ({ ...config, ...data, telegram: { ...config.telegram, ...data.telegram }, media: { ...config.media, ...data.media } }));
+});
+afterEach(() => { cleanup(); window.localStorage.clear(); vi.restoreAllMocks(); });
 
 describe("SettingsForm", () => {
-  afterEach(() => {
-    cleanup();
-    window.localStorage.clear();
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
+  it("saves media independently while retaining invalid Telegram edits and field errors", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    const apiId = await screen.findByLabelText("API ID");
+    await user.clear(apiId);
+    await user.type(apiId, "invalid");
+    await user.click(screen.getByRole("button", { name: "保存", exact: true }));
+    expect(apiMocks.update).not.toHaveBeenCalled();
+    expect(apiId.getAttribute("aria-invalid")).toBe("true");
+    await user.click(category("媒体"));
+    await user.click(screen.getByRole("radio", { name: "清晰" }));
+    await user.click(screen.getByRole("button", { name: "保存", exact: true }));
+    await waitFor(() => expect(apiMocks.update).toHaveBeenCalledWith({ media: { thumbIndex: 2 } }));
+    await user.click(category("Telegram"));
+    expect((screen.getByLabelText("API ID") as HTMLInputElement).value).toBe("invalid");
+    expect(screen.getByLabelText("API ID").getAttribute("aria-invalid")).toBe("true");
   });
 
-  it("edits Telegram settings and thumb quality in one form", async () => {
+  it("discards only the selected category and preserves the other draft", async () => {
     const user = userEvent.setup();
-    const onSubmit = vi.fn();
-    const QueryWrapper = createQueryWrapper();
-    mockClientDevicesFetch();
-    render(<SettingsFormHarness onSubmit={onSubmit} />, {
-      wrapper: ({ children }: { children: ReactNode }) => (
-        <MemoryRouter initialEntries={["/settings/connection"]}>
-          <QueryWrapper>
-            <Routes>
-              <Route path="/settings/:sectionId" element={<>{children}</>} />
-            </Routes>
-          </QueryWrapper>
-        </MemoryRouter>
-      ),
-    });
+    renderSettings();
+    const apiId = await screen.findByLabelText("API ID");
+    await user.clear(apiId);
+    await user.type(apiId, "67890");
+    await user.click(category("媒体"));
+    await user.click(screen.getByRole("radio", { name: "清晰" }));
+    await user.click(category("Telegram"));
+    await user.click(screen.getByRole("button", { name: "放弃修改", exact: true }));
+    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "放弃修改", exact: true }));
+    await waitFor(() => expect((screen.getByLabelText("API ID") as HTMLInputElement).value).toBe("12345"));
+    await user.click(category("媒体"));
+    expect(screen.getByRole("radio", { name: "清晰" }).getAttribute("aria-checked")).toBe("true");
+    expect((screen.getByRole("button", { name: "保存", exact: true }) as HTMLButtonElement).disabled).toBe(false);
+  });
 
-    const serverUrlInput = screen.getByLabelText("后端地址") as HTMLInputElement;
-
-    await user.type(serverUrlInput, "https://example.com/api/");
-    await user.click(screen.getByRole("button", { name: /保存地址/ }));
+  it("does not persist an empty custom address, and saves the connection without submitting server settings", async () => {
+    const user = userEvent.setup();
+    renderSettings("connection");
+    await user.click(screen.getByRole("button", { name: "自定义地址", exact: true }));
+    await user.click(screen.getByRole("button", { name: "保存", exact: true }));
+    expect(window.localStorage.getItem(SERVER_CONFIG_STORAGE_KEY)).toBeNull();
+    expect(screen.getByLabelText("服务器地址").getAttribute("aria-invalid")).toBe("true");
+    await user.type(screen.getByLabelText("服务器地址"), "https://example.com/api/");
+    await user.click(screen.getByRole("button", { name: "保存", exact: true }));
     expect(window.localStorage.getItem(SERVER_CONFIG_STORAGE_KEY)).toBe("https://example.com");
-    expect(onSubmit).not.toHaveBeenCalled();
+    expect(apiMocks.update).not.toHaveBeenCalled();
+  });
 
-    await user.click(screen.getByRole("button", { name: /Telegram/ }));
-    const apiIdInput = screen.getByLabelText("API ID") as HTMLInputElement;
-    const apiHashInput = screen.getByLabelText("API Hash") as HTMLInputElement;
-
-    await user.clear(apiIdInput);
-    await user.type(apiIdInput, "67890");
-    await user.type(apiHashInput, "new-hash");
-
-    await user.click(screen.getByRole("button", { name: /媒体/ }));
-    await user.click(screen.getByRole("radio", { name: /清晰/ }));
-
-    expect(apiIdInput.value).toBe("67890");
-    expect(apiHashInput.value).toBe("new-hash");
-    expect(screen.getByRole("radio", { name: /清晰/ }).getAttribute("aria-pressed")).toBe("true");
-
-    fireEvent.submit(document.getElementById(SETTINGS_FORM_ID) as HTMLFormElement);
-
-    expect(onSubmit).toHaveBeenCalledWith({
-      apiId: "67890",
-      apiHash: "new-hash",
-      thumbIndex: 2,
-    });
+  it("protects other drafts before switching backends", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    const apiId = await screen.findByLabelText("API ID");
+    await user.clear(apiId);
+    await user.type(apiId, "67890");
+    await user.click(category("服务器连接"));
+    await user.click(screen.getByRole("button", { name: "自定义地址", exact: true }));
+    await user.type(screen.getByLabelText("服务器地址"), "https://example.com");
+    await user.click(screen.getByRole("button", { name: "保存", exact: true }));
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    expect(window.localStorage.getItem(SERVER_CONFIG_STORAGE_KEY)).toBeNull();
+    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "继续编辑" }));
+    await user.click(category("Telegram"));
+    expect((screen.getByLabelText("API ID") as HTMLInputElement).value).toBe("67890");
   });
 });

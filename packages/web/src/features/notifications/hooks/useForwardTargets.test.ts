@@ -71,6 +71,23 @@ describe("useForwardTargets", () => {
     expect(result.current.selectedTarget?.id).toBe(0);
   });
 
+  it("does not replace route-owned selection when list contents change", async () => {
+    const target = createTarget(1);
+    vi.spyOn(api.forwardTargets, "list").mockResolvedValue([target]);
+    const queryClient = createTestQueryClient();
+    const { result } = renderHook(() => useForwardTargets({ autoSelect: false }), {
+      wrapper: createQueryWrapper(queryClient),
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.selectedTargetId).toBeNull();
+
+    act(() => result.current.setSelectedTargetId("99"));
+    act(() => queryClient.setQueryData(queryKeys.forwardTargets.all, [createTarget(2), target]));
+    await waitFor(() => expect(result.current.targets[0]?.id).toBe(2));
+    expect(result.current.selectedTargetId).toBe("99");
+    expect(result.current.selectedTarget).toBeNull();
+  });
+
   it("updates target cache after create, update, and delete mutations", async () => {
     const target = createTarget(1);
     const created = createTarget(2, { name: "created" });

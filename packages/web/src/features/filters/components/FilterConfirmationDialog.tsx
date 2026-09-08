@@ -33,7 +33,7 @@ export function FilterConfirmationDialog({
         if (!open) onCancel();
       }}
     >
-      <AlertDialogContent size="sm">
+      <AlertDialogContent size="sm" className="rules-theme">
         <AlertDialogHeader>
           <AlertDialogTitle>
             {deleting ? `删除规则“${filterName}”？` : "放弃未保存的修改？"}
@@ -41,11 +41,11 @@ export function FilterConfirmationDialog({
           <AlertDialogDescription>
             {deleting
               ? "删除后无法恢复，这条规则也将立即停止监听。"
-              : "返回上一页后，当前页面中的修改将不会保留。"}
+              : "尚未保存的规则修改将不会保留。"}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogCancel>{deleting ? "取消" : "继续编辑"}</AlertDialogCancel>
           <AlertDialogAction
             variant={deleting ? "destructive" : "default"}
             onClick={onConfirm}

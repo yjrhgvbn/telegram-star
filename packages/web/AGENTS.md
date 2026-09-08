@@ -1,4 +1,4 @@
-# packages/web/CLAUDE.md
+# packages/web/AGENTS.md
 
 本文件仅约束 `packages/web` 范围内的 AI 开发行为。
 
@@ -13,11 +13,11 @@
 
 关键文件：
 
-- 应用入口: [packages/web/src/main.tsx](packages/web/src/main.tsx)
-- 根组件: [packages/web/src/App.tsx](packages/web/src/App.tsx)
-- API 客户端: [packages/web/src/shared/api](packages/web/src/shared/api)
-- 兼容聚合入口: [packages/web/src/api/client.ts](packages/web/src/api/client.ts)
-- 类型定义: [packages/web/src/types/index.ts](packages/web/src/types/index.ts)
+- 应用入口: [packages/web/src/main.tsx](src/main.tsx)
+- 根组件: [packages/web/src/App.tsx](src/App.tsx)
+- API 客户端: [packages/web/src/shared/api](src/shared/api)
+- 兼容聚合入口: [packages/web/src/api/client.ts](src/api/client.ts)
+- 类型定义: [packages/web/src/types/index.ts](src/types/index.ts)
 
 ## 2. 绝对约束
 
@@ -44,6 +44,7 @@
 - 新增状态（loading/error/empty）时，保持文案简洁并与现有页面一致。
 - 涉及列表性能时，优先优化渲染与请求频率，不要先做大改架构。
 - `src/index.css` 仅用于全局设计 token、基础元素样式和跨页面共享规则；页面、feature 或组件专属样式应放在对应源码附近（如 `Component.css`），并由组件显式引入。
+- 四个 Tab 的当前视觉、交互与业务语义统一记录在 [UI 基准与页面行为](../../docs/ui-design.md)。
 
 ## 5. 提交前最小验证
 
@@ -64,4 +65,4 @@ pnpm start
 
 - 本文件为 web 目录就近规则。
 - 与全局规则冲突时，以本文件为准。
-- 全局规则以仓库根目录 [AGENTS.md](../../AGENTS.md) 为准；本文件保留给旧 Agent 兼容。
+- 其余约束遵循仓库根目录 [AGENTS.md](../../AGENTS.md)。

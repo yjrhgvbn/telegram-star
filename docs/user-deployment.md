@@ -1,314 +1,128 @@
-# Telegram Star 部署文档
+# 部署文档
 
-本文档面向部署与运维，提供 Docker 部署、升级与回滚建议。
+## Docker Compose 部署
 
-## 0. GitHub Actions 自动部署（推荐）
+需要 Docker、`docker compose` 和仓库代码。镜像包含 Node.js 24、Web 产物、server 与 Apprise；桌面 / 手机客户端另行打包，连接同一后端。
 
-仓库已提供工作流：[.github/workflows/deploy.yml](.github/workflows/deploy.yml)。
-
-触发方式：
-
-- push 到 `main`
-- 在 GitHub Actions 页面手动执行 `workflow_dispatch`
-
-### 0.1 服务器准备
-
-在服务器上准备代码目录（示例路径 `/opt/telegram-star`）：
-
-```bash
-mkdir -p /opt/telegram-star
-cd /opt/telegram-star
-git clone <your-repo-url> .
-cp .env.example .env
-# 可选：编辑 .env 覆盖端口、数据库路径或预置 TELEGRAM_API_ID / TELEGRAM_API_HASH
-```
-
-确保服务器已安装：
-
-- Docker
-- Docker Compose（`docker compose` 子命令可用）
-
-### 0.2 GitHub Secrets 配置
-
-在仓库 `Settings -> Secrets and variables -> Actions` 中添加：
-
-- `SSH_HOST`：服务器 IP 或域名
-- `SSH_PORT`：SSH 端口（通常 `22`）
-- `SSH_USER`：SSH 用户
-- `SSH_PRIVATE_KEY`：用于登录服务器的私钥内容
-- `DEPLOY_PATH`：服务器上的项目目录（如 `/opt/telegram-star`）
-
-说明：
-
-- 建议为部署单独创建 SSH 密钥对
-- 将公钥写入服务器目标用户的 `~/.ssh/authorized_keys`
-- 私钥完整内容（含 `BEGIN/END`）放入 `SSH_PRIVATE_KEY`
-
-### 0.3 工作流执行内容
-
-工作流在服务器执行：
-
-```bash
-cd "$DEPLOY_PATH"
-git fetch --all --prune
-git checkout main
-git pull --ff-only origin main
-docker compose up -d --build
-docker compose ps
-```
-
-这会自动完成：
-
-- 拉取最新代码
-- 重建并重启容器
-- 容器启动时自动执行 Prisma `db:deploy`
-
-### 0.4 首次验证
-
-首次配置完成后，建议手动触发一次 Actions 并检查：
-
-- Actions 日志是否成功
-- 服务器上 `docker compose ps` 状态是否正常
-- 页面是否可访问（默认 `http://<server-ip>:3000`）
-
-## 1. 部署方式
-
-推荐使用 Docker Compose。
-
-核心特性：
-
-- 镜像内自动执行数据库迁移：`pnpm --filter @telegram-star/server db:deploy`
-- SQLite 与 Telegram 会话持久化在卷：`telegram-star-data`
-- 应用启动后对外暴露 3000 端口
-
-多端部署关系：
-
-- 后端和 Web/PWA 仍只部署一份，由 Docker 容器托管。
-- Tauri Desktop 和 Tauri Mobile 不内置后端，只保存用户填写或扫码得到的后端根地址。
-- 桌面壳、手机壳的发版与后端 Docker 发版独立；业务页面更新随后端 Web dist 更新，壳能力更新才需要重新打包客户端。
-
-## 2. 部署前准备
-
-1. 安装 Docker 与 Docker Compose
-2. 准备 `.env` 文件（可选但推荐保留默认运行参数）
-3. 启动后在 Web UI 填写 Telegram 凭证，或在 `.env` 中预先填写
-
-示例：
+在仓库目录执行：
 
 ```bash
 cp .env.example .env
-```
-
-关键变量：
-
-- `TELEGRAM_API_ID` / `TELEGRAM_API_HASH`：可选；仅在数据库未保存 Telegram 配置时作为兜底
-- `DATABASE_URL` / `DB_PATH`：保留默认即可，Docker 中指向 `/app/data/telegram-star.db`
-- `TELEGRAM_STAR_MEMORY_LIMIT`：容器内存硬上限，默认 `1536m`；异常时只重启容器，避免拖死宿主机
-- `NODE_MAX_OLD_SPACE_SIZE_MB`：Node.js V8 堆上限，默认 `768`；应低于容器内存上限
-- `LOG_LEVEL`：应用结构化日志等级，生产默认 `info`
-- `GRAMJS_LOG_LEVEL`：Telegram 底层库日志等级，默认 `warn`；临时诊断连接问题时可改为 `info`
-
-通知转发配置通过 Web UI 的「通知设置」页面管理，底层采用 Apprise，配置保存在 SQLite 数据库中。每个转发通道可独立设置标题/正文模板，并可使用简洁、详情、Markdown 三种内置格式预设。
-
-其他变量通常保持默认。
-
-生产宿主机建议额外配置 2–4 GiB Swap。Swap 不是内存泄漏的解决方案，但能在瞬时内存压力下为 SSH、Docker 和系统守护进程保留恢复窗口。
-
-## 3. 首次部署
-
-```bash
 docker compose up -d --build
-```
-
-检查状态：
-
-```bash
 docker compose ps
-docker compose logs -f telegram-star
-```
-
-访问地址：
-
-- http://localhost:3000
-
-如果桌面壳或手机壳连接远程后端，建议使用 HTTPS 域名作为 `serverUrl`。内网 HTTP 可用于局域网或 Tailscale 等可信网络，但不建议裸露到公网。
-
-## 4. 升级发布
-
-```bash
-git pull
-docker compose up -d --build
-```
-
-说明：
-
-- 容器启动命令会自动执行 `db:deploy`，应用新 migration。
-- 数据卷不删除时，历史消息与 session 会保留。
-
-## 5. 回滚建议
-
-推荐策略：
-
-1. 回滚代码/镜像版本
-2. 保留同一数据卷
-3. 重启服务并确认日志
-
-注意：
-
-- 如果新版本 migration 已执行，回滚前需确认 schema 向后兼容。
-- Prisma 默认不自动 down migration，生产回滚请提前演练。
-
-## 6. 数据与备份
-
-持久化位置：
-
-- 容器内：`/app/data`
-- Compose 卷：`telegram-star-data`
-
-备份建议：
-
-- 备份 SQLite 文件：`telegram-star.db`
-- 备份会话文件：`session.txt`
-- SQLite 中包含 Web UI 保存的 Telegram API 配置，请按敏感数据处理
-
-可在维护窗口执行卷级备份。
-
-### 6.1 日志保留与排查
-
-应用日志统一输出为单行 JSON，并由 Docker Compose 的 `local` 驱动保存。每个容器配置为 `20m × 10`，最多保留约 200 MB 原始日志，旧文件自动轮转和压缩。保留时间取决于请求量；按当前单机流量并降低心跳、缩略图成功日志后，通常可覆盖 30–60 天。
-
-注意：日志按容量而不是按天数保留；重新创建容器时，旧容器日志不会继续挂载到新容器。需要跨部署长期保存时，应接入集中式日志平台。
-
-常用命令：
-
-```bash
-# 持续查看 warn/error
-docker compose logs -f telegram-star | grep -E '"level":(40|50)|"level":"(warn|error)"'
-
-# 按数据库消息行 ID 排查，例如 /messages/12
-docker compose logs telegram-star | grep '"rowId":12'
-
-# 已知 Telegram 会话和消息 ID 时，按稳定关联键排查
-docker compose logs telegram-star | grep '"messageKey":"1308315775:17377"'
-
-# 查看回补任务和消息延迟
-docker compose logs telegram-star | grep -E 'telegram\.catch_up|"lagMs"'
-
-# 确认容器实际使用了轮转日志驱动
-docker inspect --format '{{.HostConfig.LogConfig.Type}} {{json .HostConfig.LogConfig.Config}}' telegram-star
-```
-
-消息入库事件 `telegram.message.saved` 包含 `messageKey`、`rowId`、`chatId`、`telegramMessageId`、`source`、`telegramDate`、`editDate` 和 `lagMs`。`lagMs` 超过 60 秒记录为 `warn`，超过 5 分钟记录为 `error`。日志不会记录消息正文、Apprise URL、Telegram Session、验证码或请求查询参数。
-
-## 7. 安全建议
-
-- 不要将 `.env` 提交到仓库
-- 使用强访问控制保护宿主机
-- 生产环境建议将 `CORS_ORIGIN` 设置为明确域名
-- 定期更新镜像基础版本与依赖
-
-### 7.1 多端访问与 CORS
-
-Web/PWA 直接访问后端同源页面时，不需要额外 CORS 配置。Tauri Desktop / Mobile 的本地壳会从本地 WebView origin 请求远程后端 `/api/health`、`/api/clients/register` 等接口，因此需要后端允许对应来源。
-
-推荐做法：
-
-- 个人内网或 Tailscale 部署可保留 `CORS_ORIGIN=*`，便于不同端连接。
-- 公网反向代理部署应优先通过 Cloudflare Access、Basic Auth 或私有网络限制访问，而不是只依赖 CORS。
-- 如果改成明确 CORS 白名单，需要把 Web 域名和 Tauri WebView origin 一并纳入测试。
-
-### 7.2 无应用层认证的访问边界
-
-当前应用按单用户自用工具设计，不内置应用层登录或单用户密码保护。因此部署后不应将无保护的后端直接暴露到不可信公网，否则消息、媒体、规则、通知配置、Telegram API 配置等接口都可能被访问。
-
-推荐至少采用一种网络层或反向代理层保护：
-
-| 方式 | 适用场景 | 说明 |
-| --- | --- | --- |
-| Tailscale / ZeroTier | 个人自用、跨设备访问 | 后端只暴露在私有网络内，推荐优先考虑 |
-| Cloudflare Tunnel + Access | 需要固定域名和公网访问 | 由 Cloudflare Access 负责访问控制 |
-| Nginx Basic Auth | 简单公网保护 | 成本低，但体验和安全能力有限 |
-| 局域网 / NAS 内网 | 仅家庭或办公室访问 | 不离开可信网络时最简单 |
-
-如果后续必须直接公网访问，应先重新评估并补充应用层认证，再开放服务。
-
-### 7.3 HTTPS 与缓存建议
-
-推荐响应头：
-
-```text
-/index.html
-  Cache-Control: no-cache
-
-/assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/api/*
-  Cache-Control: no-store
-
-/api/media/*/thumb
-  Cache-Control: private, max-age=86400
-```
-
-说明：
-
-- `index.html` 不强缓存，便于 Web/PWA/Tauri 远程业务页发现新版本。
-- Vite hash 资源可长期缓存，提升浏览器和 WebView 二次加载速度。
-- API 默认不缓存，避免消息、配置和 Telegram 状态泄露或过期。
-- 移动端扫码配置建议使用 HTTPS serverUrl；内网 HTTP 只用于可信网络。
-
-## 8. 多端发布建议
-
-后端 / Web / PWA：
-
-```bash
-git pull
-docker compose up -d --build
-```
-
-Tauri Desktop：
-
-```bash
-pnpm build:desktop
-pnpm tauri:build
-```
-
-Tauri Mobile：
-
-```bash
-pnpm build:mobile
-pnpm tauri:android:build
-pnpm tauri:ios:build
-```
-
-说明：
-
-- `pnpm build:mobile` 只验证手机壳前端产物，不需要 Android / iOS 原生工具链。
-- `pnpm tauri:android:*` 需要 Android Studio、SDK、NDK 与目标模拟器/真机。
-- `pnpm tauri:ios:*` 需要 macOS、Xcode 与签名配置。
-- 手机壳第一版预留 Push token 字段，但未接入 APNs / FCM，部署后不会产生推送服务依赖。
-
-## 9. 常见问题
-
-### 9.1 容器不断重启
-
-查看日志：
-
-```bash
 docker compose logs --tail=200 telegram-star
 ```
 
-优先检查 Telegram 凭证配置状态与数据库文件权限。
+默认访问 `http://<server-ip>:3000`，在页面填写 Telegram API ID / Hash 并登录，再配置监听规则与转发通道。
 
-### 9.2 迁移失败
+容器启动时先运行 `pnpm --filter @telegram-star/server db:deploy`，成功后由 Node 启动 server；迁移失败不会继续启动应用。首次部署应确认容器运行、日志没有迁移 / 启动错误，并检查 `/api/health` 与页面可访问。
 
-确认：
+## 配置与持久化
 
-- migration 文件存在于镜像内 `packages/server/prisma/migrations`
-- `DATABASE_URL` 与 `DB_PATH` 指向可写路径
+完整配置见 [docker-compose.yml](../docker-compose.yml)、[Dockerfile](../Dockerfile) 和 [.env.example](../.env.example)。当前 Compose 从 `.env` 读取：
 
-### 9.3 页面可访问但无消息
+| 变量 | 默认 / 用途 |
+| --- | --- |
+| `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | 可选；数据库没有 Telegram 凭证时兜底 |
+| `TELEGRAM_STAR_MEMORY_LIMIT` | `1536m`，容器内存上限 |
+| `NODE_MAX_OLD_SPACE_SIZE_MB` | `768`，Node V8 堆上限，应低于容器内存上限 |
+| `LOG_LEVEL` | `info`，应用日志 |
+| `GRAMJS_LOG_LEVEL` | `warn`，Telegram 库日志 |
 
-- 先在 UI 完成 Telegram API 配置与 Telegram 登录
-- 确认已创建筛选器
-- 检查后端日志中 Telegram 连接状态
+以下值由 Compose 固定，修改根目录 `.env` 不会覆盖，需修改 Compose 或使用覆盖文件：
+
+- 端口映射 `3000:3000`，容器监听 `0.0.0.0:3000`。
+- `DATABASE_URL=file:/app/data/telegram-star.db`、`DB_PATH=/app/data/telegram-star.db`。
+- `SESSION_PATH=/app/data/session.txt`、`CORS_ORIGIN=*`。
+
+数据库与 Telegram 会话保存在容器 `/app/data`，挂载 Compose 命名卷 `telegram-star-data`。Docker 实际卷名通常带 Compose 项目前缀。重建容器保留数据卷；`docker compose down -v` 会删除该卷，不用于普通升级。
+
+数据库还包含 Telegram API 凭证、规则与 Apprise 地址。`.env`、数据库、会话文件及其备份均按敏感配置保管。
+
+## 升级与发布验证
+
+升级前备份数据，再执行：
+
+```bash
+git pull --ff-only
+docker compose up -d --build
+docker compose ps
+docker compose logs --tail=200 telegram-star
+```
+
+发布前的代码检查为 `pnpm test`、`pnpm build`、`pnpm db:deploy`，详见 [开发文档](user-development.md#构建与验证)。发布后确认：
+
+- 容器持续运行，迁移成功，Web 与 `/api/health` 可访问。
+- Telegram 状态、消息列表、规则与转发配置可读取；涉及相关改动时验证对应操作。
+- 页面刷新 / PWA 更新后加载当前版本；使用客户端时确认能连接、设备已注册且最近活动时间更新。
+
+Web/PWA 业务页面随镜像更新。桌面 / 手机壳能力变更需要额外发布原生包；`pnpm build` 不包含原生打包，见 [原生客户端](user-development.md#原生客户端)。
+
+## 数据备份与恢复
+
+可在维护窗口停止服务，再复制完整数据目录，避免复制正在写入的 SQLite 文件：
+
+```bash
+mkdir -p backups
+backup_dir="backups/$(date +%Y%m%d-%H%M%S)"
+mkdir "$backup_dir"
+docker compose stop telegram-star
+docker compose cp telegram-star:/app/data/. "$backup_dir/"
+docker compose start telegram-star
+```
+
+备份至少应包含数据库及 `session.txt`（登录后生成）；完整目录复制也会保留可能存在的 SQLite WAL / SHM 文件。确认复制成功并将备份保存在数据卷之外。服务端缩略图使用内存缓存，无需单独备份。
+
+恢复步骤：
+
+1. 停止服务，保留当前数据备份，并选定与备份数据库兼容的代码 / 镜像版本。
+2. 将备份完整还原到容器挂载的 `/app/data`，使用空数据卷以免混入旧数据库或 WAL / SHM 文件；确认目录可写。
+3. 启动服务，检查 migration 日志、Telegram 状态以及消息、规则、转发配置。
+
+只回退代码 / 镜像前，必须确认已执行的 migration 向后兼容；Prisma 部署流程不会自动执行反向迁移。不兼容时恢复升级前数据库备份，备份之后新增的数据不会随之保留。
+
+## GitHub Actions 自动部署
+
+[deploy.yml](../.github/workflows/deploy.yml) 在推送 `main` 或手动触发时，通过 SSH 更新服务器上的 `main` 并执行 Compose 重建。
+
+服务器需预先安装 Git、Docker 和 Compose，在部署目录克隆仓库、准备 `.env`；SSH 用户需有仓库读取权限、目录写权限和 Docker 操作权限。该目录应保持干净，以便 `git pull --ff-only` 成功。
+
+仓库 Actions Secrets：
+
+| Secret | 内容 |
+| --- | --- |
+| `SSH_HOST` | 服务器地址 |
+| `SSH_PORT` | SSH 端口，例如 `22` |
+| `SSH_USER` | 部署用户 |
+| `SSH_PRIVATE_KEY` | 对应已授权公钥的私钥 |
+| `DEPLOY_PATH` | 服务器上的仓库绝对路径 |
+
+工作流依次运行 `git fetch --all --prune`、`git checkout main`、`git pull --ff-only origin main`、`docker compose up -d --build` 和 `docker compose ps`。它**不运行测试、不自动备份，也不等待应用健康检查**；代码验证、备份及发布后检查仍需完成。
+
+## 日志
+
+应用使用单行 JSON 日志。Compose 使用 Docker `local` 驱动，每个容器配置 `20m × 10`，按容量轮转并压缩，不能保证保留多少天。重建容器后旧容器日志不随数据卷保留；需要跨发布保留时另行收集日志。
+
+```bash
+docker compose logs -f telegram-star
+docker inspect --format '{{.HostConfig.LogConfig.Type}} {{json .HostConfig.LogConfig.Config}}' telegram-star
+```
+
+排查单条消息可搜索日志中的 `rowId` 或 `messageKey`（`chatId:telegramMessageId`）；检查监听延迟与回补时关注 `lagMs` 和 `telegram.catch_up` 事件。
+
+## 访问与缓存
+
+当前应用没有应用层账号或密码保护，Telegram 登录也不是访问控制。后端只应暴露在可信网络，或置于有认证的反向代理之后；CORS 不提供身份验证。
+
+Web/PWA 同源访问不需要额外 CORS。Tauri 本地壳会跨源调用后端健康检查及设备接口；限制 `CORS_ORIGIN` 时需实际验证 WebView 来源。当前实现接受 `*` 或一个来源字符串，不支持逗号分隔白名单。Compose 中该值固定为 `*`，如需更改应覆盖 Compose 环境配置。
+
+远程客户端建议使用 HTTPS 后端根地址；内网 HTTP 仅用于可信网络。使用带认证的代理时，需验证浏览器、PWA 和原生壳都能完成认证并访问 API。
+
+服务端已设置以下缓存策略，反向代理应保留：
+
+| 资源 | Cache-Control |
+| --- | --- |
+| HTML / 其他静态入口 | `no-cache` |
+| `/assets/*` | `public, max-age=31536000, immutable` |
+| API 默认 | `no-store` |
+| 媒体缩略图等例外 | 由接口显式设置私有缓存策略 |

@@ -89,10 +89,3 @@ export interface AuthStatus {
   apiId: number | null;
   apiHashMasked: string | null;
 }
-
-export type NotificationSource = "feishu";
-
-export interface NotificationSettings {
-  sources: NotificationSource[];
-  feishuWebhookUrl: string;
-}

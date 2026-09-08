@@ -10,7 +10,7 @@ import {
   type EditableForwardTarget,
 } from "../types";
 
-export function useForwardTargets() {
+export function useForwardTargets({ autoSelect = true }: { autoSelect?: boolean } = {}) {
   const queryClient = useQueryClient();
   const [draftTarget, setDraftTarget] = useState<EditableForwardTarget | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
@@ -72,6 +72,9 @@ export function useForwardTargets() {
   }, [queryClient]);
 
   useEffect(() => {
+    // Route-driven workspaces own selection, including missing target IDs.
+    // Do not compete with that selection after a draft or mutation.
+    if (!autoSelect) return;
     if (selectedTargetId === NEW_FORWARD_TARGET_ID && draftTarget) return;
     if (selectedTargetId && targets.some((target) => String(target.id) === selectedTargetId)) return;
     if (draftTarget) {
@@ -79,7 +82,7 @@ export function useForwardTargets() {
       return;
     }
     setSelectedTargetId(targets[0] ? String(targets[0].id) : null);
-  }, [draftTarget, selectedTargetId, targets]);
+  }, [autoSelect, draftTarget, selectedTargetId, targets]);
 
   const visibleTargets = useMemo(
     () => (draftTarget ? [draftTarget, ...targets] : targets),

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useState } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ForwardTarget } from "@/types";
@@ -34,6 +34,8 @@ function FilterFormHarness({
   onToggleGroupEffect = vi.fn(),
   conditions,
   onUpdateCondition = vi.fn(),
+  onRemoveCondition = vi.fn(),
+  onRemoveGroup = vi.fn(),
 }: {
   onAutoLocateChange: (value: boolean) => void;
   onToggleForwardTarget: (id: number) => void;
@@ -45,6 +47,8 @@ function FilterFormHarness({
     id: string,
     updater: (condition: DraftCondition) => DraftCondition,
   ) => void;
+  onRemoveCondition?: (id: string) => void;
+  onRemoveGroup?: (groupId: string) => void;
 }) {
   const [autoLocateUnreadNearRead, setAutoLocateUnreadNearRead] = useState(true);
 
@@ -82,10 +86,9 @@ function FilterFormHarness({
           input: "",
         },
       ]}
-      error=""
       onUpdateCondition={onUpdateCondition}
-      onRemoveCondition={vi.fn()}
-      onRemoveGroup={vi.fn()}
+      onRemoveCondition={onRemoveCondition}
+      onRemoveGroup={onRemoveGroup}
       onToggleGroupEffect={onToggleGroupEffect}
       onAppendValues={vi.fn()}
       onAddAlternative={onAddAlternative}
@@ -114,21 +117,23 @@ describe("FilterForm", () => {
       />,
     );
 
-    expect(screen.getByRole("region", { name: "命中条件" })).not.toBeNull();
-    expect(screen.getByText("发送通知")).not.toBeNull();
-    expect(screen.getByText("已选 1 个")).not.toBeNull();
-    expect(screen.queryByText("判断是否命中")).toBeNull();
-    expect(screen.queryByText("规则速览")).toBeNull();
-    expect(screen.queryByText("保存消息")).toBeNull();
+    expect(screen.getByRole("region", { name: "匹配条件" })).not.toBeNull();
+    const notificationSummary = screen.getByText("命中后通知").closest("summary")!;
+    expect(within(notificationSummary).getByText("值班群")).not.toBeNull();
+    expect(notificationSummary.closest("details")?.open).toBe(false);
+    expect(screen.getByText("打开消息时").closest("details")?.open).toBe(false);
 
-    await user.click(screen.getByRole("switch", { name: "打开时自动定位未读" }));
+    await user.click(screen.getByText("打开消息时"));
+    await user.click(screen.getByRole("switch", { name: /自动定位待完成/ }));
     expect(onAutoLocateChange).toHaveBeenCalledWith(false);
+    expect(screen.getByText("按浏览位置")).not.toBeNull();
 
-    await user.click(screen.getByRole("checkbox", { name: "备份通道 · 停用" }));
+    await user.click(notificationSummary);
+    await user.click(screen.getByRole("checkbox", { name: "备份通道" }));
     expect(onToggleForwardTarget).toHaveBeenCalledWith(2);
 
     await user.click(
-      screen.getByRole("button", { name: "添加必须条件" }),
+      screen.getByRole("button", { name: "添加条件组" }),
     );
     expect(onAddCondition).toHaveBeenCalledTimes(1);
   });
@@ -149,20 +154,17 @@ describe("FilterForm", () => {
     );
 
     expect(screen.getByRole("button", { name: "全部会话" })).not.toBeNull();
-    expect(screen.getByText("来自任一会话")).not.toBeNull();
-    expect(screen.getByText("未指定会话时，匹配全部会话")).not.toBeNull();
-    expect(screen.queryByRole("button", { name: "删除消息来源条件" })).toBeNull();
-    expect(screen.getByRole("button", { name: "删除消息内容条件组" })).not.toBeNull();
+    expect(within(screen.getByRole("region", { name: "消息来源" })).queryByRole("button", { name: "条件组操作" })).toBeNull();
     expect(screen.queryByRole("combobox", { name: /消息来源/ })).toBeNull();
 
     await user.click(
       screen.getByRole("combobox", { name: "消息内容匹配方式" }),
     );
     expect(
-      await screen.findByRole("option", { name: "关键词" }),
+      await screen.findByRole("option", { name: "关键词包含" }),
     ).not.toBeNull();
     expect(
-      await screen.findByRole("option", { name: "正则表达式" }),
+      await screen.findByRole("option", { name: "正则匹配" }),
     ).not.toBeNull();
     expect(
       await screen.findByRole("option", { name: "JavaScript" }),
@@ -172,7 +174,12 @@ describe("FilterForm", () => {
     await user.keyboard("{Escape}");
 
     await user.click(screen.getByRole("button", { name: "全部会话" }));
+    expect(screen.getByRole("dialog", { name: "选择会话" })).not.toBeNull();
     expect(screen.getByText("当前匹配全部会话")).not.toBeNull();
+    await user.type(screen.getByRole("searchbox", { name: "搜索会话" }), "动漫");
+    expect(screen.getByRole("button", { name: /^动漫抢先看\s*chat-1$/ })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /^VAM 国漫精品社区\s*chat-2$/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "在已加入会话的消息中查找“动漫”" })).not.toBeNull();
   });
 
   it("can clear selected chats back to the implicit all-chat scope", async () => {
@@ -229,7 +236,6 @@ describe("FilterForm", () => {
     expect(
       (screen.getByRole("textbox", { name: "JavaScript 代码" }) as HTMLTextAreaElement).value,
     ).toBe("return message.content.includes('红包');");
-    expect(screen.getByText(/可读取 message\.chatId 和 message\.content/)).not.toBeNull();
   });
 
   it("toggles the whole group effect from the left rail", async () => {
@@ -300,7 +306,7 @@ describe("FilterForm", () => {
     });
   });
 
-  it("renders alternatives inside one group with an explicit OR divider", async () => {
+  it("renders OR alternatives inside the same group and adds to that group", async () => {
     const user = userEvent.setup();
     const onAddAlternative = vi.fn();
 
@@ -336,19 +342,24 @@ describe("FilterForm", () => {
       />,
     );
 
-    expect(screen.getByText("或者")).not.toBeNull();
+    expect(screen.getByText("或")).not.toBeNull();
     expect(screen.getAllByRole("combobox", { name: "消息内容匹配方式" })).toHaveLength(2);
 
-    await user.click(screen.getByRole("button", { name: "备选条件" }));
+    await user.click(screen.getByRole("button", { name: "添加条件" }));
     expect(onAddAlternative).toHaveBeenCalledWith("content-group");
   });
 
-  it("keeps the alternative remove action beside the type selector on narrow screens", () => {
+  it("removes the selected alternative or the whole group through their own actions", async () => {
+    const user = userEvent.setup();
+    const onRemoveCondition = vi.fn();
+    const onRemoveGroup = vi.fn();
     render(
       <FilterFormHarness
         onAutoLocateChange={vi.fn()}
         onToggleForwardTarget={vi.fn()}
         onAddCondition={vi.fn()}
+        onRemoveCondition={onRemoveCondition}
+        onRemoveGroup={onRemoveGroup}
         conditions={[
           {
             id: "chat-condition",
@@ -378,11 +389,13 @@ describe("FilterForm", () => {
     const removeButtons = screen.getAllByRole("button", {
       name: /删除.*备选条件/,
     });
-    expect(removeButtons).toHaveLength(2);
-    for (const button of removeButtons) {
-      expect(button.className).toContain("col-start-2");
-      expect(button.className).toContain("sm:col-start-3");
-      expect(button.className).toContain("row-start-1");
-    }
+    expect(removeButtons).toHaveLength(1);
+    await user.click(removeButtons[0]);
+    expect(onRemoveCondition).toHaveBeenCalledWith("regex-condition");
+    expect(onRemoveGroup).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "条件组操作" }));
+    await user.click(await screen.findByRole("menuitem", { name: "删除条件组" }));
+    expect(onRemoveGroup).toHaveBeenCalledWith("content-group");
   });
 });

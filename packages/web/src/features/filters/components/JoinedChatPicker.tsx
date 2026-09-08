@@ -10,6 +10,7 @@ import { Check, ChevronDown, LoaderCircle, Search, X } from "lucide-react";
 import { api } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SearchInput } from "@/components/ui/search-input";
 import { selectableItemVariants } from "@/components/ui/selectable-item";
@@ -17,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { ChatDiscoveryResult, JoinedChat } from "@/types";
+import "./JoinedChatPicker.css";
 
 interface JoinedChatPickerProps {
   /** 可选择的会话。由页面统一请求，避免每个条件编辑器重复订阅查询。 */
@@ -118,6 +120,7 @@ export function JoinedChatPicker({
     createIdleDiscoveryState,
   );
   const discoveryAbortRef = useRef<AbortController | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const resolvedOpen = open ?? innerOpen;
   const normalizedQuery = searchInput.trim();
 
@@ -229,20 +232,6 @@ export function JoinedChatPicker({
     }
   };
 
-  // 支持 Esc 关闭弹框，并在组件卸载时取消仍在进行的远程搜索。
-  useEffect(() => {
-    if (!resolvedOpen) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        handleOpenChange(false);
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handleOpenChange, resolvedOpen]);
-
   useEffect(
     () => () => {
       discoveryAbortRef.current?.abort();
@@ -255,8 +244,8 @@ export function JoinedChatPicker({
     : normalizedQuery;
 
   return (
-    <div className="relative">
-      <button
+    <Dialog open={resolvedOpen} onOpenChange={handleOpenChange}>
+      <DialogTrigger
         type="button"
         aria-haspopup="dialog"
         aria-expanded={resolvedOpen}
@@ -265,13 +254,7 @@ export function JoinedChatPicker({
             ? `已选 ${selected.length} 个会话：${selectedTitles}`
             : label || "选择会话"
         }
-        className={cn(
-          "flex h-9 w-full min-w-0 flex-nowrap items-center gap-1 overflow-hidden rounded-lg border border-input bg-card px-1.5 py-1 text-left shadow-xs transition",
-          resolvedOpen
-            ? "border-ring ring-3 ring-ring/18"
-            : "hover:border-primary/38",
-        )}
-        onClick={() => handleOpenChange(!resolvedOpen)}
+        className="joined-chat-trigger"
       >
         {selectedItems.length === 0 ? (
           <span className="px-1.5 text-xs text-muted-foreground">
@@ -298,259 +281,244 @@ export function JoinedChatPicker({
             className={cn("size-3.5 transition", resolvedOpen && "rotate-180")}
           />
         </span>
-      </button>
+      </DialogTrigger>
 
-      {resolvedOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/18 p-4 backdrop-blur-[2px]"
-          onClick={() => handleOpenChange(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="joined-chat-picker-title"
-            className="flex h-[min(80vh,680px)] w-[min(92vw,580px)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_24px_70px_color-mix(in_oklab,var(--foreground)_16%,transparent)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
-              <div>
-                <div id="joined-chat-picker-title" className="text-base font-semibold">
-                  选择会话
+      <DialogContent className="joined-chat-picker" showCloseButton={false} initialFocus={searchRef}>
+        <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+          <div>
+            <DialogTitle>选择会话</DialogTitle>
+            <DialogDescription className="joined-chat-picker__description">
+              {selected.length > 0
+                ? `已选 ${selected.length} 个`
+                : "当前匹配全部会话"}
+            </DialogDescription>
+          </div>
+          <div className="flex items-center gap-1">
+            {selected.length > 0 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => onSelectionChange([])}
+              >
+                改为全部会话
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="关闭会话选择"
+              onClick={() => handleOpenChange(false)}
+            >
+              <X />
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 px-4 pb-3">
+          <SearchInput
+            ref={searchRef}
+            name="chat-search"
+            aria-label="搜索会话"
+            placeholder={searchPlaceholder}
+            value={searchInput}
+            onChange={(event) => handleSearchChange(event.target.value)}
+            onClear={() => handleSearchChange("")}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && normalizedQuery.length >= 2) {
+                event.preventDefault();
+                void handleDiscover();
+              }
+            }}
+            clearLabel="清空会话搜索"
+          />
+
+          {normalizedQuery.length >= 2 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full justify-start border-dashed text-xs"
+              disabled={discovery.status === "loading"}
+              onClick={() => void handleDiscover()}
+            >
+              {discovery.status === "loading" ? (
+                <LoaderCircle data-icon="inline-start" className="animate-spin" />
+              ) : (
+                <Search data-icon="inline-start" />
+              )}
+              {discovery.status === "loading"
+                ? `正在消息中查找“${compactQuery}”`
+                : discovery.status === "idle"
+                  ? `在已加入会话的消息中查找“${compactQuery}”`
+                  : `重新按消息内容查找“${compactQuery}”`}
+            </Button>
+          ) : normalizedQuery.length > 0 ? (
+            <p className="px-1 text-[11px] text-muted-foreground">
+              再输入 1 个字符，即可按消息内容发现会话
+            </p>
+          ) : null}
+        </div>
+
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="flex flex-col gap-3 px-3 pb-3">
+            <section aria-label={normalizedQuery ? "名称匹配" : "全部已加入会话"}>
+              {normalizedQuery ? (
+                <div className="flex items-center justify-between px-1 pb-1.5 text-[11px] font-medium text-muted-foreground">
+                  <span>名称匹配</span>
+                  {!loading ? <span>{sortedItems.length} 个会话</span> : null}
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {selected.length > 0
-                    ? `已选 ${selected.length} 个`
-                    : "当前匹配全部会话"}
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                {selected.length > 0 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => onSelectionChange([])}
-                  >
-                    改为全部会话
-                  </Button>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="关闭会话选择"
-                  onClick={() => handleOpenChange(false)}
-                >
-                  <X />
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 px-4 pb-3">
-              <SearchInput
-                name="chat-search"
-                aria-label="搜索会话"
-                placeholder={searchPlaceholder}
-                value={searchInput}
-                onChange={(event) => handleSearchChange(event.target.value)}
-                onClear={() => handleSearchChange("")}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && normalizedQuery.length >= 2) {
-                    event.preventDefault();
-                    void handleDiscover();
-                  }
-                }}
-                clearLabel="清空会话搜索"
-                autoFocus
-              />
-
-              {normalizedQuery.length >= 2 ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start border-dashed text-xs"
-                  disabled={discovery.status === "loading"}
-                  onClick={() => void handleDiscover()}
-                >
-                  {discovery.status === "loading" ? (
-                    <LoaderCircle data-icon="inline-start" className="animate-spin" />
-                  ) : (
-                    <Search data-icon="inline-start" />
-                  )}
-                  {discovery.status === "loading"
-                    ? `正在消息中查找“${compactQuery}”`
-                    : discovery.status === "idle"
-                      ? `在已加入会话的消息中查找“${compactQuery}”`
-                      : `重新按消息内容查找“${compactQuery}”`}
-                </Button>
-              ) : normalizedQuery.length > 0 ? (
-                <p className="px-1 text-[11px] text-muted-foreground">
-                  再输入 1 个字符，即可按消息内容发现会话
-                </p>
               ) : null}
-            </div>
 
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="flex flex-col gap-3 px-3 pb-3">
-                <section aria-label={normalizedQuery ? "名称匹配" : "全部已加入会话"}>
-                  {normalizedQuery ? (
-                    <div className="flex items-center justify-between px-1 pb-1.5 text-[11px] font-medium text-muted-foreground">
-                      <span>名称匹配</span>
-                      {!loading ? <span>{sortedItems.length} 个会话</span> : null}
-                    </div>
-                  ) : null}
+              {loading ? (
+                <ChatListSkeleton />
+              ) : sortedItems.length === 0 ? (
+                <p className="py-5 text-center text-xs text-muted-foreground">
+                  {normalizedQuery ? "没有名称匹配的会话" : emptyText}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {sortedItems.map((item) => {
+                    const isSelected = selectedSet.has(item.id);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        aria-pressed={isSelected}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm",
+                          selectableItemVariants({
+                            kind: "choice",
+                            selected: isSelected,
+                            surface: "flat",
+                          }),
+                        )}
+                        onClick={() => handleToggleItem(item.id)}
+                      >
+                        <span className="truncate">{item.title}</span>
+                        {isSelected ? (
+                          <span
+                            className="ml-3 grid size-6 shrink-0 place-items-center rounded-md border border-primary bg-primary text-primary-foreground"
+                            aria-hidden="true"
+                          >
+                            <Check className="size-3.5" strokeWidth={2.5} />
+                          </span>
+                        ) : (
+                          <span className="ml-3 shrink-0 text-xs text-muted-foreground">
+                            {item.id}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
 
-                  {loading ? (
+            {discovery.status !== "idle" ? (
+              <>
+                <Separator />
+                <section aria-label="根据消息内容发现">
+                  <div className="flex items-center justify-between px-1 pb-1.5 text-[11px] font-medium text-muted-foreground">
+                    <span>根据消息内容发现</span>
+                    {discovery.status === "success" ? (
+                      <span>本次 {discovery.data.length} 个会话</span>
+                    ) : null}
+                  </div>
+
+                  {discovery.status === "loading" ? (
                     <ChatListSkeleton />
-                  ) : sortedItems.length === 0 ? (
-                    <p className="py-5 text-center text-xs text-muted-foreground">
-                      {normalizedQuery ? "没有名称匹配的会话" : emptyText}
+                  ) : discovery.status === "error" ? (
+                    <p role="alert" className="px-3 py-5 text-center text-xs text-destructive">
+                      {discovery.error}
                     </p>
+                  ) : discovery.data.length === 0 ? (
+                    <div className="px-3 py-5 text-center">
+                      <p className="text-xs text-muted-foreground">
+                        没有从已加入会话的消息中发现相关会话
+                      </p>
+                      <p className="mt-1 text-[10px] text-muted-foreground/80">
+                        可以换一个更具体或更常见的词再试
+                      </p>
+                    </div>
                   ) : (
-                    <div className="flex flex-col gap-1">
-                      {sortedItems.map((item) => {
-                        const isSelected = selectedSet.has(item.id);
+                    <div className="flex flex-col gap-1.5">
+                      {discovery.data.map((result) => {
+                        const isSelected = selectedSet.has(result.chat.id);
                         return (
                           <button
-                            key={item.id}
+                            key={result.chat.id}
                             type="button"
                             aria-pressed={isSelected}
+                            aria-label={`${isSelected ? "取消选择" : "选择"}会话：${result.chat.title}`}
                             className={cn(
-                              "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm",
+                              "flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left",
                               selectableItemVariants({
                                 kind: "choice",
                                 selected: isSelected,
                                 surface: "flat",
                               }),
                             )}
-                            onClick={() => handleToggleItem(item.id)}
+                            onClick={() => handleToggleItem(result.chat.id)}
                           >
-                            <span className="truncate">{item.title}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span className="truncate text-sm font-medium">
+                                  {result.chat.title}
+                                </span>
+                                <Badge variant="outline" className="h-4 px-1.5 text-[9px]">
+                                  {result.chat.type === "channel" ? "频道" : "群组"}
+                                </Badge>
+                              </span>
+                              <span className="mt-1.5 flex flex-col gap-1">
+                                {result.matches.map((match) => (
+                                  <span
+                                    key={match.messageId}
+                                    className="line-clamp-2 text-[11px] leading-4 text-muted-foreground"
+                                  >
+                                    {highlightSnippet(match.snippet, discovery.query)}
+                                    <span className="ml-1 whitespace-nowrap text-[10px] text-muted-foreground/70">
+                                      · {formatDiscoveryDate(match.messageDate)}
+                                    </span>
+                                  </span>
+                                ))}
+                              </span>
+                            </span>
                             {isSelected ? (
                               <span
-                                className="ml-3 grid size-6 shrink-0 place-items-center rounded-md border border-primary bg-primary text-primary-foreground"
+                                className="grid size-6 shrink-0 place-items-center rounded-md border border-primary bg-primary text-primary-foreground"
                                 aria-hidden="true"
                               >
                                 <Check className="size-3.5" strokeWidth={2.5} />
                               </span>
-                            ) : (
-                              <span className="ml-3 shrink-0 text-xs text-muted-foreground">
-                                {item.id}
-                              </span>
-                            )}
+                            ) : null}
                           </button>
                         );
                       })}
+                      <p className="px-2 pt-1 text-[10px] text-muted-foreground/75">
+                        仅显示 Telegram 本次返回的相关会话，不代表完整统计
+                      </p>
                     </div>
                   )}
                 </section>
-
-                {discovery.status !== "idle" ? (
-                  <>
-                    <Separator />
-                    <section aria-label="根据消息内容发现">
-                      <div className="flex items-center justify-between px-1 pb-1.5 text-[11px] font-medium text-muted-foreground">
-                        <span>根据消息内容发现</span>
-                        {discovery.status === "success" ? (
-                          <span>本次 {discovery.data.length} 个会话</span>
-                        ) : null}
-                      </div>
-
-                      {discovery.status === "loading" ? (
-                        <ChatListSkeleton />
-                      ) : discovery.status === "error" ? (
-                        <p role="alert" className="px-3 py-5 text-center text-xs text-destructive">
-                          {discovery.error}
-                        </p>
-                      ) : discovery.data.length === 0 ? (
-                        <div className="px-3 py-5 text-center">
-                          <p className="text-xs text-muted-foreground">
-                            没有从已加入会话的消息中发现相关会话
-                          </p>
-                          <p className="mt-1 text-[10px] text-muted-foreground/80">
-                            可以换一个更具体或更常见的词再试
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col gap-1.5">
-                          {discovery.data.map((result) => {
-                            const isSelected = selectedSet.has(result.chat.id);
-                            return (
-                              <button
-                                key={result.chat.id}
-                                type="button"
-                                aria-pressed={isSelected}
-                                aria-label={`${isSelected ? "取消选择" : "选择"}会话：${result.chat.title}`}
-                                className={cn(
-                                  "flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left",
-                                  selectableItemVariants({
-                                    kind: "choice",
-                                    selected: isSelected,
-                                    surface: "flat",
-                                  }),
-                                )}
-                                onClick={() => handleToggleItem(result.chat.id)}
-                              >
-                                <span className="min-w-0 flex-1">
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    <span className="truncate text-sm font-medium">
-                                      {result.chat.title}
-                                    </span>
-                                    <Badge variant="outline" className="h-4 px-1.5 text-[9px]">
-                                      {result.chat.type === "channel" ? "频道" : "群组"}
-                                    </Badge>
-                                  </span>
-                                  <span className="mt-1.5 flex flex-col gap-1">
-                                    {result.matches.map((match) => (
-                                      <span
-                                        key={match.messageId}
-                                        className="line-clamp-2 text-[11px] leading-4 text-muted-foreground"
-                                      >
-                                        {highlightSnippet(match.snippet, discovery.query)}
-                                        <span className="ml-1 whitespace-nowrap text-[10px] text-muted-foreground/70">
-                                          · {formatDiscoveryDate(match.messageDate)}
-                                        </span>
-                                      </span>
-                                    ))}
-                                  </span>
-                                </span>
-                                {isSelected ? (
-                                  <span
-                                    className="grid size-6 shrink-0 place-items-center rounded-md border border-primary bg-primary text-primary-foreground"
-                                    aria-hidden="true"
-                                  >
-                                    <Check className="size-3.5" strokeWidth={2.5} />
-                                  </span>
-                                ) : null}
-                              </button>
-                            );
-                          })}
-                          <p className="px-2 pt-1 text-[10px] text-muted-foreground/75">
-                            仅显示 Telegram 本次返回的相关会话，不代表完整统计
-                          </p>
-                        </div>
-                      )}
-                    </section>
-                  </>
-                ) : null}
-              </div>
-            </ScrollArea>
-
-            <Separator />
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <span className="text-xs text-muted-foreground">
-                {selected.length > 0
-                  ? `已选 ${selected.length} 个会话`
-                  : "未选择时匹配全部会话"}
-              </span>
-              <Button type="button" size="sm" onClick={() => handleOpenChange(false)}>
-                完成
-              </Button>
-            </div>
+              </>
+            ) : null}
           </div>
+        </ScrollArea>
+
+        <Separator />
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <span className="text-xs text-muted-foreground">
+            {selected.length > 0
+              ? `已选 ${selected.length} 个会话`
+              : "未选择时匹配全部会话"}
+          </span>
+          <Button type="button" size="sm" onClick={() => handleOpenChange(false)}>
+            完成
+          </Button>
         </div>
-      ) : null}
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,0 +1,9 @@
+.message-content-link {
+  color: var(--message-action);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 65%, transparent);
+  text-underline-offset: 3px;
+}
+.message-content-link:hover { color: var(--message-action-hover); text-decoration-color: currentColor; }
+.message-content-link:focus-visible { outline: 2px solid var(--message-action); outline-offset: 2px; border-radius: 2px; }

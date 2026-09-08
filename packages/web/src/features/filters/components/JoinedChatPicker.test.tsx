@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "@/api/client";
@@ -87,5 +87,29 @@ describe("JoinedChatPicker", () => {
     await user.click(screen.getByRole("button", { name: "全部会话" }));
 
     expect((screen.getByRole("searchbox", { name: "搜索会话" }) as HTMLInputElement).value).toBe("");
+  });
+
+  it("focuses search on open and restores the trigger after Escape", async () => {
+    const user = userEvent.setup();
+    const onSelectionChange = vi.fn();
+    render(
+      <JoinedChatPicker
+        items={[{ id: "chat-1", title: "动漫抢先看" }]}
+        loading={false}
+        label="全部会话"
+        selected={[]}
+        onSelectionChange={onSelectionChange}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "全部会话" });
+    await user.click(trigger);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("searchbox", { name: "搜索会话" })));
+    await user.click(screen.getByRole("button", { name: /动漫抢先看/ }));
+    expect(onSelectionChange).toHaveBeenCalledWith(["chat-1"]);
+    expect(screen.getByRole("dialog", { name: "选择会话" })).not.toBeNull();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.activeElement).toBe(trigger);
   });
 });

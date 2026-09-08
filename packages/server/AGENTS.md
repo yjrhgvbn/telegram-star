@@ -1,4 +1,4 @@
-# packages/server/CLAUDE.md
+# packages/server/AGENTS.md
 
 本文件仅约束 `packages/server` 范围内的 AI 开发行为。
 
@@ -11,11 +11,11 @@
 
 关键文件：
 
-- schema: [packages/server/prisma/schema.prisma](packages/server/prisma/schema.prisma)
-- migrate deploy 脚本: [packages/server/src/db/deploy.ts](packages/server/src/db/deploy.ts)
-- Prisma 初始化: [packages/server/src/db/index.ts](packages/server/src/db/index.ts)
-- 服务入口: [packages/server/src/index.ts](packages/server/src/index.ts)
-- 打包配置: [packages/server/tsdown.config.ts](packages/server/tsdown.config.ts)
+- schema: [prisma/schema.prisma](prisma/schema.prisma)
+- migrate deploy 脚本: [src/db/deploy.ts](src/db/deploy.ts)
+- Prisma 初始化: [src/db/index.ts](src/db/index.ts)
+- 服务入口: [src/index.ts](src/index.ts)
+- 打包配置: [tsdown.config.ts](tsdown.config.ts)
 
 ## 2. 绝对约束
 
@@ -26,7 +26,7 @@
 
 ## 3. 数据库改动流程（强制）
 
-1. 修改 [packages/server/prisma/schema.prisma](packages/server/prisma/schema.prisma)
+1. 修改 [prisma/schema.prisma](prisma/schema.prisma)
 2. 执行：
 
 ```bash
@@ -70,7 +70,7 @@ pnpm start
 
 当 server 构建产物路径、启动命令、Prisma 目录发生变化时，必须同步检查：
 
-- [Dockerfile](Dockerfile)
-- [docker-compose.yml](docker-compose.yml)
+- [Dockerfile](../../Dockerfile)
+- [docker-compose.yml](../../docker-compose.yml)
 
 并验证容器启动链路仍然是“先 deploy，再 start”。

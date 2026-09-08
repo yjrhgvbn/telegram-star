@@ -1,85 +1,36 @@
 import {
   type FormEvent,
-  type ReactNode,
+  type KeyboardEvent,
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import {
-  closestCenter,
-  type CollisionDetection,
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  pointerWithin,
-  type DragEndEvent,
-  type DragOverEvent,
-  type DragStartEvent,
-  type UniqueIdentifier,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { Field } from "@base-ui/react/field";
+import { Popover } from "@base-ui/react/popover";
 import { ALL_MESSAGES_SYSTEM_KEY } from "@telegram-star/shared/contracts/filters";
-import {
-  Check,
-  ChevronDown,
-  ChevronRight,
-  GripVertical,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  Settings2,
-  Trash2,
-  X,
-} from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, MoreHorizontal, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ListSearchToolbar } from "@/components/ListSearchToolbar";
 import { Input } from "@/components/ui/input";
 import { SearchInput } from "@/components/ui/search-input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import type {
-  Filter,
-  FilterGroup,
-  FilterGroupOrderInput,
-} from "@/types";
-import { AllMessagesPanelItem, FilterPanelItem } from "./FilterPanelItem";
+import type { Filter, FilterGroup, FilterGroupOrderInput } from "@/types";
+import { FilterPanelItem } from "./FilterPanelItem";
 import {
-  type FilterPanelSortableData,
-  getFilterSortableId,
   getGroupSectionId,
-  reorderSortableIds,
-  SortableFilterRow,
-  SortableGroupSection,
+  reorderIds,
   UNGROUPED_SECTION_ID,
-} from "./FilterPanelSortable";
+} from "../utils/filterPanelOrder";
+import "./FilterPanel.css";
 
-type ViewMode = "manual" | "focused" | "recent";
 type MaybePromise = Promise<unknown> | unknown;
+type MenuKind = "create" | "group" | "filter";
+type MenuView = "menu" | "rename" | "move" | "delete";
 
 interface Props {
   filters: Filter[];
@@ -88,96 +39,27 @@ interface Props {
   loading: boolean;
   selectedFilterId: string;
   onSelectFilter: (id: string) => void;
-  onSetFocused: (id: number, isFocused: boolean) => MaybePromise;
   onCreateGroup: (name: string) => MaybePromise;
   onRenameGroup: (id: number, name: string) => MaybePromise;
+  onEditFilter?: (id: number) => void;
   onDeleteGroup: (id: number) => MaybePromise;
   onReorderGroups: (input: FilterGroupOrderInput) => MaybePromise;
-  onSetPlacement: (
-    id: number,
-    manualGroupId: number | null,
-    targetIndex?: number,
-  ) => MaybePromise;
+  onSetPlacement: (id: number, manualGroupId: number | null, targetIndex?: number) => MaybePromise;
 }
 
-interface SectionHeaderProps {
-  title: string;
-  count: number;
-  collapsed: boolean;
-  onToggle: () => void;
-  leadingAction?: ReactNode;
-  actions?: ReactNode;
+interface MenuState {
+  kind: MenuKind;
+  id: number | null;
+  name: string;
+  view: MenuView;
+  triggerId: string;
 }
 
-interface ManualSection {
-  group: FilterGroup;
-  allFilters: Filter[];
-  visibleFilters: Filter[];
-}
-
-const MAX_RECENT_FILTERS = 5;
-
-function getSectionIdForGroup(manualGroupId: number | null): string {
-  return manualGroupId === null
-    ? UNGROUPED_SECTION_ID
-    : getGroupSectionId(manualGroupId);
-}
-
-function getGroupIdFromSectionId(sectionId: UniqueIdentifier): number | null {
+function getGroupIdFromSectionId(sectionId: string): number | null {
   if (sectionId === UNGROUPED_SECTION_ID) return null;
   const groupId = Number(String(sectionId).replace("section:group:", ""));
   return Number.isFinite(groupId) ? groupId : null;
 }
-
-function getSortableData(value: Record<string, unknown> | undefined): FilterPanelSortableData | null {
-  if (value?.type === "section") {
-    return {
-      type: "section",
-      manualGroupId: typeof value.manualGroupId === "number" ? value.manualGroupId : null,
-    };
-  }
-  if (value?.type === "filter" && typeof value.filterId === "number") {
-    return {
-      type: "filter",
-      filterId: value.filterId,
-      manualGroupId: typeof value.manualGroupId === "number" ? value.manualGroupId : null,
-    };
-  }
-  return null;
-}
-
-const filterPanelCollisionDetection: CollisionDetection = (args) => {
-  const activeData = getSortableData(args.active.data.current);
-  if (!activeData) return closestCenter(args);
-
-  const dataById = new Map(
-    args.droppableContainers.map((container) => [
-      container.id,
-      getSortableData(container.data.current),
-    ]),
-  );
-  const pointerCollisions = pointerWithin(args);
-  const preferredPointerCollisions = pointerCollisions.filter((collision) => {
-    const data = dataById.get(collision.id);
-    return activeData.type === "section"
-      ? data?.type === "section"
-      : data?.type === "filter";
-  });
-  if (preferredPointerCollisions.length > 0) return preferredPointerCollisions;
-
-  const sectionPointerCollisions = pointerCollisions.filter(
-    (collision) => dataById.get(collision.id)?.type === "section",
-  );
-  if (sectionPointerCollisions.length > 0) return sectionPointerCollisions;
-
-  return closestCenter({
-    ...args,
-    droppableContainers: args.droppableContainers.filter((container) => {
-      const data = dataById.get(container.id);
-      return activeData.type === "section" ? data?.type === "section" : data !== null;
-    }),
-  });
-};
 
 function sortManualFilters(filters: Filter[]): Filter[] {
   return [...filters].sort(
@@ -202,47 +84,37 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error && error.message ? error.message : "操作失败，请重试";
 }
 
-function SectionHeader({
-  title,
-  count,
-  collapsed,
-  onToggle,
-  leadingAction,
-  actions,
-}: SectionHeaderProps) {
-  const Chevron = collapsed ? ChevronRight : ChevronDown;
-
-  return (
-    <div className="flex min-h-11 items-center border-l-[3px] border-primary lg:min-h-9">
-      {leadingAction}
-      <button
-        type="button"
-        className={cn(
-          "flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left lg:min-h-9",
-          leadingAction
-            ? "py-0 pr-3 pl-0.5 lg:pr-2.5 lg:pl-0"
-            : "px-3 lg:px-2.5",
-        )}
-        aria-expanded={!collapsed}
-        aria-label={`${collapsed ? "展开" : "收起"}分组 ${title}`}
-        onClick={onToggle}
-      >
-        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-          {title}
-        </h3>
-        <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
-        <Chevron className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </button>
-      {actions}
-    </div>
-  );
+function menuTriggerId(kind: MenuKind, id: number | null): string {
+  return `message-filter-${kind}-${id ?? "new"}`;
 }
 
-function EmptyState({ children }: { children: ReactNode }) {
+function MenuTrigger({ kind, id, name, disabled }: {
+  kind: MenuKind;
+  id: number | null;
+  name: string;
+  disabled: boolean;
+}) {
   return (
-    <div className="rounded-xl border border-dashed border-border bg-card px-3 py-5 text-center shadow-sm lg:rounded-lg lg:bg-transparent lg:shadow-none">
-      <p className="text-sm leading-5 text-muted-foreground">{children}</p>
-    </div>
+    <Popover.Trigger
+      id={menuTriggerId(kind, id)}
+      data-panel-kind={kind}
+      data-panel-id={id ?? undefined}
+      data-panel-name={name}
+      data-panel-focus={kind === "create" ? "create" : undefined}
+      disabled={disabled}
+      render={(
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className={kind === "create" ? undefined : "message-filter-menu-trigger"}
+          aria-label={kind === "create" ? "新建目录" : `${kind === "group" ? "目录" : "消息组"} ${name}的操作`}
+          title={kind === "create" ? "新建目录" : "更多操作"}
+        />
+      )}
+    >
+      {kind === "create" ? <Plus /> : <MoreHorizontal />}
+    </Popover.Trigger>
   );
 }
 
@@ -253,40 +125,31 @@ export function FilterPanel({
   loading,
   selectedFilterId,
   onSelectFilter,
-  onSetFocused,
   onCreateGroup,
   onRenameGroup,
+  onEditFilter,
   onDeleteGroup,
   onReorderGroups,
   onSetPlacement,
 }: Props) {
-  const [viewMode, setViewMode] = useState<ViewMode>("manual");
+  const panelRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const restoreFocusRef = useRef(true);
+  const lastTriggerRef = useRef<string | null>(null);
+  const pendingRef = useRef(false);
+  const reorderFocusRef = useRef<"up" | "down" | null>(null);
   const [query, setQuery] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [pendingFocusIds, setPendingFocusIds] = useState<ReadonlySet<number>>(
-    () => new Set(),
-  );
-  const [pendingPlacementIds, setPendingPlacementIds] = useState<ReadonlySet<number>>(
-    () => new Set(),
-  );
-  const [movingFilterId, setMovingFilterId] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set());
+  const [menu, setMenu] = useState<MenuState | null>(null);
+  const [nameDraft, setNameDraft] = useState("");
   const [moveQuery, setMoveQuery] = useState("");
-  const [dropTargetSectionId, setDropTargetSectionId] = useState<UniqueIdentifier | null>(null);
-  const [expandedGroupId, setExpandedGroupId] = useState<number | null>(null);
-  const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
-  const [groupName, setGroupName] = useState("");
-  const [creatingGroup, setCreatingGroup] = useState(false);
-  const [managing, setManaging] = useState(false);
-  const [collapsedSectionKeys, setCollapsedSectionKeys] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const [deleteGroupTarget, setDeleteGroupTarget] = useState<FilterGroup | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const sortingSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const [announcement, setAnnouncement] = useState("");
+  const [focusTarget, setFocusTarget] = useState<string | null>(null);
+  const [bottomPadding, setBottomPadding] = useState(12);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 60_000);
@@ -294,495 +157,252 @@ export function FilterPanel({
   }, []);
 
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const sortingEnabled = managing
-    && viewMode === "manual"
-    && !normalizedQuery
-    && !actionPending;
   const sortedGroups = useMemo(
-    () => [...filterGroups].sort(
-      (left, right) => left.sortOrder - right.sortOrder || left.id - right.id,
-    ),
+    () => [...filterGroups].sort((left, right) => left.sortOrder - right.sortOrder || left.id - right.id),
     [filterGroups],
   );
-  const allSectionIds = useMemo(() => {
-    const sectionIds = sortedGroups.map((group) => getGroupSectionId(group.id));
-    sectionIds.splice(
-      Math.min(Math.max(ungroupedPosition, 0), sectionIds.length),
-      0,
-      UNGROUPED_SECTION_ID,
-    );
-    return sectionIds;
-  }, [sortedGroups, ungroupedPosition]);
-  const knownGroupIds = useMemo(
-    () => new Set(sortedGroups.map((group) => group.id)),
-    [sortedGroups],
-  );
+  const knownGroupIds = useMemo(() => new Set(sortedGroups.map((group) => group.id)), [sortedGroups]);
+  const filtersById = useMemo(() => new Map(filters.map((filter) => [filter.id, filter])), [filters]);
   const manualFiltersByGroup = useMemo(() => {
     const grouped = new Map<number | null, Filter[]>([[null, []]]);
     for (const group of sortedGroups) grouped.set(group.id, []);
     for (const filter of filters) {
-      const groupId = filter.manualGroupId !== null && knownGroupIds.has(filter.manualGroupId)
-        ? filter.manualGroupId
-        : null;
+      const groupId = filter.manualGroupId !== null && knownGroupIds.has(filter.manualGroupId) ? filter.manualGroupId : null;
       grouped.get(groupId)?.push(filter);
     }
-    for (const [groupId, items] of grouped) {
-      grouped.set(groupId, sortManualFilters(items));
-    }
+    for (const [groupId, items] of grouped) grouped.set(groupId, sortManualFilters(items));
     return grouped;
   }, [filters, knownGroupIds, sortedGroups]);
-
-  const manualSections = useMemo<ManualSection[]>(() => {
-    return sortedGroups.flatMap((group) => {
-      const allFilters = manualFiltersByGroup.get(group.id) ?? [];
-      const groupMatches = group.name.toLocaleLowerCase().includes(normalizedQuery);
-      const visibleFilters = groupMatches
-        ? allFilters
-        : allFilters.filter((filter) => matchesFilter(filter, normalizedQuery));
-      if (normalizedQuery && !groupMatches && visibleFilters.length === 0) return [];
-      return [{ group, allFilters, visibleFilters }];
+  const allSectionIds = useMemo(() => {
+    const ids = sortedGroups.map((group) => getGroupSectionId(group.id));
+    // The persisted layout stores one position for independent entries. Keep
+    // that contract while removing the artificial ungrouped directory in UI.
+    ids.splice(Math.min(Math.max(ungroupedPosition, 0), ids.length), 0, UNGROUPED_SECTION_ID);
+    return ids;
+  }, [sortedGroups, ungroupedPosition]);
+  const orderedSections = useMemo(() => {
+    const groupsById = new Map(sortedGroups.map((group) => [group.id, group]));
+    return allSectionIds.flatMap((sectionId) => {
+      const groupId = getGroupIdFromSectionId(sectionId);
+      const group = groupId === null ? null : groupsById.get(groupId);
+      const items = manualFiltersByGroup.get(groupId) ?? [];
+      const groupMatches = group?.name.toLocaleLowerCase().includes(normalizedQuery);
+      const visibleItems = groupMatches ? items : items.filter((filter) => matchesFilter(filter, normalizedQuery));
+      if (groupId === null && visibleItems.length === 0) return [];
+      if (normalizedQuery && !groupMatches && visibleItems.length === 0) return [];
+      return [{ sectionId, group, groupId, visibleItems }];
     });
-  }, [manualFiltersByGroup, normalizedQuery, sortedGroups]);
-  const manualSectionById = useMemo(
-    () => new Map(manualSections.map((section) => [section.group.id, section])),
-    [manualSections],
-  );
-
-  const ungroupedFilters = useMemo(
-    () => manualFiltersByGroup.get(null) ?? [],
-    [manualFiltersByGroup],
-  );
-  const ungroupedMatches = "未分组".includes(normalizedQuery);
-  const visibleUngroupedFilters = useMemo(
-    () => ungroupedMatches
-      ? ungroupedFilters
-      : ungroupedFilters.filter((filter) => matchesFilter(filter, normalizedQuery)),
-    [normalizedQuery, ungroupedFilters, ungroupedMatches],
-  );
-  const visibleSectionIds = useMemo(
-    () => allSectionIds.filter((sectionId) => {
-      if (sectionId === UNGROUPED_SECTION_ID) {
-        return !normalizedQuery || ungroupedMatches || visibleUngroupedFilters.length > 0;
-      }
-      const groupId = Number(String(sectionId).replace("section:group:", ""));
-      return manualSectionById.has(groupId);
-    }),
-    [
-      allSectionIds,
-      manualSectionById,
-      normalizedQuery,
-      ungroupedMatches,
-      visibleUngroupedFilters.length,
-    ],
-  );
+  }, [allSectionIds, manualFiltersByGroup, normalizedQuery, sortedGroups]);
   const latestMessageAt = useMemo(() => {
-    let latestValue: string | null = null;
+    let latest: string | null = null;
     let latestTimestamp = Number.NEGATIVE_INFINITY;
-
     for (const filter of filters) {
       const timestamp = filter.latestMessageAt ? Date.parse(filter.latestMessageAt) : Number.NaN;
       if (Number.isFinite(timestamp) && timestamp > latestTimestamp) {
         latestTimestamp = timestamp;
-        latestValue = filter.latestMessageAt;
+        latest = filter.latestMessageAt;
       }
     }
-
-    return latestValue;
+    return latest;
   }, [filters]);
 
-  const flatViewFilters = useMemo(() => {
-    const visible = filters.filter(
-      (filter) => filter.systemKey === null && matchesFilter(filter, normalizedQuery),
-    );
-    if (viewMode === "recent") {
-      return visible
-        .filter((filter) => filter.lastEngagedAt !== null)
-        .sort(
-          (left, right) =>
-            Date.parse(right.lastEngagedAt ?? "") - Date.parse(left.lastEngagedAt ?? ""),
-        )
-        .slice(0, MAX_RECENT_FILTERS);
-    }
-    if (viewMode !== "focused") return [];
+  const targetFilter = menu?.kind === "filter" && menu.id !== null ? filtersById.get(menu.id) : undefined;
+  const targetGroupId = targetFilter?.manualGroupId !== null && targetFilter?.manualGroupId !== undefined && knownGroupIds.has(targetFilter.manualGroupId)
+    ? targetFilter.manualGroupId : null;
+  const targetItems = manualFiltersByGroup.get(targetGroupId) ?? [];
+  const reorderableSections = allSectionIds.filter((id) => id !== UNGROUPED_SECTION_ID || (manualFiltersByGroup.get(null)?.length ?? 0) > 0);
+  const targetOrder = menu?.kind === "filter"
+    ? targetItems.map((filter) => filter.id)
+    : reorderableSections;
+  const targetOrderId = menu?.kind === "filter" ? menu.id : menu?.id === null || menu?.id === undefined ? null : getGroupSectionId(menu.id);
+  const targetIndex = targetOrder.findIndex((id) => id === targetOrderId);
+  const moveOptions = [{ id: null, name: "独立显示" }, ...sortedGroups]
+    .filter((group) => group.name.toLocaleLowerCase().includes(moveQuery.trim().toLocaleLowerCase()));
+  const isNameForm = menu?.kind === "create" || (menu?.kind === "group" && menu.view === "rename");
+  const menuTitle = menu?.kind === "create" ? "新建目录"
+    : menu?.view === "rename" ? "重命名目录"
+    : menu?.view === "move" ? "移动到目录"
+    : menu?.view === "delete" ? "删除目录"
+    : menu?.name ?? "消息组操作";
 
-    const groupOrder = new Map<number | null, number>();
-    for (const [index, sectionId] of allSectionIds.entries()) {
-      groupOrder.set(
-        sectionId === UNGROUPED_SECTION_ID
-          ? null
-          : Number(String(sectionId).replace("section:group:", "")),
-        index,
-      );
-    }
-    return visible
-      .filter((filter) => filter.isFocused)
-      .sort((left, right) => {
-        const leftGroup = groupOrder.get(left.manualGroupId) ?? allSectionIds.length;
-        const rightGroup = groupOrder.get(right.manualGroupId) ?? allSectionIds.length;
-        return leftGroup - rightGroup ||
-          left.manualSortOrder - right.manualSortOrder ||
-          left.id - right.id;
-      });
-  }, [allSectionIds, filters, normalizedQuery, viewMode]);
-
-  const movingFilter = useMemo(
-    () => filters.find((filter) => filter.id === movingFilterId) ?? null,
-    [filters, movingFilterId],
-  );
-  const movingFilterGroupId = movingFilter?.manualGroupId !== null
-    && movingFilter?.manualGroupId !== undefined
-    && knownGroupIds.has(movingFilter.manualGroupId)
-    ? movingFilter.manualGroupId
-    : null;
-  const movingFilterPending = movingFilter !== null && pendingPlacementIds.has(movingFilter.id);
-  const moveGroupOptions = useMemo(() => {
-    const groupById = new Map(sortedGroups.map((group) => [group.id, group]));
-    const normalizedMoveQuery = moveQuery.trim().toLocaleLowerCase();
-    return allSectionIds.flatMap((sectionId) => {
-      const option = sectionId === UNGROUPED_SECTION_ID
-        ? { id: null, name: "未分组" }
-        : (() => {
-            const groupId = Number(String(sectionId).replace("section:group:", ""));
-            const group = groupById.get(groupId);
-            return group ? { id: group.id, name: group.name } : null;
-          })();
-      if (!option || (normalizedMoveQuery && !option.name.toLocaleLowerCase().includes(normalizedMoveQuery))) {
-        return [];
-      }
-      return [option];
-    });
-  }, [allSectionIds, moveQuery, sortedGroups]);
-
-  const isSectionCollapsed = useCallback(
-    (key: string) => !normalizedQuery && collapsedSectionKeys.has(key),
-    [collapsedSectionKeys, normalizedQuery],
-  );
-
-  const toggleSection = useCallback((key: string) => {
-    setCollapsedSectionKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const focusElement = useCallback((key: string | null) => {
+    const target = key ? panelRef.current?.querySelector<HTMLElement>(`[data-panel-focus="${key}"]`) : null;
+    return target ?? panelRef.current?.querySelector<HTMLInputElement>("input[type=search]") ?? null;
   }, []);
 
-  const finishManaging = useCallback(() => {
-    setManaging(false);
-    setMovingFilterId(null);
+  useEffect(() => {
+    if (!focusTarget) return;
+    const target = focusElement(focusTarget);
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView?.({ block: "nearest" });
+    setFocusTarget(null);
+  }, [focusTarget, filters, filterGroups, focusElement]);
+
+  useEffect(() => {
+    if (!isNameForm) return;
+    nameInputRef.current?.focus();
+    nameInputRef.current?.select();
+  }, [isNameForm, menu?.triggerId]);
+
+  const menuOpen = menu !== null;
+  useEffect(() => {
+    if (actionPending || !menuOpen || !reorderFocusRef.current) return;
+    // Run after the new order is committed so an offscreen row becomes visible
+    // before Base UI positions the same popup against its stable trigger.
+    if (menu?.id !== null && menu?.id !== undefined) focusElement(`${menu.kind}-${menu.id}`)?.scrollIntoView?.({ block: "nearest" });
+    const preferred = popupRef.current?.querySelector<HTMLButtonElement>(`[data-panel-reorder="${reorderFocusRef.current}"]:not(:disabled)`);
+    const available = preferred ?? popupRef.current?.querySelector<HTMLButtonElement>("[data-panel-reorder]:not(:disabled)");
+    // Keep keyboard focus inside the open popup. At the first/last position,
+    // choose the remaining direction instead of focusing a disabled button.
+    (available ?? popupRef.current)?.focus({ preventScroll: true });
+    reorderFocusRef.current = null;
+  }, [actionPending, menuOpen, menu?.kind, menu?.id, targetIndex, focusElement]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const update = () => {
+      const panelBottom = panelRef.current?.getBoundingClientRect().bottom ?? window.innerHeight;
+      const visibleBottom = window.visualViewport
+        ? window.visualViewport.offsetTop + window.visualViewport.height
+        : window.innerHeight;
+      // The page ends above the mobile tab bar; using its actual edge includes
+      // device safe-area insets and avoids covering navigation with a popup.
+      setBottomPadding(Math.max(12, visibleBottom - Math.min(visibleBottom, panelBottom) + 8));
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
+    };
+  }, [menuOpen]);
+
+  function handleOpenChange(open: boolean, details: Popover.Root.ChangeEventDetails) {
+    if (!open) {
+      reorderFocusRef.current = null;
+      restoreFocusRef.current = details.reason !== "outside-press" && details.reason !== "focus-out";
+      setMenu(null);
+      setActionError(null);
+      return;
+    }
+    const trigger = details.trigger as HTMLElement | undefined;
+    const kind = trigger?.dataset.panelKind as MenuKind | undefined;
+    if (!trigger || !kind) return;
+    const id = kind === "create" ? null : Number(trigger.dataset.panelId);
+    if (id !== null && !Number.isFinite(id)) return;
+    restoreFocusRef.current = true;
+    reorderFocusRef.current = null;
+    lastTriggerRef.current = trigger.id;
+    setMenu({ kind, id, name: trigger.dataset.panelName ?? "", view: "menu", triggerId: trigger.id });
+    setNameDraft("");
     setMoveQuery("");
-    setDropTargetSectionId(null);
-    setExpandedGroupId(null);
-    setEditingGroupId(null);
-    setCreatingGroup(false);
-    setGroupName("");
     setActionError(null);
-  }, []);
+  }
 
-  const handleSetFocused = useCallback(
-    async (id: number, isFocused: boolean) => {
-      setPendingFocusIds((current) => new Set(current).add(id));
-      setActionError(null);
-      try {
-        await onSetFocused(id, isFocused);
-      } catch (error) {
-        setActionError(getErrorMessage(error));
-      } finally {
-        setPendingFocusIds((current) => {
-          const next = new Set(current);
-          next.delete(id);
-          return next;
-        });
-      }
-    },
-    [onSetFocused],
-  );
-
-  const handleSetPlacement = useCallback(
-    async (id: number, manualGroupId: number | null, targetIndex?: number) => {
-      setPendingPlacementIds((current) => new Set(current).add(id));
-      setActionError(null);
-      try {
-        await onSetPlacement(id, manualGroupId, targetIndex);
-        setMovingFilterId(null);
-        setMoveQuery("");
-      } catch (error) {
-        setActionError(getErrorMessage(error));
-      } finally {
-        setPendingPlacementIds((current) => {
-          const next = new Set(current);
-          next.delete(id);
-          return next;
-        });
-      }
-    },
-    [onSetPlacement],
-  );
-
-  const handleFilterDragEnd = useCallback(
-    async (
-      event: DragEndEvent,
-      activeData: Extract<FilterPanelSortableData, { type: "filter" }>,
-    ) => {
-      if (!event.over) return;
-      const overData = getSortableData(event.over.data.current);
-      if (!overData) return;
-
-      const targetGroupId = overData.manualGroupId;
-      const targetFilters = manualFiltersByGroup.get(targetGroupId) ?? [];
-      let targetIndex = targetFilters.length;
-
-      if (overData.type === "filter") {
-        const overIndex = targetFilters.findIndex((filter) => filter.id === overData.filterId);
-        if (overIndex < 0) return;
-        targetIndex = overIndex;
-
-        // 跨分组时根据指针落在目标行的上半区或下半区决定前插/后插。
-        const translated = event.active.rect.current.translated;
-        if (
-          activeData.manualGroupId !== targetGroupId &&
-          translated &&
-          translated.top + translated.height / 2 > event.over.rect.top + event.over.rect.height / 2
-        ) {
-          targetIndex += 1;
-        }
-      }
-
-      const sourceFilters = manualFiltersByGroup.get(activeData.manualGroupId) ?? [];
-      const sourceIndex = sourceFilters.findIndex((filter) => filter.id === activeData.filterId);
-      if (activeData.manualGroupId === targetGroupId && sourceIndex === targetIndex) return;
-
-      await handleSetPlacement(activeData.filterId, targetGroupId, targetIndex);
-    },
-    [handleSetPlacement, manualFiltersByGroup],
-  );
-
-  const handleCreateGroup = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const name = groupName.trim();
-      if (!name) return;
-      setActionPending(true);
-      setActionError(null);
-      try {
-        await onCreateGroup(name);
-        setGroupName("");
-        setCreatingGroup(false);
-      } catch (error) {
-        setActionError(getErrorMessage(error));
-      } finally {
-        setActionPending(false);
-      }
-    },
-    [groupName, onCreateGroup],
-  );
-
-  const startRenamingGroup = useCallback((group: FilterGroup) => {
-    setCreatingGroup(false);
-    setEditingGroupId(group.id);
-    setGroupName(group.name);
-    setExpandedGroupId(null);
-    setActionError(null);
-  }, []);
-
-  const handleRenameGroup = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const name = groupName.trim();
-      if (editingGroupId === null || !name) return;
-      setActionPending(true);
-      setActionError(null);
-      try {
-        await onRenameGroup(editingGroupId, name);
-        setEditingGroupId(null);
-        setGroupName("");
-      } catch (error) {
-        setActionError(getErrorMessage(error));
-      } finally {
-        setActionPending(false);
-      }
-    },
-    [editingGroupId, groupName, onRenameGroup],
-  );
-
-  const handleGroupDragEnd = useCallback(
-    async (event: DragEndEvent, overSectionId: UniqueIdentifier) => {
-      if (!event.over) return;
-      const nextSectionIds = reorderSortableIds(allSectionIds, event.active.id, overSectionId);
-      if (!nextSectionIds) return;
-      const nextIds = nextSectionIds.flatMap((sectionId) => {
-        if (sectionId === UNGROUPED_SECTION_ID) return [];
-        const groupId = getGroupIdFromSectionId(sectionId);
-        return groupId === null ? [] : [groupId];
-      });
-      const nextUngroupedPosition = nextSectionIds.indexOf(UNGROUPED_SECTION_ID);
-      setActionPending(true);
-      setActionError(null);
-      try {
-        await onReorderGroups({
-          ids: nextIds,
-          ungroupedPosition: nextUngroupedPosition,
-        });
-      } catch (error) {
-        setActionError(getErrorMessage(error));
-      } finally {
-        setActionPending(false);
-      }
-    },
-    [allSectionIds, onReorderGroups],
-  );
-
-  const handleDragStart = useCallback((_event: DragStartEvent) => {
-    setDropTargetSectionId(null);
-  }, []);
-
-  const handleDragOver = useCallback((event: DragOverEvent) => {
-    const activeData = getSortableData(event.active.data.current);
-    const overData = event.over ? getSortableData(event.over.data.current) : null;
-    if (activeData?.type !== "filter" || !event.over || !overData) {
-      setDropTargetSectionId(null);
-      return;
-    }
-    setDropTargetSectionId(
-      overData.type === "section"
-        ? event.over.id
-        : getSectionIdForGroup(overData.manualGroupId),
-    );
-  }, []);
-
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    setDropTargetSectionId(null);
-    const activeData = getSortableData(event.active.data.current);
-    const overData = event.over ? getSortableData(event.over.data.current) : null;
-    if (!activeData || !event.over || !overData) return;
-
-    if (activeData.type === "section") {
-      const overSectionId = overData.type === "section"
-        ? event.over.id
-        : getSectionIdForGroup(overData.manualGroupId);
-      void handleGroupDragEnd(event, overSectionId);
-      return;
-    }
-    void handleFilterDragEnd(event, activeData);
-  }, [handleFilterDragEnd, handleGroupDragEnd]);
-
-  const handleDeleteGroup = useCallback(async () => {
-    if (!deleteGroupTarget) return;
+  async function runAction(
+    task: () => MaybePromise,
+    successMessage: string,
+    target: string | null,
+    onSuccess?: (result: unknown) => void,
+    keepMenuOpen = false,
+  ) {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
     setActionPending(true);
     setActionError(null);
     try {
-      await onDeleteGroup(deleteGroupTarget.id);
-      setDeleteGroupTarget(null);
-      setExpandedGroupId(null);
+      const result = await task();
+      if (!keepMenuOpen) {
+        restoreFocusRef.current = false;
+        setMenu(null);
+        if (target) setFocusTarget(target);
+      }
+      setAnnouncement(successMessage);
+      onSuccess?.(result);
     } catch (error) {
       setActionError(getErrorMessage(error));
     } finally {
+      pendingRef.current = false;
       setActionPending(false);
     }
-  }, [deleteGroupTarget, onDeleteGroup]);
+  }
 
-  const handleToggleOrganize = useCallback((id: number) => {
-    setMovingFilterId(id);
-    setMoveQuery("");
+  function saveName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!menu || menu.kind === "filter") return;
+    const name = nameDraft.trim();
+    const duplicate = filterGroups.some((item) => item.id !== menu.id && item.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+    if (!name || duplicate) {
+      setActionError(!name ? "请输入名称" : "目录名称已存在");
+      nameInputRef.current?.focus();
+      return;
+    }
+    if (menu.kind === "create") {
+      void runAction(() => onCreateGroup(name), "目录已创建", null, (result) => {
+        setQuery("");
+        const id = typeof result === "object" && result !== null && "id" in result ? result.id : undefined;
+        setFocusTarget(typeof id === "number" ? `group-${id}` : "create");
+      });
+    } else if (menu.id !== null) {
+      const id = menu.id;
+      void runAction(() => onRenameGroup(id, name), "名称已保存", `group-${id}`);
+    }
+  }
+
+  function moveFilter(id: number, groupId: number | null, index?: number, keepMenuOpen = false) {
+    void runAction(() => onSetPlacement(id, groupId, index), "消息组位置已更新", `filter-${id}`, () => {
+      if (groupId !== null) setCollapsed((current) => { const next = new Set(current); next.delete(groupId); return next; });
+    }, keepMenuOpen);
+  }
+
+  function reorderSections(nextIds: string[], target: string | null, keepMenuOpen = false) {
+    const ids = nextIds.flatMap((sectionId) => {
+      const id = getGroupIdFromSectionId(sectionId);
+      return id === null ? [] : [id];
+    });
+    void runAction(() => onReorderGroups({ ids, ungroupedPosition: nextIds.indexOf(UNGROUPED_SECTION_ID) }), "目录顺序已更新", target, undefined, keepMenuOpen);
+  }
+
+  function reorderFromMenu(offset: number) {
+    if (pendingRef.current || !menu || menu.id === null || targetIndex < 0 || !targetOrder[targetIndex + offset]) return;
+    reorderFocusRef.current = offset < 0 ? "up" : "down";
+    popupRef.current?.focus({ preventScroll: true });
+    if (menu.kind === "filter") moveFilter(menu.id, targetGroupId, targetIndex + offset, true);
+    else {
+      const next = reorderIds(allSectionIds, getGroupSectionId(menu.id), reorderableSections[targetIndex + offset]);
+      if (next) reorderSections(next, `group-${menu.id}`, true);
+    }
+  }
+
+  function handleMenuKeys(event: KeyboardEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).matches("input") || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("[data-panel-menu-item]:not(:disabled)")];
+    if (buttons.length === 0) return;
+    event.preventDefault();
+    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+    buttons[next].focus();
+  }
+
+  function renameTarget() {
+    if (menu?.kind !== "group") return;
+    setNameDraft(menu.name);
     setActionError(null);
-  }, []);
+    setMenu({ ...menu, view: "rename" });
+  }
 
-  const renderFilterItems = useCallback(
-    (items: Filter[], preferEngagement: boolean) => items.map((filter) => (
-      <FilterPanelItem
-        key={filter.id}
-        filter={filter}
-        selectedFilterId={selectedFilterId}
-        nowMs={nowMs}
-        preferEngagement={preferEngagement}
-        managing={false}
-        focusPending={pendingFocusIds.has(filter.id)}
-        placementPending={pendingPlacementIds.has(filter.id)}
-        organizing={false}
-        onSelectFilter={onSelectFilter}
-        onSetFocused={handleSetFocused}
-        onToggleOrganize={handleToggleOrganize}
-      />
-    )),
-    [
-      handleSetFocused,
-      handleToggleOrganize,
-      nowMs,
-      onSelectFilter,
-      pendingFocusIds,
-      pendingPlacementIds,
-      selectedFilterId,
-    ],
-  );
-
-  const renderManualItems = useCallback(
-    (items: Filter[], manualGroupId: number | null) => {
-      const currentIds = items.map((filter) => getFilterSortableId(filter.id));
-      return (
-        <SortableContext items={currentIds} strategy={verticalListSortingStrategy}>
-          {items.map((filter) => (
-            <SortableFilterRow
-              key={filter.id}
-              id={getFilterSortableId(filter.id)}
-              filterId={filter.id}
-              label={filter.name}
-              manualGroupId={manualGroupId}
-              disabled={!sortingEnabled || pendingPlacementIds.has(filter.id)}
-            >
-              {(dragHandle) => filter.systemKey === ALL_MESSAGES_SYSTEM_KEY ? (
-                <AllMessagesPanelItem
-                  latestMessageAt={latestMessageAt}
-                  managing={managing}
-                  nowMs={nowMs}
-                  organizing={movingFilterId === filter.id}
-                  placementPending={pendingPlacementIds.has(filter.id)}
-                  selected={selectedFilterId === ""}
-                  dragHandle={dragHandle}
-                  onMove={() => handleToggleOrganize(filter.id)}
-                  onSelect={() => onSelectFilter("")}
-                />
-              ) : (
-                <FilterPanelItem
-                  filter={filter}
-                  selectedFilterId={selectedFilterId}
-                  nowMs={nowMs}
-                  preferEngagement={false}
-                  managing={managing}
-                  focusPending={pendingFocusIds.has(filter.id)}
-                  placementPending={pendingPlacementIds.has(filter.id)}
-                  organizing={movingFilterId === filter.id}
-                  dragHandle={dragHandle}
-                  onSelectFilter={onSelectFilter}
-                  onSetFocused={handleSetFocused}
-                  onToggleOrganize={handleToggleOrganize}
-                />
-              )}
-            </SortableFilterRow>
-          ))}
-        </SortableContext>
-      );
-    },
-    [
-      handleSetFocused,
-      handleToggleOrganize,
-      latestMessageAt,
-      managing,
-      movingFilterId,
-      nowMs,
-      onSelectFilter,
-      pendingFocusIds,
-      pendingPlacementIds,
-      selectedFilterId,
-      sortingEnabled,
-    ],
-  );
+  function closeAfterNavigation(id: number) {
+    restoreFocusRef.current = false;
+    setMenu(null);
+    onEditFilter?.(id);
+  }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-card">
-      <div className="flex shrink-0 flex-col gap-2 border-b border-border px-3 pt-3 pb-2 lg:p-3">
-        <div className="flex items-center gap-2">
+    <Popover.Root open={menuOpen} triggerId={menu?.triggerId ?? null} onOpenChange={handleOpenChange}>
+      <div ref={panelRef} className="message-filter-panel">
+        <ListSearchToolbar>
           <SearchInput
-            containerClassName="min-w-0 flex-1"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onClear={() => setQuery("")}
@@ -790,427 +410,149 @@ export function FilterPanel({
             aria-label="搜索消息组"
             clearLabel="清空消息组搜索"
           />
-          <Button
-            type="button"
-            variant={managing ? "secondary" : "outline"}
-            size="icon-lg"
-            aria-label={managing ? "完成整理" : "配置分组列表"}
-            aria-expanded={managing}
-            title={managing ? "完成整理" : "配置分组列表"}
-            onClick={() => {
-              if (managing) {
-                finishManaging();
-                return;
-              }
-              setViewMode("manual");
-              setQuery("");
-              setManaging(true);
-              setMovingFilterId(null);
-              setMoveQuery("");
-              setExpandedGroupId(null);
-              setEditingGroupId(null);
-              setCreatingGroup(false);
-              setGroupName("");
-              setActionError(null);
-            }}
-          >
-            {managing ? <Check /> : <Settings2 />}
-          </Button>
-        </div>
-
-        {managing ? (
-          <div
-            className="flex h-9 items-center justify-between gap-2 rounded-lg bg-muted px-2.5 py-1"
-            aria-live="polite"
-          >
-            <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
-              <GripVertical className="size-3.5 shrink-0" aria-hidden="true" />
-              {normalizedQuery
-                ? "整理我的分组：清空搜索后可拖拽"
-                : "整理我的分组：拖拽排序或移动消息组"}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="shrink-0"
-              disabled={creatingGroup || actionPending}
-              onClick={() => {
-                setCreatingGroup(true);
-                setEditingGroupId(null);
-                setGroupName("");
-                setActionError(null);
-              }}
-            >
-              <Plus data-icon="inline-start" />
-              新建分组
-            </Button>
-          </div>
-        ) : (
-          <Tabs
-            value={viewMode}
-            className="w-full"
-            onValueChange={(value) => {
-              setViewMode(value as ViewMode);
-              setMovingFilterId(null);
-              setMoveQuery("");
-              setExpandedGroupId(null);
-              setEditingGroupId(null);
-              setCreatingGroup(false);
-              setActionError(null);
-            }}
-          >
-            <TabsList variant="line" className="grid h-9! w-full grid-cols-3 rounded-none p-0">
-              <TabsTrigger value="manual">我的分组</TabsTrigger>
-              <TabsTrigger value="focused">重点关注</TabsTrigger>
-              <TabsTrigger value="recent">最近跟进</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        )}
-      </div>
-
-      <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-scrollbar]]:hidden">
-        <div className="flex flex-col gap-2 pb-2 pt-2">
-          {actionError ? (
-            <p role="alert" className="m-2 rounded-lg bg-destructive/10 px-2.5 py-2 text-xs text-destructive">
-              {actionError}
-            </p>
-          ) : null}
-
-          {loading ? (
-            <div className="flex flex-col gap-2 p-2">
-              <Skeleton className="h-10 rounded-lg" />
-              <Skeleton className="h-10 rounded-lg" />
-              <Skeleton className="h-10 rounded-lg" />
-            </div>
-          ) : viewMode === "manual" ? (
-            <>
-              {creatingGroup ? (
-                <form className="flex items-center gap-1.5 px-3 py-2 lg:px-2.5" onSubmit={handleCreateGroup}>
-                  <Input
-                    autoFocus
-                    value={groupName}
-                    maxLength={60}
-                    placeholder="例如：本季在追"
-                    aria-label="新分组名称"
-                    disabled={actionPending}
-                    onChange={(event) => setGroupName(event.target.value)}
-                  />
-                  <Button
-                    type="submit"
-                    size="icon-sm"
-                    aria-label="保存新分组"
-                    disabled={actionPending || !groupName.trim()}
-                  >
-                    <Check />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="取消新建分组"
-                    disabled={actionPending}
-                    onClick={() => {
-                      setCreatingGroup(false);
-                      setGroupName("");
-                    }}
-                  >
-                    <X />
-                  </Button>
-                </form>
-              ) : null}
-
-              <DndContext
-                sensors={sortingSensors}
-                collisionDetection={filterPanelCollisionDetection}
-                onDragStart={handleDragStart}
-                onDragOver={handleDragOver}
-                onDragCancel={() => setDropTargetSectionId(null)}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={visibleSectionIds}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {visibleSectionIds.map((sectionId) => {
-                    if (sectionId === UNGROUPED_SECTION_ID) {
-                      const collapsed = isSectionCollapsed("ungrouped");
-                      return (
-                        <SortableGroupSection
-                          key={UNGROUPED_SECTION_ID}
-                          id={UNGROUPED_SECTION_ID}
-                          label="未分组"
-                          manualGroupId={null}
-                          disabled={!sortingEnabled}
-                          dropActive={dropTargetSectionId === UNGROUPED_SECTION_ID}
-                        >
-                          {(dragHandle) => (
-                            <>
-                              <SectionHeader
-                                title="未分组"
-                                count={normalizedQuery
-                                  ? visibleUngroupedFilters.length
-                                  : ungroupedFilters.length}
-                                collapsed={collapsed}
-                                onToggle={() => toggleSection("ungrouped")}
-                                leadingAction={managing ? dragHandle : null}
-                              />
-                              {!collapsed ? (
-                                visibleUngroupedFilters.length > 0 ? (
-                                  renderManualItems(visibleUngroupedFilters, null)
-                                ) : (
-                                  <p className="px-6 py-2 text-xs text-muted-foreground">暂无消息组</p>
-                                )
-                              ) : null}
-                            </>
-                          )}
-                        </SortableGroupSection>
-                      );
-                    }
-
-                    const groupId = getGroupIdFromSectionId(sectionId);
-                    if (groupId === null) return null;
-                    const section = manualSectionById.get(groupId);
-                    if (!section) return null;
-                    const { group, allFilters, visibleFilters } = section;
-                    const editing = editingGroupId === group.id;
-                    const expanded = expandedGroupId === group.id;
-                    const sectionKey = `group:${group.id}`;
-                    const collapsed = isSectionCollapsed(sectionKey);
-                    return (
-                      <SortableGroupSection
-                        key={group.id}
-                        id={sectionId}
-                        label={group.name}
-                        manualGroupId={group.id}
-                        disabled={!sortingEnabled}
-                        dropActive={dropTargetSectionId === sectionId}
-                      >
-                        {(dragHandle) => (
-                          <>
-                            {editing ? (
-                              <form className="flex min-h-11 items-center gap-1.5 px-3 py-1.5 lg:min-h-9 lg:px-2.5" onSubmit={handleRenameGroup}>
-                                <Input
-                                  autoFocus
-                                  value={groupName}
-                                  maxLength={60}
-                                  aria-label={`重命名分组 ${group.name}`}
-                                  disabled={actionPending}
-                                  onChange={(event) => setGroupName(event.target.value)}
-                                />
-                                <Button
-                                  type="submit"
-                                  size="icon-sm"
-                                  aria-label={`保存分组名称 ${group.name}`}
-                                  disabled={actionPending || !groupName.trim()}
-                                >
-                                  <Check />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  aria-label={`取消重命名分组 ${group.name}`}
-                                  disabled={actionPending}
-                                  onClick={() => {
-                                    setEditingGroupId(null);
-                                    setGroupName("");
-                                  }}
-                                >
-                                  <X />
-                                </Button>
-                              </form>
-                            ) : (
-                              <SectionHeader
-                                title={group.name}
-                                count={normalizedQuery ? visibleFilters.length : allFilters.length}
-                                collapsed={collapsed}
-                                onToggle={() => toggleSection(sectionKey)}
-                                leadingAction={managing ? dragHandle : null}
-                                actions={managing ? (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    className="mr-1.5 size-9 lg:size-7"
-                                    aria-label={`管理分组 ${group.name}`}
-                                    aria-expanded={expanded}
-                                    onClick={() => setExpandedGroupId(expanded ? null : group.id)}
-                                  >
-                                    <MoreHorizontal />
-                                  </Button>
-                                ) : null}
-                              />
-                            )}
-
-                            {managing && expanded ? (
-                              <div className="flex items-center justify-end gap-1 px-3 pb-2 lg:px-2.5">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="xs"
-                                  disabled={actionPending}
-                                  onClick={() => startRenamingGroup(group)}
-                                >
-                                  <Pencil data-icon="inline-start" />
-                                  重命名
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="xs"
-                                  disabled={actionPending}
-                                  onClick={() => setDeleteGroupTarget(group)}
-                                >
-                                  <Trash2 data-icon="inline-start" />
-                                  删除
-                                </Button>
-                              </div>
-                            ) : null}
-
-                            {!collapsed ? (
-                              visibleFilters.length > 0 ? (
-                                renderManualItems(visibleFilters, group.id)
-                              ) : (
-                                <p className="px-6 py-2 text-xs text-muted-foreground">暂无消息组</p>
-                              )
-                            ) : null}
-                          </>
-                        )}
-                      </SortableGroupSection>
-                    );
-                  })}
-                </SortableContext>
-              </DndContext>
-
-              {normalizedQuery && visibleSectionIds.length === 0 ? (
-                <EmptyState>没有匹配的分组或消息组</EmptyState>
-              ) : null}
-            </>
-          ) : (
-            <section className="flex flex-col">
-              <SectionHeader
-                title={viewMode === "focused" ? "重点关注" : "最近跟进"}
-                count={flatViewFilters.length}
-                collapsed={isSectionCollapsed(viewMode)}
-                onToggle={() => toggleSection(viewMode)}
-              />
-              {!isSectionCollapsed(viewMode) ? (
-                flatViewFilters.length > 0 ? (
-                  renderFilterItems(flatViewFilters, true)
-                ) : (
-                  <EmptyState>
-                    {query
-                      ? "没有匹配的消息组"
-                      : viewMode === "focused"
-                        ? "还没有重点关注，可点击顶部配置按钮后添加"
-                        : "还没有最近跟进，标记已读或打开 Telegram 后会出现在这里"}
-                  </EmptyState>
-                )
-              ) : null}
-            </section>
-          )}
-        </div>
-      </ScrollArea>
-
-      <Dialog
-        open={movingFilter !== null}
-        onOpenChange={(open) => {
-          if (!open && movingFilterId !== null && !movingFilterPending) {
-            setMovingFilterId(null);
-            setMoveQuery("");
-            setActionError(null);
-          }
-        }}
-      >
-        <DialogContent className="max-h-[min(80vh,32rem)] sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>移动“{movingFilter?.name}”</DialogTitle>
-            <DialogDescription>选择目标分组后会立即移动，也可以在整理模式中直接拖拽。</DialogDescription>
-          </DialogHeader>
-
-          {allSectionIds.length > 8 ? (
-            <SearchInput
-              value={moveQuery}
-              onChange={(event) => setMoveQuery(event.target.value)}
-              onClear={() => setMoveQuery("")}
-              placeholder="搜索分组"
-              aria-label="搜索目标分组"
-              clearLabel="清空目标分组搜索"
-            />
-          ) : null}
-
-          {actionError ? (
-            <p role="alert" className="rounded-lg bg-destructive/10 px-2.5 py-2 text-xs text-destructive">
-              {actionError}
-            </p>
-          ) : null}
-
-          <ScrollArea className="max-h-[min(56vh,20rem)] min-h-0">
-            <div className="flex flex-col gap-1 pr-2">
-              {moveGroupOptions.length > 0 ? moveGroupOptions.map((option) => {
-                const selected = option.id === movingFilterGroupId;
+          <MenuTrigger kind="create" id={null} name="" disabled={actionPending} />
+        </ListSearchToolbar>
+        {actionError && !menuOpen ? <p role="alert" className="message-filter-error">{actionError}</p> : null}
+        <ScrollArea className="message-filter-scroll">
+          <nav className="message-filter-items" aria-label="消息组与目录">
+            {loading ? (
+              <div className="message-filter-loading" aria-label="加载消息组">
+                {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-10 w-full" />)}
+              </div>
+            ) : (
+              orderedSections.map(({ sectionId, group, groupId, visibleItems }) => {
+                const isCollapsed = groupId !== null && !normalizedQuery && collapsed.has(groupId);
+                const Chevron = isCollapsed ? ChevronRight : ChevronDown;
                 return (
-                  <Button
-                    key={option.id ?? "ungrouped"}
-                    type="button"
-                    variant={selected ? "secondary" : "ghost"}
-                    size="sm"
-                    className="w-full justify-start"
-                    aria-current={selected ? "true" : undefined}
-                    disabled={movingFilterPending}
-                    onClick={() => {
-                      if (selected) {
-                        setMovingFilterId(null);
-                        setMoveQuery("");
-                        return;
-                      }
-                      if (!movingFilter) return;
-                      void handleSetPlacement(movingFilter.id, option.id);
-                    }}
-                  >
-                    <Check
-                      data-icon="inline-start"
-                      className={cn(!selected && "invisible")}
-                    />
-                    <span className="truncate">{option.name}</span>
-                  </Button>
+                  <section key={sectionId} className={cn("message-filter-section", groupId === null && "is-independent")}>
+                    {group ? (
+                      <div className="message-filter-section-heading">
+                        <button
+                          type="button"
+                          className="message-filter-section-toggle"
+                          data-panel-focus={`group-${group.id}`}
+                          aria-label={`${isCollapsed ? "展开" : "收起"}目录 ${group.name}`}
+                          aria-expanded={!isCollapsed}
+                          aria-controls={`message-filter-directory-${group.id}`}
+                          onClick={() => setCollapsed((current) => {
+                            const next = new Set(current);
+                            if (next.has(group.id)) next.delete(group.id); else next.add(group.id);
+                            return next;
+                          })}
+                        >
+                          <Chevron aria-hidden="true" />
+                          <h3>{group.name}</h3>
+                        </button>
+                        <MenuTrigger kind="group" id={group.id} name={group.name} disabled={actionPending} />
+                      </div>
+                    ) : null}
+                    {!isCollapsed ? (
+                      <div className={group ? "message-filter-directory-items" : undefined} id={group ? `message-filter-directory-${group.id}` : undefined}>
+                        {visibleItems.map((filter) => (
+                          <FilterPanelItem
+                            key={filter.id}
+                            filter={filter}
+                            selectedFilterId={selectedFilterId}
+                            nowMs={nowMs}
+                            latestMessageAt={filter.systemKey === ALL_MESSAGES_SYSTEM_KEY ? latestMessageAt : undefined}
+                            onSelectFilter={onSelectFilter}
+                            actions={<MenuTrigger kind="filter" id={filter.id} name={filter.name} disabled={actionPending} />}
+                          />
+                        ))}
+                        {visibleItems.length === 0 ? <p className="message-filter-empty-directory">暂无消息组</p> : null}
+                      </div>
+                    ) : null}
+                  </section>
                 );
-              }) : (
-                <p className="px-2 py-5 text-center text-sm text-muted-foreground">
-                  没有匹配的分组
-                </p>
-              )}
+              })
+            )}
+            {!loading && orderedSections.length === 0 ? <p className="message-filter-empty">{normalizedQuery ? "没有匹配的目录或消息组" : "还没有消息组"}</p> : null}
+          </nav>
+        </ScrollArea>
+        <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
+      </div>
+      <Popover.Portal>
+        <Popover.Positioner
+          className="message-theme message-filter-popover-positioner"
+          positionMethod="fixed"
+          side="bottom"
+          align="end"
+          sideOffset={6}
+          collisionPadding={{ top: 12, right: 12, bottom: bottomPadding, left: 12 }}
+          collisionAvoidance={{ side: "flip", align: "shift", fallbackAxisSide: "none" }}
+        >
+          <Popover.Popup
+            ref={popupRef}
+            className="message-theme message-filter-popover"
+            initialFocus={() => nameInputRef.current ?? popupRef.current?.querySelector<HTMLButtonElement>("[data-panel-menu-item]:not(:disabled)") ?? true}
+            finalFocus={() => restoreFocusRef.current
+              ? (lastTriggerRef.current ? document.getElementById(lastTriggerRef.current) : null) ?? focusElement(null)
+              : false}
+            onKeyDown={handleMenuKeys}
+          >
+            <div className="message-filter-popover-heading">
+              {menu?.kind !== "create" && menu?.view !== "menu" ? (
+                <Button type="button" variant="ghost" size="icon-xs" aria-label="返回操作菜单" onClick={() => { setMenu(menu ? { ...menu, view: "menu" } : null); setActionError(null); }} disabled={actionPending}><ArrowLeft /></Button>
+              ) : null}
+              <Popover.Title>{menuTitle}</Popover.Title>
+              <Popover.Close render={<Button type="button" variant="ghost" size="icon-xs" aria-label="关闭操作菜单" />}><X /></Popover.Close>
             </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog
-        open={deleteGroupTarget !== null}
-        onOpenChange={(open) => {
-          if (!open && !actionPending) setDeleteGroupTarget(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>删除分组“{deleteGroupTarget?.name}”？</AlertDialogTitle>
-            <AlertDialogDescription>
-              分组内的消息组会移到“未分组”，过滤规则和已收集的消息都不会删除。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={actionPending}>取消</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={actionPending}
-              onClick={() => void handleDeleteGroup()}
-            >
-              删除分组
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+            {isNameForm ? (
+              <form className="message-filter-name-form" onSubmit={saveName} noValidate>
+                <Field.Root name="name" invalid={Boolean(actionError)} disabled={actionPending}>
+                  <Field.Label className="sr-only">目录名称</Field.Label>
+                  <Input ref={nameInputRef} value={nameDraft} maxLength={60} autoComplete="off" aria-invalid={Boolean(actionError)} aria-describedby={actionError ? "message-filter-action-error" : undefined} onChange={(event) => { setNameDraft(event.target.value); setActionError(null); }} />
+                </Field.Root>
+                {actionError ? <p role="alert" id="message-filter-action-error" className="message-filter-error">{actionError}</p> : null}
+                <div className="message-filter-form-actions">
+                  <Popover.Close render={<Button type="button" variant="ghost" size="sm" />}>取消</Popover.Close>
+                  <Button type="submit" size="sm" disabled={actionPending}>{actionPending ? "保存中…" : menu?.kind === "create" ? "创建目录" : "保存名称"}</Button>
+                </div>
+              </form>
+            ) : (
+              <div className="message-filter-menu-content">
+                {actionError ? <p role="alert" className="message-filter-error">{actionError}</p> : null}
+                {menu?.view === "move" ? (
+                  <>
+                    {sortedGroups.length > 7 ? <SearchInput value={moveQuery} onChange={(event) => setMoveQuery(event.target.value)} onClear={() => setMoveQuery("")} placeholder="搜索目录" aria-label="搜索目标目录" clearLabel="清空目标目录搜索" /> : null}
+                    <div className="message-filter-menu-options">
+                      {moveOptions.map((option) => (
+                        <Button key={option.id ?? "independent"} type="button" variant="ghost" className="message-filter-menu-item" data-panel-menu-item aria-pressed={option.id === targetGroupId} disabled={actionPending} onClick={() => {
+                          if (!targetFilter) return;
+                          if (option.id === targetGroupId) { setMenu(null); return; }
+                          moveFilter(targetFilter.id, option.id);
+                        }}>
+                          <span>{option.name}</span>{option.id === targetGroupId ? <Check data-icon="inline-end" /> : null}
+                        </Button>
+                      ))}
+                      {moveOptions.length === 0 ? <p className="message-filter-empty">没有匹配的目录</p> : null}
+                    </div>
+                  </>
+                ) : menu?.view === "delete" ? (
+                  <>
+                    <Popover.Description className="message-filter-delete-description">删除“{menu.name}”后，其中的消息组会独立显示，消息不会删除。</Popover.Description>
+                    <div className="message-filter-form-actions">
+                      <Popover.Close render={<Button type="button" variant="ghost" size="sm" />}>取消</Popover.Close>
+                      <Button type="button" variant="destructive" size="sm" disabled={actionPending} onClick={() => {
+                        if (menu.id !== null) { const id = menu.id; void runAction(() => onDeleteGroup(id), "目录已删除，消息组已独立显示", "create"); }
+                      }}>{actionPending ? "删除中…" : "删除目录"}</Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {menu?.kind === "group" ? <Button type="button" variant="ghost" className="message-filter-menu-item" data-panel-menu-item disabled={actionPending} onClick={renameTarget}>重命名</Button> : null}
+                    {menu?.kind === "filter" ? <Button type="button" variant="ghost" className="message-filter-menu-item" data-panel-menu-item disabled={actionPending} onClick={() => setMenu({ ...menu, view: "move" })}><span>移动到目录</span><ChevronRight data-icon="inline-end" /></Button> : null}
+                    <Button type="button" variant="ghost" className="message-filter-menu-item" data-panel-menu-item data-panel-reorder="up" disabled={actionPending || targetIndex <= 0} onClick={() => reorderFromMenu(-1)}>上移</Button>
+                    <Button type="button" variant="ghost" className="message-filter-menu-item" data-panel-menu-item data-panel-reorder="down" disabled={actionPending || targetIndex < 0 || targetIndex >= targetOrder.length - 1} onClick={() => reorderFromMenu(1)}>下移</Button>
+                    {menu?.kind === "group" ? <><Separator /><Button type="button" variant="destructive" className="message-filter-menu-item" data-panel-menu-item disabled={actionPending} onClick={() => setMenu({ ...menu, view: "delete" })}>删除目录</Button></> : null}
+                    {targetFilter && targetFilter.systemKey !== ALL_MESSAGES_SYSTEM_KEY && onEditFilter ? <><Separator /><Button type="button" variant="ghost" className="message-filter-menu-item" data-panel-menu-item disabled={actionPending} onClick={() => closeAfterNavigation(targetFilter.id)}>编辑监听规则</Button></> : null}
+                  </>
+                )}
+              </div>
+            )}
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

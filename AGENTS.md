@@ -37,6 +37,7 @@
 - 前端样式组织：
   - [packages/web/src/index.css](packages/web/src/index.css) 仅放全局设计 token、基础元素样式和跨页面共享规则
   - 页面、功能或组件专属样式应放在对应源码附近（如 `Component.css`），并由使用它的组件显式引入，避免继续堆积到 `index.css`
+  - 四个 Tab 的当前视觉、交互与业务语义统一记录在 [UI 基准与页面行为](docs/ui-design.md)。
 
 ## 4. 推荐执行顺序
 

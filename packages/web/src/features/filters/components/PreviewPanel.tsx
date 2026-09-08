@@ -1,11 +1,6 @@
-import { memo, useDeferredValue, useEffect, useState, type ReactNode, type UIEvent } from "react";
-import {
-  ChevronDown,
-  ChevronUp,
-  ExternalLink,
-  Inbox,
-  LoaderCircle,
-} from "lucide-react";
+import { memo, useDeferredValue, useEffect, useMemo, useState, type ReactNode, type UIEvent } from "react";
+import { ExternalLink, Inbox, LoaderCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -15,18 +10,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type {
+  FilterMatchEvidence,
   HistoricalFilterPreviewMessage,
   HistoricalFilterPreviewSample,
 } from "@/types";
 import {
-  cleanPreviewContent,
   findPreviewHighlightRanges,
   getPreviewExclusionHighlightTexts,
   getPreviewHighlightTexts,
   type PreviewHighlightRange,
 } from "../previewHighlight";
+import "./PreviewPanel.css";
 
 interface PreviewSummary {
   scannedChats: number;
@@ -43,42 +40,50 @@ interface PreviewPanelProps {
   previewSummary: PreviewSummary | null;
   previewLimit: string;
   onPreviewLimitChange: (value: string) => void;
+  onLocateCondition?: (groupId: string) => void;
   className?: string;
 }
 
 const PAGE_SIZE = 20;
+const EMPTY_SAMPLES: HistoricalFilterPreviewSample[] = [];
 const scopeOptions = [
-  { value: "50", label: "最近 50 条 / 会话" },
-  { value: "200", label: "最近 200 条 / 会话" },
-  { value: "500", label: "最近 500 条 / 会话" },
-  { value: "1000", label: "最近 1,000 条 / 会话" },
+  { value: "50", label: "每会话最近 50 条" },
+  { value: "200", label: "每会话最近 200 条" },
+  { value: "500", label: "每会话最近 500 条" },
+  { value: "1000", label: "每会话最近 1,000 条" },
 ];
+const evidenceTypeLabels: Record<FilterMatchEvidence["type"], string> = {
+  keyword: "关键词",
+  chat: "消息来源",
+  regex: "正则",
+  script: "脚本",
+};
 
-function renderHighlightedContent(
-  content: string,
-  ranges: PreviewHighlightRange[],
-  excluded = false,
-): ReactNode {
+/** Keep Telegram line breaks while mapping the normalized match evidence back to display offsets. */
+function getContentHighlightRanges(content: string, texts: string[]): PreviewHighlightRange[] {
+  const offsets: PreviewHighlightRange[] = [];
+  let normalized = "";
+
+  for (const match of content.matchAll(/\s+|\S/g)) {
+    const start = match.index;
+    normalized += /^\s/.test(match[0]) ? " " : match[0];
+    offsets.push({ start, end: start + match[0].length });
+  }
+
+  return findPreviewHighlightRanges(normalized, texts).map((range) => ({
+    start: offsets[range.start].start,
+    end: offsets[range.end - 1].end,
+  }));
+}
+
+function renderHighlightedContent(content: string, ranges: PreviewHighlightRange[]): ReactNode {
   if (ranges.length === 0) return content;
-
   const nodes: ReactNode[] = [];
   let cursor = 0;
 
   for (const range of ranges) {
     if (range.start > cursor) nodes.push(content.slice(cursor, range.start));
-    nodes.push(
-      <mark
-        key={`${range.start}-${range.end}`}
-        className={cn(
-          "rounded-sm px-0.5 font-semibold text-foreground ring-1",
-          excluded
-            ? "bg-destructive/14 ring-destructive/25"
-            : "bg-primary/20 ring-primary/30",
-        )}
-      >
-        {content.slice(range.start, range.end)}
-      </mark>,
-    );
+    nodes.push(<mark key={`${range.start}-${range.end}`}>{content.slice(range.start, range.end)}</mark>);
     cursor = range.end;
   }
 
@@ -89,7 +94,6 @@ function renderHighlightedContent(
 function formatMessageDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-
   return date.toLocaleString("zh-CN", {
     month: "numeric",
     day: "numeric",
@@ -98,70 +102,100 @@ function formatMessageDate(value: string): string {
   });
 }
 
+function getRelevantEvidence(message: HistoricalFilterPreviewMessage, excluded: boolean) {
+  return (message.matchEvidence ?? []).filter((evidence) => {
+    if (!excluded) return evidence.effect === "require" && evidence.passed && evidence.groupPassed !== false;
+    // A failed OR sibling does not reject a message when another member passed its group.
+    return !evidence.passed && (evidence.effect === "exclude" || evidence.groupPassed !== true);
+  });
+}
+
+function getEvidenceLabel(evidence: FilterMatchEvidence, chatTitle: string): string {
+  const type = evidenceTypeLabels[evidence.type];
+  if (!evidence.passed && evidence.effect === "require") return `未满足${type}`;
+  const prefix = evidence.effect === "exclude" ? `排除${type}` : type;
+  // Script source is not a useful evidence label; only show the actual returned match text.
+  const values = evidence.type === "chat" ? [chatTitle] : evidence.type === "script" ? evidence.matchedTexts : evidence.matchedValues;
+  return values.length > 0 ? `${prefix} · ${values.join(" / ")}` : `${prefix}${evidence.effect === "exclude" ? "命中" : "通过"}`;
+}
+
 const PreviewMessageItem = memo(function PreviewMessageItem({
   message,
   excluded = false,
+  onLocateCondition,
 }: {
   message: HistoricalFilterPreviewMessage;
   excluded?: boolean;
+  onLocateCondition?: (groupId: string) => void;
 }) {
-  const content = cleanPreviewContent(message.content) || "媒体消息";
+  const [expanded, setExpanded] = useState(false);
+  const content = message.content.replace(/\*\*/g, "").trim() || message.mediaFileName || "媒体消息";
   const highlightTexts = excluded
     ? getPreviewExclusionHighlightTexts(message)
     : getPreviewHighlightTexts(message);
-  const highlightRanges = findPreviewHighlightRanges(content, highlightTexts);
+  const highlightRanges = getContentHighlightRanges(content, highlightTexts);
   const messageDate = formatMessageDate(message.messageDate);
+  const evidence = getRelevantEvidence(message, excluded);
+  const canExpand = content.length > 280 || content.split("\n").length > 6;
 
   return (
-    <article
-      className={cn(
-        "relative border-b border-border/72 py-3 pr-3 pl-8 [contain-intrinsic-size:0_116px] [content-visibility:auto] last:border-b-0",
-        excluded && "bg-muted/32 text-muted-foreground",
-      )}
-    >
-      <span
-        className={cn(
-          "absolute top-4 left-3 size-2 rounded-full ring-4",
-          excluded
-            ? "bg-destructive/70 ring-destructive/10"
-            : "bg-primary ring-primary/12",
-        )}
-      />
-      <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-        <span className="min-w-0 flex-1 truncate">
-          {message.chatTitle}{messageDate ? ` · ${messageDate}` : ""}
-          {excluded ? <span className="text-destructive"> · 已排除</span> : null}
-        </span>
+    <article className="rule-preview-message" data-excluded={excluded || undefined}>
+      <div className="rule-preview-message-meta">
+        <span className="rule-preview-source">{message.chatTitle}</span>
+        {messageDate ? <time dateTime={message.messageDate}>{messageDate}</time> : null}
         {message.telegramLink ? (
-          <a
-            href={message.telegramLink}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="打开 Telegram 原消息"
-            className="grid size-7 shrink-0 place-items-center rounded-lg text-primary transition hover:bg-accent focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            nativeButton={false}
+            role="link"
+            className="rule-preview-open"
+            render={<a href={message.telegramLink} target="_blank" rel="noreferrer" aria-label="打开 Telegram 原消息" />}
           >
-            <ExternalLink className="size-3.5" />
-          </a>
+            <ExternalLink />
+          </Button>
         ) : null}
       </div>
 
-      <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-foreground/92">
-        {renderHighlightedContent(content, highlightRanges, excluded)}
+      <p className="rule-preview-content" data-collapsed={canExpand && !expanded || undefined}>
+        {renderHighlightedContent(content, highlightRanges)}
       </p>
+      {canExpand ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="rule-preview-expand"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? "收起原文" : "展开原文"}
+        </Button>
+      ) : null}
 
-      <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
-        <span className="min-w-0 flex-1 truncate">
-          {excluded && highlightRanges.length > 0
-            ? `命中 ${highlightRanges.length} 处排除项`
-            : highlightRanges.length > 0
-            ? `高亮 ${highlightRanges.length} 处 · ${highlightTexts.length} 个命中项`
-            : message.matchedKeyword
-              ? `匹配「${message.matchedKeyword}」`
-              : "符合当前规则"}
-        </span>
-        <span className="hidden shrink-0 sm:inline">
-          {message.inDatabase ? "已在消息列表" : "尚未同步"}
-        </span>
+      <div className="rule-preview-evidence">
+        {evidence.length > 0 ? evidence.map((item) => {
+          const label = getEvidenceLabel(item, message.chatTitle);
+          return item.groupId && onLocateCondition ? (
+            <Button
+              key={item.conditionIndex}
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="rule-preview-evidence-link"
+              title={`${label}；定位条件`}
+              onClick={() => onLocateCondition(item.groupId!)}
+            >
+              <span>{label}</span>
+            </Button>
+          ) : (
+            <Badge key={item.conditionIndex} variant="secondary" title={label}>{label}</Badge>
+          );
+        }) : (
+          <Badge variant="secondary">
+            {excluded ? "未通过当前规则" : message.matchedKeyword ? `关键词 · ${message.matchedKeyword}` : "符合当前规则"}
+          </Badge>
+        )}
       </div>
     </article>
   );
@@ -173,207 +207,113 @@ export function PreviewPanel({
   previewStale,
   previewError,
   previewMessages,
-  previewSamples = [],
+  previewSamples = EMPTY_SAMPLES,
   previewSummary,
   previewLimit,
   onPreviewLimitChange,
+  onLocateCondition,
   className,
 }: PreviewPanelProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState("matched");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const deferredMessages = useDeferredValue(previewMessages);
-  const visibleMessages = deferredMessages.slice(0, visibleCount);
-  const excludedSample = previewSamples.find(
-    (sample) => !sample.matched && getPreviewExclusionHighlightTexts(sample).length > 0,
-  );
-  const selectedScope =
-    scopeOptions.find((option) => option.value === previewLimit) ?? scopeOptions[1];
+  const deferredSamples = useDeferredValue(previewSamples);
+  const excludedSamples = useMemo(() => deferredSamples.filter((sample) => !sample.matched), [deferredSamples]);
+  const selectedScope = scopeOptions.find((option) => option.value === previewLimit) ?? scopeOptions[1];
+  const activeMessages = activeTab === "excluded" ? excludedSamples : deferredMessages;
+  const resultCount = previewSummary?.total ?? deferredMessages.length;
+  const isStale = previewStale || deferredMessages !== previewMessages || deferredSamples !== previewSamples;
+  const hasResults = previewSummary !== null || deferredMessages.length > 0 || deferredSamples.length > 0;
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [previewLimit, previewMessages]);
+  }, [previewLimit, previewMessages, previewSamples]);
 
-  const resultCount = previewSummary?.total ?? deferredMessages.length;
-  const dockStatus = !previewEnabled
-    ? "添加有效条件后自动预览"
-    : previewError
-      ? "预览暂不可用"
-      : previewLoading && !previewSummary
-        ? "正在匹配…"
-        : previewLoading || previewStale
-          ? `${resultCount} 条命中 · 更新中`
-          : `${resultCount} 条命中`;
-
+  const loadMore = () => setVisibleCount((current) => Math.min(current + PAGE_SIZE, activeMessages.length));
   const handleResultScroll = (event: UIEvent<HTMLDivElement>) => {
     const viewport = event.currentTarget;
     const remaining = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-    if (remaining > 240 || visibleCount >= deferredMessages.length) return;
-
-    setVisibleCount((current) => Math.min(current + PAGE_SIZE, deferredMessages.length));
+    if (remaining <= 240 && visibleCount < activeMessages.length) loadMore();
   };
 
+  let emptyTitle = activeTab === "excluded" ? "当前范围内没有排除样本" : "当前范围内没有匹配样本";
+  if (!previewEnabled) emptyTitle = "填写条件后查看样本";
+  else if (previewError && !hasResults) emptyTitle = "暂时无法完成预览";
+  else if (previewLoading && !hasResults) emptyTitle = "正在匹配历史消息…";
+
   return (
-    <div className={cn("min-w-0 shrink-0 xl:min-h-0", className)}>
-      <button
-        type="button"
-        aria-expanded={expanded}
-        aria-controls="filter-preview-results"
-        className={cn(
-          "flex h-12 w-full items-center gap-2 border-y border-border bg-card/96 px-3 text-left shadow-[0_-6px_18px_color-mix(in_oklab,var(--foreground)_5%,transparent)] xl:hidden",
-          expanded && "hidden",
-        )}
-        onClick={() => setExpanded(true)}
+    <section className={cn("rule-preview", className)} aria-label="消息样本预览" aria-busy={previewLoading}>
+      <header className="rule-preview-header">
+        <h2>预览样本</h2>
+        <Select
+          items={scopeOptions}
+          value={previewLimit}
+          onValueChange={(value) => { if (value) onPreviewLimitChange(value); }}
+        >
+          <SelectTrigger size="sm" className="rule-preview-scope" aria-label="预览扫描范围">
+            <SelectValue>{selectedScope.label}</SelectValue>
+          </SelectTrigger>
+          <SelectContent align="end" alignItemWithTrigger={false} className="rules-theme">
+            <SelectGroup>
+              {scopeOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </header>
+
+      <Tabs
+        className="rule-preview-tabs"
+        value={activeTab}
+        onValueChange={(value) => { setActiveTab(String(value)); setVisibleCount(PAGE_SIZE); }}
       >
-        <span
-          className={cn(
-            "size-2 shrink-0 rounded-full bg-muted-foreground/40",
-            previewLoading && "animate-pulse bg-primary",
-            previewEnabled && !previewLoading && !previewError && "bg-success",
-            previewError && "bg-destructive",
-          )}
-        />
-        <span className="shrink-0 text-sm font-semibold">预览匹配</span>
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          {dockStatus}
-        </span>
-        <ChevronUp className="size-4 shrink-0 text-muted-foreground" />
-      </button>
+        <div className="rule-preview-tabs-heading">
+          <TabsList variant="line" aria-label="预览样本类型">
+            <TabsTrigger value="matched">匹配样本 <span>{previewEnabled ? resultCount : 0}</span></TabsTrigger>
+            <TabsTrigger value="excluded">排除样本 <span>{previewEnabled ? excludedSamples.length : 0}</span></TabsTrigger>
+          </TabsList>
+        </div>
 
-      <section
-        id="filter-preview-results"
-        aria-label="命中消息预览"
-        className={cn(
-          "h-[min(58dvh,34rem)] min-h-0 flex-col overflow-hidden border-t border-border bg-card shadow-[0_-14px_34px_color-mix(in_oklab,var(--foreground)_10%,transparent)]",
-          expanded ? "flex" : "hidden",
-          "xl:flex xl:h-full xl:rounded-xl xl:border xl:shadow-[var(--workspace-panel-shadow)]",
-        )}
-      >
-        <header className="flex min-h-13 shrink-0 items-center gap-2 border-b border-border px-3 py-2">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold">预览匹配</h2>
-            <p className="mt-0.5 hidden truncate text-[11px] text-muted-foreground xl:block">
-              {previewLoading || previewStale ? "自动预览 · 更新中" : "自动预览 · 已更新"}
-            </p>
-          </div>
-
-          <Select
-            items={scopeOptions}
-            value={previewLimit}
-            onValueChange={(value) => {
-              if (value) onPreviewLimitChange(value);
-            }}
-          >
-            <SelectTrigger size="sm" className="max-w-48" aria-label="预览扫描范围">
-              <SelectValue>{selectedScope.label}</SelectValue>
-            </SelectTrigger>
-            <SelectContent align="end" alignItemWithTrigger={false}>
-              <SelectGroup>
-                {scopeOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="xl:hidden"
-            onClick={() => setExpanded(false)}
-            aria-label="收起预览"
-          >
-            <ChevronDown />
-          </Button>
-        </header>
-
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex h-9 shrink-0 items-center justify-between gap-3 border-b border-border/70 px-3 text-xs text-muted-foreground">
-            <span>命中消息 · 按时间倒序</span>
-            <span className="flex items-center gap-1.5">
-              {previewLoading ? <LoaderCircle className="size-3 animate-spin text-primary" /> : null}
-              <strong className="font-semibold text-primary">{resultCount} 条</strong>
-            </span>
-          </div>
-
-          <div
-            className={cn(
-              "min-h-0 flex-1 overflow-y-auto overscroll-contain",
-              previewStale && "opacity-70",
+        {previewEnabled && (previewError || previewLoading || isStale) ? (
+          <div className="rule-preview-status" data-error={Boolean(previewError) || undefined} role={previewError ? "alert" : "status"}>
+            {previewError ? (
+              <>{hasResults ? "更新失败，显示上次结果。" : ""}{previewError}</>
+            ) : (
+              <><LoaderCircle className="rule-preview-spinner" />{hasResults ? "更新中，显示上次结果" : "正在预览…"}</>
             )}
-            onScroll={handleResultScroll}
-          >
-            {!previewEnabled ? (
-              <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center">
-                <span className="grid size-10 place-items-center rounded-xl bg-accent text-primary">
-                  <Inbox className="size-4" />
-                </span>
-                <p className="mt-3 text-sm font-semibold">填写一个有效条件</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  条件停顿约 800ms 后会自动显示命中消息。
-                </p>
-              </div>
-            ) : previewError && !previewSummary ? (
-              <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center">
-                <p className="text-sm font-semibold text-destructive">暂时无法完成预览</p>
-                <p className="mt-1 max-w-72 text-xs leading-5 text-muted-foreground">
-                  {previewError}
-                </p>
-              </div>
-            ) : previewLoading && !previewSummary ? (
-              <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground">
-                <LoaderCircle className="size-4 animate-spin text-primary" />
-                正在匹配历史消息…
-              </div>
-            ) : deferredMessages.length === 0 ? (
-              <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center">
-                <span className="grid size-10 place-items-center rounded-xl bg-accent text-primary">
-                  <Inbox className="size-4" />
-                </span>
-                <p className="mt-3 text-sm font-semibold">当前范围内没有命中</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  可以调整条件，或扩大右上角的预览范围。
-                </p>
+          </div>
+        ) : null}
+
+        {["matched", "excluded"].map((tab) => (
+          <TabsContent key={tab} value={tab} className="rule-preview-results" onScroll={handleResultScroll}>
+            {!previewEnabled || !hasResults || activeMessages.length === 0 ? (
+              <div className="rule-preview-empty">
+                {previewLoading && !hasResults ? <LoaderCircle className="rule-preview-spinner" /> : <Inbox />}
+                <p>{emptyTitle}</p>
               </div>
             ) : (
-              <div aria-live="polite">
-                {visibleMessages.slice(0, 5).map((message) => (
+              <div className="rule-preview-messages" data-stale={isStale || undefined}>
+                {activeMessages.slice(0, visibleCount).map((message) => (
                   <PreviewMessageItem
-                    key={`${message.chatId}-${message.id}`}
+                    key={`${tab}-${message.chatId}-${message.id}`}
                     message={message}
-                  />
-                ))}
-                {excludedSample ? (
-                  <PreviewMessageItem
-                    key={`excluded-${excludedSample.chatId}-${excludedSample.id}`}
-                    message={excludedSample}
-                    excluded
-                  />
-                ) : null}
-                {visibleMessages.slice(5).map((message) => (
-                  <PreviewMessageItem
-                    key={`${message.chatId}-${message.id}`}
-                    message={message}
+                    excluded={tab === "excluded"}
+                    onLocateCondition={!isStale && !previewLoading && !previewError ? onLocateCondition : undefined}
                   />
                 ))}
               </div>
             )}
-          </div>
+          </TabsContent>
+        ))}
+      </Tabs>
 
-          {deferredMessages.length > 0 ? (
-            <div className="flex h-10 shrink-0 items-center justify-between border-t border-border bg-card px-3 text-xs text-muted-foreground">
-              <span>
-                已展示 {Math.min(visibleCount, deferredMessages.length)} / {deferredMessages.length}
-              </span>
-              <span className="font-medium text-primary">
-                {visibleCount < deferredMessages.length ? "下滑自动加载" : "已展示全部"}
-              </span>
-            </div>
-          ) : null}
-        </div>
-      </section>
-    </div>
+      {previewEnabled && hasResults ? (
+        <footer className="rule-preview-footer">
+          <span>已显示 {Math.min(visibleCount, activeMessages.length)} / {activeMessages.length} 条</span>
+          {visibleCount < activeMessages.length ? (
+            <Button type="button" variant="ghost" size="sm" onClick={loadMore}>加载更多</Button>
+          ) : previewSummary ? <span>扫描 {previewSummary.scannedChats} 个会话</span> : null}
+        </footer>
+      ) : null}
+    </section>
   );
 }

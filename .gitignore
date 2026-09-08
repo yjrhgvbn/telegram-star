@@ -16,5 +16,4 @@ packages/desktop/src-tauri/target
 packages/mobile/src-tauri/gen
 packages/mobile/src-tauri/target
 tsconfig.tsbuildinfo
-theme-exploration
 .server-backups/

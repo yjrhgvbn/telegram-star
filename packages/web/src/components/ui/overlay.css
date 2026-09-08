@@ -1,0 +1,32 @@
+/* Dialog and confirmation surfaces share one treatment, including portals
+ * rendered outside AppShell. Feature CSS only controls layout and content. */
+[data-slot="dialog-overlay"],
+[data-slot="alert-dialog-overlay"] {
+  background: rgb(39 43 50 / 24%);
+  backdrop-filter: none;
+}
+[data-slot="dialog-content"],
+[data-slot="alert-dialog-content"] {
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgb(39 43 50 / 14%);
+}
+[data-slot="alert-dialog-content"] { max-width: min(384px, calc(100vw - 32px)); }
+[data-slot="dialog-title"],
+[data-slot="alert-dialog-title"] { font-weight: 600; line-height: 1.5; }
+[data-slot="alert-dialog-header"] { justify-items: start; text-align: left; }
+[data-slot="dialog-footer"],
+[data-slot="alert-dialog-footer"] {
+  margin: 0;
+  padding: 8px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+@media (max-width: 680px) {
+  [data-slot="dialog-close"],
+  [data-slot="dialog-footer"] [data-slot="button"],
+  [data-slot="alert-dialog-footer"] [data-slot="button"] { min-height: 44px; min-width: 44px; }
+}

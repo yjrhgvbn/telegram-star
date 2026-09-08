@@ -3,6 +3,7 @@ import { Dialog } from "@base-ui/react/dialog";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
   History,
   Info,
   LoaderCircle,
@@ -19,6 +20,8 @@ type TimePreset = "three-months" | "one-year" | "custom" | "all";
 type CountPreset = "1000" | "5000" | "10000" | "custom";
 
 interface HistoryBackfillDialogProps {
+  inline?: boolean;
+  hasUnsavedChanges?: boolean;
   selectedChatCount: number;
   latestJob: FilterBackfillJob | null;
   starting: boolean;
@@ -171,6 +174,8 @@ function BackfillProgress({ job }: { job: FilterBackfillJob }) {
 }
 
 export function HistoryBackfillDialog({
+  inline = false,
+  hasUnsavedChanges = false,
   selectedChatCount,
   latestJob,
   starting,
@@ -244,54 +249,8 @@ export function HistoryBackfillDialog({
     }
   };
 
-  return (
-    <Dialog.Root
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) setFormError("");
-      }}
-    >
-      <Dialog.Trigger
-        render={
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            className="w-full sm:w-auto sm:min-w-52 lg:h-[46px] lg:min-w-[256px] lg:px-4"
-            disabled={disabled && !activeJob}
-          />
-        }
-      >
-        {activeJob ? (
-          <LoaderCircle className="animate-spin" data-icon="inline-start" />
-        ) : (
-          <History data-icon="inline-start" />
-        )}
-        {triggerLabel}
-      </Dialog.Trigger>
-
-      <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-60 bg-foreground/24 backdrop-blur-[2px] transition-opacity duration-200 data-closed:opacity-0 data-open:opacity-100" />
-        <Dialog.Viewport className="fixed inset-x-0 top-0 bottom-15 z-70 flex items-end justify-center md:inset-0 md:items-center md:p-5">
-          <Dialog.Popup className="flex max-h-[calc(100dvh-3.75rem)] w-full min-h-0 flex-col overflow-hidden rounded-t-3xl border border-b-0 bg-popover text-popover-foreground shadow-[0_-18px_56px_color-mix(in_oklab,var(--foreground)_20%,transparent)] transition duration-200 data-closed:translate-y-full data-closed:opacity-0 data-open:translate-y-0 data-open:opacity-100 md:max-h-[min(88dvh,48rem)] md:max-w-[560px] md:rounded-2xl md:border md:shadow-[0_24px_80px_color-mix(in_oklab,var(--foreground)_24%,transparent)] md:data-closed:translate-y-2">
-            <header className="flex shrink-0 items-start gap-4 px-5 pt-5 pb-4 sm:px-9 sm:pt-8">
-              <div className="min-w-0 flex-1">
-                <Dialog.Title className="text-xl font-semibold tracking-tight sm:text-2xl">
-                  {activeJob ? "正在补录历史消息" : "补录历史消息"}
-                </Dialog.Title>
-                <Dialog.Description className="mt-1.5 text-sm leading-5 text-muted-foreground sm:text-base">
-                  {activeJob ? "进度会自动更新，可以随时关闭弹框" : sourceDescription}
-                </Dialog.Description>
-              </div>
-              <Dialog.Close
-                render={<Button type="button" variant="ghost" size="icon-sm" />}
-                aria-label="关闭补录历史消息"
-              >
-                <X />
-              </Dialog.Close>
-            </header>
-
+  // Both presentations share the same range validation and background-job controls.
+  const contents = (
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
               {activeJob ? (
                 <BackfillProgress job={activeJob} />
@@ -461,6 +420,70 @@ export function HistoryBackfillDialog({
                 </div>
               )}
             </div>
+  );
+
+  if (inline) {
+    return <details className="rule-setting rule-history" aria-label="历史补录设置">
+      <summary><span>补录历史消息</span><span className="rule-setting__value">{activeJob ? triggerLabel : "按时间或数量"}</span><ChevronDown aria-hidden /></summary>
+      <div className="rule-history__body">
+        {contents}
+        {!activeJob ? <Button type="button" size="lg" onClick={() => void startBackfill()} disabled={disabled || starting}>
+          {starting ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : null}
+          {hasUnsavedChanges ? "保存并开始补录" : "开始补录"}
+        </Button> : null}
+      </div>
+    </details>;
+  }
+
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setFormError("");
+      }}
+    >
+      <Dialog.Trigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="w-full sm:w-auto sm:min-w-52 lg:h-[46px] lg:min-w-[256px] lg:px-4"
+            disabled={disabled && !activeJob}
+          />
+        }
+      >
+        {activeJob ? (
+          <LoaderCircle className="animate-spin" data-icon="inline-start" />
+        ) : (
+          <History data-icon="inline-start" />
+        )}
+        {triggerLabel}
+      </Dialog.Trigger>
+
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-60 bg-foreground/24 backdrop-blur-[2px] transition-opacity duration-200 data-closed:opacity-0 data-open:opacity-100" />
+        <Dialog.Viewport className="fixed inset-x-0 top-0 bottom-15 z-70 flex items-end justify-center md:inset-0 md:items-center md:p-5">
+          <Dialog.Popup className="flex max-h-[calc(100dvh-3.75rem)] w-full min-h-0 flex-col overflow-hidden rounded-t-3xl border border-b-0 bg-popover text-popover-foreground shadow-[0_-18px_56px_color-mix(in_oklab,var(--foreground)_20%,transparent)] transition duration-200 data-closed:translate-y-full data-closed:opacity-0 data-open:translate-y-0 data-open:opacity-100 md:max-h-[min(88dvh,48rem)] md:max-w-[560px] md:rounded-2xl md:border md:shadow-[0_24px_80px_color-mix(in_oklab,var(--foreground)_24%,transparent)] md:data-closed:translate-y-2">
+            <header className="flex shrink-0 items-start gap-4 px-5 pt-5 pb-4 sm:px-9 sm:pt-8">
+              <div className="min-w-0 flex-1">
+                <Dialog.Title className="text-xl font-semibold tracking-tight sm:text-2xl">
+                  {activeJob ? "正在补录历史消息" : "补录历史消息"}
+                </Dialog.Title>
+                <Dialog.Description className="mt-1.5 text-sm leading-5 text-muted-foreground sm:text-base">
+                  {activeJob ? "进度会自动更新，可以随时关闭弹框" : sourceDescription}
+                </Dialog.Description>
+              </div>
+              <Dialog.Close
+                render={<Button type="button" variant="ghost" size="icon-sm" />}
+                aria-label="关闭补录历史消息"
+              >
+                <X />
+              </Dialog.Close>
+            </header>
+
+            {contents}
 
             <footer className="shrink-0 border-t bg-popover px-5 pt-3 pb-4 sm:px-9 sm:pt-4 sm:pb-6">
               {activeJob ? (
