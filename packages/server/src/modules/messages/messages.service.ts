@@ -7,6 +7,8 @@ import type {
   MessageListQuery,
   MessageListResponse,
   MessageReadStateResponse,
+  MessageRemovalInput,
+  MessageRemovalResponse,
   MessageStats,
   ReadSyncLogsResponse,
 } from "@telegram-star/shared/contracts/messages";
@@ -31,6 +33,7 @@ import {
   listMessagesBeforeCursor,
   markMessagesRead,
   recordMessageGroupEngagement,
+  removeMessagesFromFilter,
   setMessageReadState,
 } from "./messages.repository.js";
 import { runInteractionSyncInBackground } from "./readSyncFallback.js";
@@ -87,11 +90,16 @@ export async function listMessages(
   const interactedReadIds = new Set<number>();
 
   return {
-    data: window.rows.map((row) => formatMessageRow(row, interactedReadIds)),
+    data: window.rows.map((row) => formatMessageRow(row, interactedReadIds, query.filterId)),
     hasOlder: window.hasOlder,
     hasNewer: window.hasNewer,
     ...(located.anchorId !== undefined ? { anchorId: located.anchorId } : {}),
   };
+}
+
+export async function removeMessages(input: MessageRemovalInput): Promise<MessageRemovalResponse> {
+  const result = await removeMessagesFromFilter(input);
+  return { success: true, removedIds: result.removedIds, count: result.removedIds.length };
 }
 
 export async function toggleMessageRead(
@@ -104,6 +112,7 @@ export async function toggleMessageRead(
   }
 
   const updated = await setMessageReadState(id, !existing.isRead);
+  if (!updated) throw new MessageNotFoundError(id);
 
   log.info(
     {

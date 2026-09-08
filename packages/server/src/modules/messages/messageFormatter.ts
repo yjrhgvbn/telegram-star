@@ -2,7 +2,17 @@ import type { Prisma } from "../../generated/prisma/client.js";
 import { parseMessageContentLinks } from "../../services/telegram/messageContentLinks.js";
 
 /** include 子查询：关联 filter 名称 */
-export const MESSAGE_INCLUDE = { matchedFilter: { select: { name: true } } } as const;
+export const MESSAGE_INCLUDE = {
+  matchedFilter: { select: { name: true } },
+  filterMemberships: {
+    select: {
+      filterId: true,
+      matchedKeyword: true,
+      filter: { select: { name: true } },
+    },
+    orderBy: { filterId: "asc" },
+  },
+} as const;
 
 export type MessageRow = Prisma.MessageGetPayload<{ include: typeof MESSAGE_INCLUDE }>;
 
@@ -10,7 +20,16 @@ export type MessageRow = Prisma.MessageGetPayload<{ include: typeof MESSAGE_INCL
 export function formatMessageRow(
   row: MessageRow,
   interactedReadIds: Set<number>,
+  filterId?: number,
 ) {
+  const filterMatches = row.filterMemberships.map((membership) => ({
+    filterId: membership.filterId,
+    filterName: membership.filter.name,
+    matchedKeyword: membership.matchedKeyword,
+  }));
+  // 当前规则的列表始终展示该归属，兼容字段不再让其它规则覆盖它。
+  const match = filterMatches.find((membership) => membership.filterId === (filterId ?? row.matchedFilterId))
+    ?? filterMatches[0];
   return {
     id: row.id,
     telegramMessageId: row.telegramMessageId,
@@ -23,10 +42,11 @@ export function formatMessageRow(
     messageDate: row.messageDate,
     telegramLink: row.telegramLink,
     isRead: interactedReadIds.has(row.id) ? true : row.isRead,
-    matchedFilterId: row.matchedFilterId,
-    matchedKeyword: row.matchedKeyword,
+    matchedFilterId: match?.filterId ?? row.matchedFilterId,
+    matchedKeyword: match ? match.matchedKeyword : row.matchedKeyword,
     createdAt: row.createdAt,
-    filterName: row.matchedFilter?.name ?? null,
+    filterName: match?.filterName ?? row.matchedFilter?.name ?? null,
+    filterMatches,
     mediaType: row.mediaType ?? null,
     mediaFileName: row.mediaFileName ?? null,
     mediaFileSize: row.mediaFileSize ?? null,

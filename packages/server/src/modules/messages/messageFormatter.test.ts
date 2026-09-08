@@ -25,6 +25,7 @@ function createMessageRow(overrides: Partial<MessageRow> = {}): MessageRow {
     mediaThumbBase64: null,
     mediaExtra: null,
     matchedFilter: { name: "Filter" },
+    filterMemberships: [],
     ...overrides,
   };
 }
@@ -35,6 +36,25 @@ describe("formatMessageRow", () => {
 
     expect(formatted.filterName).toBe("Filter");
     expect(formatted.matchedFilterId).toBe(2);
+  });
+
+  it("projects the selected rule and exposes all independent memberships", () => {
+    const formatted = formatMessageRow(createMessageRow({
+      filterMemberships: [
+        { filterId: 2, matchedKeyword: "hello", filter: { name: "Filter" } },
+        { filterId: 8, matchedKeyword: "world", filter: { name: "Other" } },
+      ],
+    }), new Set(), 8);
+
+    expect(formatted).toMatchObject({
+      matchedFilterId: 8,
+      matchedKeyword: "world",
+      filterName: "Other",
+      filterMatches: [
+        { filterId: 2, matchedKeyword: "hello", filterName: "Filter" },
+        { filterId: 8, matchedKeyword: "world", filterName: "Other" },
+      ],
+    });
   });
 
   it("overrides isRead when fallback sync marked the row as read", () => {

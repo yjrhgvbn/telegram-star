@@ -9,6 +9,8 @@ import {
   messageListQuerySchema,
   messageListResponseSchema,
   messageReadStateResponseSchema,
+  messageRemovalInputSchema,
+  messageRemovalResponseSchema,
   messageStatsSchema,
   readSyncLogsQuerySchema,
   readSyncLogsResponseSchema,
@@ -24,6 +26,7 @@ import {
   listMessages,
   markMessagesAsRead,
   recordMessageEngagement,
+  removeMessages,
   toggleMessageRead,
 } from "./messages.service.js";
 
@@ -32,6 +35,16 @@ function validationErrorMessage(error: unknown, fallback: string): string {
 }
 
 export async function messageRoutes(app: FastifyInstance): Promise<void> {
+  app.post("/api/messages/remove", async (request, reply) => {
+    const bodyResult = messageRemovalInputSchema.safeParse(request.body ?? {});
+    if (!bodyResult.success) {
+      return reply.status(400).send({
+        error: validationErrorMessage(bodyResult.error, "Invalid message removal"),
+      });
+    }
+    return messageRemovalResponseSchema.parse(await removeMessages(bodyResult.data));
+  });
+
   app.get("/api/messages", async (request, reply) => {
     const queryResult = messageListQuerySchema.safeParse(request.query);
     if (!queryResult.success) {

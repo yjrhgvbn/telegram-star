@@ -41,6 +41,9 @@ interface Props {
   selectedIds?: ReadonlySet<number>;
   pendingIds?: ReadonlySet<number>;
   onSelect?: (id: number) => void;
+  onRemove?: (id: number) => void;
+  removalPending?: boolean;
+  removalLabel?: string;
 }
 interface MessageEstimateDimensions { containerWidth: number; viewportWidth: number }
 const DEFAULT_ESTIMATE_VIEWPORT_WIDTH = 1024;
@@ -98,6 +101,7 @@ export function MessageList({
   onOpenTelegram, markAsReadLocal, searchQuery, readFilter = "all", order = "asc",
   restorePosition, onRememberPosition, onRetry, locateRequest = 0, onLocateHandled,
   isSelecting, selectedIds, pendingIds, onSelect,
+  onRemove, removalPending = false, removalLabel,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const dimensions = useMessageEstimateDimensions(scrollRef);
@@ -275,7 +279,7 @@ export function MessageList({
                 const message = orderedMessages[virtualItem.index];
                 return <div key={virtualItem.key} data-index={virtualItem.index} data-message-id={message.id} ref={virtualizer.measureElement} style={{ position: "absolute", top: 0, left: 0, width: "100%" }}>
                   <div className="messages-list-row">
-                    <MessageCard message={message} onToggleRead={onToggleRead} onOpenTelegram={onOpenTelegram} searchQuery={searchQuery} isAnchor={message.id === (locatedId ?? anchorId)} isSelecting={isSelecting} isSelected={selectedIds?.has(message.id)} onSelect={onSelect} isReadPending={pendingIds?.has(message.id)} completionDisabled={Boolean(pendingIds?.size)} />
+                    <MessageCard message={message} onToggleRead={onToggleRead} onOpenTelegram={onOpenTelegram} searchQuery={searchQuery} isAnchor={message.id === (locatedId ?? anchorId)} isSelecting={isSelecting} isSelected={selectedIds?.has(message.id)} onSelect={onSelect} isReadPending={pendingIds?.has(message.id)} completionDisabled={Boolean(pendingIds?.size) || removalPending} onRemove={onRemove} removalDisabled={removalPending} removalLabel={removalLabel} />
                   </div>
                 </div>;
               })}

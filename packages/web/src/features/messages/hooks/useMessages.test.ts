@@ -26,6 +26,7 @@ import { useMessages } from "./useMessages";
 describe("useMessages filter activity refresh", () => {
   const loadNewer = vi.fn();
   const markAsReadLocal = vi.fn();
+  const removeFromRuleLocal = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -46,6 +47,7 @@ describe("useMessages filter activity refresh", () => {
       markAsReadLocal,
       setMessageReadState: vi.fn(),
       refresh: vi.fn(),
+      removeFromRuleLocal,
     });
   });
   afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); });
@@ -113,6 +115,60 @@ describe("useMessages filter activity refresh", () => {
     expect(api.messages.recordEngagement).toHaveBeenCalledWith(7, {
       type: "opened_telegram",
     });
+  });
+
+  it("applies only confirmed removal IDs locally without querying the messages again", async () => {
+    vi.spyOn(api.messages, "remove").mockResolvedValue({ success: true, count: 1, removedIds: [3] });
+    const list = vi.spyOn(api.messages, "list");
+    const queryClient = createTestQueryClient();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useMessages({ filterId: 8 }), { wrapper: createQueryWrapper(queryClient) });
+    await act(async () => { await result.current.removeMessages({ filterId: 8, ids: [3, 7] }); });
+    expect(removeFromRuleLocal).toHaveBeenCalledWith(8, [3]);
+    expect(list).not.toHaveBeenCalled();
+    expect(loadNewer).not.toHaveBeenCalled();
+    expect(hookMocks.useMessagePagination.mock.results[0].value.refresh).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.messages.stats });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.filters.all });
+  });
+
+  it("leaves the current list unchanged when removal fails", async () => {
+    vi.spyOn(api.messages, "remove").mockRejectedValue(new Error("offline"));
+    const queryClient = createTestQueryClient();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useMessages({ filterId: 8 }), { wrapper: createQueryWrapper(queryClient) });
+    await act(async () => {
+      await expect(result.current.removeMessages({ filterId: 8, ids: [3] })).rejects.toThrow("offline");
+    });
+    expect(removeFromRuleLocal).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it("does not apply a pending removal after leaving and returning to its rule", async () => {
+    let finish!: (value: { success: true; count: number; removedIds: number[] }) => void;
+    vi.spyOn(api.messages, "remove").mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const queryClient = createTestQueryClient();
+    const { result, rerender } = renderHook(({ filterId }) => useMessages({ filterId }), {
+      initialProps: { filterId: 8 }, wrapper: createQueryWrapper(queryClient),
+    });
+    let pending!: ReturnType<typeof result.current.removeMessages>;
+    act(() => { pending = result.current.removeMessages({ filterId: 8, ids: [3] }); });
+    rerender({ filterId: 9 });
+    rerender({ filterId: 8 });
+    await act(async () => { finish({ success: true, count: 1, removedIds: [3] }); await pending; });
+    expect(removeFromRuleLocal).not.toHaveBeenCalled();
+  });
+
+  it("does not apply an old server's removal to the new server", async () => {
+    let resolve!: (value: { success: true; count: number; removedIds: number[] }) => void;
+    vi.spyOn(api.messages, "remove").mockImplementation(() => new Promise((done) => { resolve = done; }));
+    const queryClient = createTestQueryClient();
+    const { result } = renderHook(() => useMessages(), { wrapper: createQueryWrapper(queryClient) });
+    let pending!: ReturnType<typeof result.current.removeMessages>;
+    act(() => { pending = result.current.removeMessages({ filterId: 8, ids: [3], blockBackfill: false }); });
+    saveServerUrl("https://another.example");
+    await act(async () => { resolve({ success: true, count: 1, removedIds: [3] }); await pending; });
+    expect(removeFromRuleLocal).not.toHaveBeenCalled();
   });
 
   it("does not apply an old server's completed toggle to the new server", async () => {

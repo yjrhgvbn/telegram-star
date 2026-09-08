@@ -1,0 +1,11 @@
+.message-removal-dialog { max-width: min(440px, calc(100vw - 32px)); }
+.message-removal-rule { display: grid; gap: 8px; font-size: 14px; }
+.message-removal-rule [data-slot="select-trigger"] { width: 100%; }
+.message-removal-option { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; cursor: pointer; }
+.message-removal-option input { width: 17px; height: 17px; accent-color: var(--primary); }
+.message-removal-scope { font-size: 13px; line-height: 1.6; color: var(--muted-foreground); }
+.message-removal-error { color: var(--destructive); font-size: 14px; line-height: 1.6; }
+@media (max-width: 680px) {
+  .message-removal-dialog [data-slot="alert-dialog-footer"] button,
+  .message-removal-dialog [data-slot="select-trigger"] { min-height: 44px; }
+}

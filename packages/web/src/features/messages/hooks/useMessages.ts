@@ -1,9 +1,10 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { queryKeys } from "@/shared/query/queryKeys";
 import { getApiBaseUrl } from "@/shared/api/url";
 import type { Filter, Message, MessageStats } from "@/types";
+import type { MessageRemovalInput, MessageRemovalResponse } from "@telegram-star/shared/contracts/messages";
 import { useMessageEvents } from "./useMessageEvents";
 import {
   useMessagePagination,
@@ -31,6 +32,7 @@ export interface UseMessagesReturn {
   recordTelegramOpen: (id: number) => void;
   markAsReadLocal: (ids: number[]) => void;
   refresh: () => void;
+  removeMessages: (input: MessageRemovalInput) => Promise<MessageRemovalResponse>;
 }
 
 export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn {
@@ -53,6 +55,7 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
     markAsReadLocal,
     setMessageReadState,
     refresh,
+    removeFromRuleLocal,
   } = useMessagePagination(options);
 
   const loadNewerRef = useRef(loadNewer);
@@ -71,6 +74,29 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
     onNewMessage: handleNewMessageEvent,
     onReadMessages: markAsReadLocal,
   });
+
+  const removalScope = JSON.stringify([
+    getApiBaseUrl(), options.filterId, options.isRead, options.search,
+    options.limit, options.autoLocateEnabled, options.enabled,
+  ]);
+  const removalScopeRef = useRef({ key: removalScope, revision: 0 });
+  if (removalScopeRef.current.key !== removalScope) {
+    removalScopeRef.current = { key: removalScope, revision: removalScopeRef.current.revision + 1 };
+  }
+  useEffect(() => () => { removalScopeRef.current.revision += 1; }, []);
+
+  const removeMessages = useCallback(async (input: MessageRemovalInput) => {
+    const serverKey = getApiBaseUrl();
+    const revision = removalScopeRef.current.revision;
+    const result = await api.messages.remove(input);
+    // Only the initiating view changes; another rule/server waits for refresh.
+    if (serverKey === getApiBaseUrl() && revision === removalScopeRef.current.revision) {
+      removeFromRuleLocal(input.filterId, result.removedIds);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.messages.stats });
+      invalidateFilterActivity();
+    }
+    return result;
+  }, [invalidateFilterActivity, queryClient, removeFromRuleLocal]);
 
   const toggleRead = useCallback(async (id: number) => {
     const serverKey = getApiBaseUrl();
@@ -132,6 +158,7 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
     recordTelegramOpen,
     markAsReadLocal,
     refresh: refreshMessages,
+    removeMessages,
   };
 }
 

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useClientExternalLink } from "@/shared/runtime/ClientShellBridgeProvider";
 import { getMessageContentPreview } from "../utils/messageContentPreview";
 import { rememberTelegramJumpMessageId } from "../utils/messageNavigation";
+import { getMessageFilterMatches } from "../utils/messageRemoval";
 import { MediaPreview } from "./MediaPreview";
 import { MessageContent } from "./MessageContent";
 import { MessageSourceAvatar } from "./MessageSourceAvatar";
@@ -29,11 +30,15 @@ interface Props {
   onSelect?: (id: number) => void;
   isReadPending?: boolean;
   completionDisabled?: boolean;
+  onRemove?: (id: number) => void;
+  removalDisabled?: boolean;
+  removalLabel?: string;
 }
 
 export function MessageCard({
   message, onToggleRead, onOpenTelegram, searchQuery, isAnchor,
   isSelecting = false, isSelected = false, onSelect, isReadPending = false, completionDisabled = false,
+  onRemove, removalDisabled = false, removalLabel = "从当前规则移除",
 }: Props) {
   const handleExternalLink = useClientExternalLink();
   const bodyId = useId();
@@ -72,7 +77,7 @@ export function MessageCard({
       <div className="message-card__leading">
         {isSelecting ? (
           <label className="message-card__selection">
-            <input type="checkbox" checked={isSelected} onChange={() => onSelect?.(message.id)} aria-label={`选择 ${source} 的消息`} />
+            <input type="checkbox" checked={isSelected} onChange={() => onSelect?.(message.id)} disabled={completionDisabled || removalDisabled} aria-label={`选择 ${source} 的消息`} />
           </label>
         ) : (
           <MessageSourceAvatar messageId={message.id} source={source} />
@@ -104,6 +109,7 @@ export function MessageCard({
                     <Menu.Item className="message-card-menu__item" disabled={!message.telegramLink} onClick={() => void copyText(message.telegramLink, "原文链接已复制")}>
                       <Link aria-hidden="true" />{message.telegramLink ? "复制原文链接" : "无原文链接"}
                     </Menu.Item>
+                    {onRemove && <Menu.Item className="message-card-menu__item message-card-menu__remove" disabled={removalDisabled || completionDisabled || !getMessageFilterMatches(message).length} onClick={() => onRemove(message.id)}>{removalLabel}</Menu.Item>}
                   </Menu.Group>
                 </Menu.Popup>
               </Menu.Positioner>

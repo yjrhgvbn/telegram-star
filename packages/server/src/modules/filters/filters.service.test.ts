@@ -20,7 +20,7 @@ describe("filters.service", () => {
       manualGroupId: 3,
       manualSortOrder: 2,
       forwardTargets: [{ id: 2 }, { id: 5 }],
-      messages: [{ messageDate: "2026-06-29T00:30:00.000Z" }],
+      messageMemberships: [{ message: { messageDate: "2026-06-29T00:30:00.000Z" } }],
       createdAt: "2026-06-29T00:00:00.000Z",
       updatedAt: "2026-06-29T01:00:00.000Z",
     });

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   findMessageCursor: vi.fn(),
+  removeMessagesFromFilter: vi.fn(),
+  emitMessageEvent: vi.fn(),
   findMostRecentReadMessage: vi.fn(),
   findOldestUnreadMessage: vi.fn(),
   listMessagesAroundCursor: vi.fn(),
@@ -11,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("./messages.repository.js", () => ({
   countMessageStats: vi.fn(),
+  removeMessagesFromFilter: mocks.removeMessagesFromFilter,
   findFirstUnreadAfterCursor: vi.fn(),
   findMessageCursor: mocks.findMessageCursor,
   findMessageReadState: vi.fn(),
@@ -27,6 +30,8 @@ vi.mock("./messages.repository.js", () => ({
   setMessageReadState: vi.fn(),
 }));
 
+vi.mock("../../services/messageEvents.js", () => ({ emitMessageEvent: mocks.emitMessageEvent }));
+
 vi.mock("./readSyncFallback.js", () => ({
   runInteractionSyncInBackground: mocks.runInteractionSyncInBackground,
 }));
@@ -35,6 +40,7 @@ import {
   MessageNotFoundError,
   listMessages,
   recordMessageEngagement,
+  removeMessages,
 } from "./messages.service.js";
 
 const logger = {
@@ -69,9 +75,9 @@ describe("messages service", () => {
       limit: 20,
     }, logger);
 
-    expect(mocks.findOldestUnreadMessage).toHaveBeenCalledWith({ matchedFilterId: 12 });
+    expect(mocks.findOldestUnreadMessage).toHaveBeenCalledWith({ filterMemberships: { some: { filterId: 12 } } });
     expect(mocks.listMessagesAroundCursor).toHaveBeenCalledWith(
-      { matchedFilterId: 12 },
+      { filterMemberships: { some: { filterId: 12 } } },
       cursor.id,
       cursor,
       20,
@@ -106,5 +112,24 @@ describe("messages service", () => {
     await expect(
       recordMessageEngagement(404, { type: "opened_telegram" }),
     ).rejects.toBeInstanceOf(MessageNotFoundError);
+  });
+
+  it("returns removals only to the caller without broadcasting", async () => {
+    const input = { ids: [1, 2], filterId: 3, blockBackfill: false };
+    mocks.removeMessagesFromFilter.mockResolvedValue({
+      removedIds: [1, 2],
+    });
+
+    await expect(removeMessages(input)).resolves.toEqual({ success: true, removedIds: [1, 2], count: 2 });
+    expect(mocks.emitMessageEvent).not.toHaveBeenCalled();
+  });
+
+  it("does not broadcast retries or failed removal transactions", async () => {
+    mocks.removeMessagesFromFilter.mockResolvedValueOnce({ removedIds: [] });
+    await expect(removeMessages({ ids: [1], filterId: 3 }))
+      .resolves.toEqual({ success: true, removedIds: [], count: 0 });
+    mocks.removeMessagesFromFilter.mockRejectedValueOnce(new Error("transaction failed"));
+    await expect(removeMessages({ ids: [1], filterId: 3 })).rejects.toThrow("transaction failed");
+    expect(mocks.emitMessageEvent).not.toHaveBeenCalled();
   });
 });

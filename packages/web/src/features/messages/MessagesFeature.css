@@ -80,3 +80,5 @@
   .messages-tools-menu [role="menuitem"] { min-height: 44px; }
   .messages-arrival { right: 14px; }
 }
+.messages-selection .messages-selection__remove { color: var(--destructive); }
+.messages-operation-feedback { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 24px; background: var(--muted); color: var(--foreground); font-size: 13px; }

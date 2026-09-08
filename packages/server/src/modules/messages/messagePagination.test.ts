@@ -18,7 +18,7 @@ describe("messagePagination", () => {
       search: "keyword",
     })).toEqual({
       isRead: false,
-      matchedFilterId: 7,
+      filterMemberships: { some: { filterId: 7 } },
       content: { contains: "keyword" },
     });
   });

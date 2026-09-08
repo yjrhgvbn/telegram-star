@@ -190,4 +190,56 @@ describe("useMessagePagination", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(list).toHaveBeenCalledTimes(1);
   });
+
+  it("removes only the requested rule locally without reloading messages", async () => {
+    const shared = { ...createMessage(3), filterMatches: [
+      { filterId: 8, filterName: "A", matchedKeyword: null },
+      { filterId: 9, filterName: "B", matchedKeyword: "b" },
+    ] };
+    const list = vi.spyOn(api.messages, "list").mockResolvedValue({
+      data: [createMessage(2), shared], hasOlder: true, hasNewer: true,
+    });
+    const { result } = renderHook(() => useMessagePagination({ filterId: 8 }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.removeFromRuleLocal(8, [3]));
+    expect(result.current.messages.map((message) => message.id)).toEqual([2]);
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves other rules in all messages and discards a pending stale page", async () => {
+    let finishPage!: (value: Awaited<ReturnType<typeof api.messages.list>>) => void;
+    const shared = { ...createMessage(3), filterMatches: [
+      { filterId: 8, filterName: "A", matchedKeyword: null },
+      { filterId: 9, filterName: "B", matchedKeyword: "b" },
+    ] };
+    const list = vi.spyOn(api.messages, "list")
+      .mockResolvedValueOnce({ data: [createMessage(2), shared], hasOlder: true, hasNewer: false })
+      .mockImplementationOnce(() => new Promise((resolve) => { finishPage = resolve; }));
+    const { result } = renderHook(() => useMessagePagination());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => { result.current.loadOlder(); });
+    act(() => result.current.removeFromRuleLocal(8, [2, 3]));
+    expect(result.current.messages).toEqual([{
+      ...shared, matchedFilterId: 9, filterName: "B", matchedKeyword: "b", filterMatches: [shared.filterMatches[1]],
+    }]);
+    await act(async () => finishPage({ data: [createMessage(1), createMessage(2), shared], hasOlder: false, hasNewer: false }));
+    expect(result.current.messages.map((message) => message.id)).toEqual([3]);
+    expect(result.current.messages[0].filterMatches).toEqual([shared.filterMatches[1]]);
+    expect(result.current.loadingOlder).toBe(false);
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves an emptied window until the user refreshes", async () => {
+    const list = vi.spyOn(api.messages, "list")
+      .mockResolvedValueOnce({ data: [createMessage(3)], hasOlder: true, hasNewer: true })
+      .mockResolvedValueOnce({ data: [createMessage(4)], hasOlder: false, hasNewer: false });
+    const { result } = renderHook(() => useMessagePagination({ filterId: 8 }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.removeFromRuleLocal(8, [3]));
+    expect(result.current.messages).toEqual([]);
+    expect(list).toHaveBeenCalledTimes(1);
+    act(() => result.current.refresh());
+    await waitFor(() => expect(result.current.messages.map((message) => message.id)).toEqual([4]));
+    expect(list).toHaveBeenCalledTimes(2);
+  });
 });

@@ -1,4 +1,5 @@
 import { db } from "../../db/index.js";
+import type { Prisma } from "../../generated/prisma/client.js";
 import type {
   FilterManualOrderInput,
   FilterPlacementInput,
@@ -10,20 +11,21 @@ import type {
 } from "@telegram-star/shared/contracts/filters";
 import { serializeConditions } from "../../services/filter-matching.js";
 import { planFilterMessageReconciliation } from "./filter-message-reconciliation.js";
+import { synchronizeMessageMemberships, withMessageMembershipTransaction } from "../../services/messageMemberships.js";
 
 export type FilterRow = Awaited<ReturnType<typeof findFilterRows>>[number];
 
 const filterApiInclude = {
   forwardTargets: { select: { id: true } },
-  messages: {
+  messageMemberships: {
     orderBy: [
-      { messageDate: "desc" },
-      { telegramMessageId: "desc" },
+      { message: { messageDate: "desc" } },
+      { message: { telegramMessageId: "desc" } },
     ],
     take: 1,
-    select: { messageDate: true },
+    select: { message: { select: { messageDate: true } } },
   },
-} as const;
+} satisfies Prisma.FilterInclude;
 
 const MESSAGE_WRITE_BATCH_SIZE = 500;
 
@@ -103,41 +105,47 @@ export async function updateFilterRow(id: number, input: FilterUpdateInput): Pro
   }
 
   // 规则与历史归属必须原子更新，避免新规则生效后仍短暂展示旧规则命中的消息。
-  return db.$transaction(async (transaction) => {
+  const conditions = input.conditions;
+  return withMessageMembershipTransaction(async (transaction) => {
     await transaction.filter.update({
       where: { id },
       data: buildFilterUpdateData(input),
     });
-    const messages = await transaction.message.findMany({
-      where: { matchedFilterId: id },
+    const memberships = await transaction.messageFilterMembership.findMany({
+      where: { filterId: id },
       select: {
-        id: true,
-        chatId: true,
-        content: true,
         matchedKeyword: true,
+        message: { select: { id: true, chatId: true, content: true } },
       },
     });
-    const reconciliation = planFilterMessageReconciliation(messages, input.conditions);
+    const messages = memberships.map(({ message, matchedKeyword }) => ({ ...message, matchedKeyword }));
+    const changedMessageIds = messages.map((message) => message.id);
+    const reconciliation = planFilterMessageReconciliation(messages, conditions);
 
     for (const messageIds of toMessageIdBatches(reconciliation.messageIdsToDelete)) {
-      await transaction.message.deleteMany({
+      await transaction.messageFilterMembership.deleteMany({
         where: {
-          id: { in: messageIds },
-          matchedFilterId: id,
+          messageId: { in: messageIds },
+          filterId: id,
         },
       });
     }
 
     for (const keywordUpdate of reconciliation.keywordUpdates) {
       for (const messageIds of toMessageIdBatches(keywordUpdate.messageIds)) {
-        await transaction.message.updateMany({
+        await transaction.messageFilterMembership.updateMany({
           where: {
-            id: { in: messageIds },
-            matchedFilterId: id,
+            messageId: { in: messageIds },
+            filterId: id,
           },
           data: { matchedKeyword: keywordUpdate.matchedKeyword },
         });
       }
+    }
+
+    // 条件清理只解除当前规则归属，保留其他规则及其消息级完成状态。
+    for (const messageIds of toMessageIdBatches(changedMessageIds)) {
+      await synchronizeMessageMemberships(transaction, messageIds);
     }
 
     // 规则变更可能删除历史命中，必须在清理完成后再读取活动摘要。
@@ -264,10 +272,15 @@ export async function reorderManualFilterRows(input: FilterManualOrderInput): Pr
 }
 
 export async function deleteFilterWithMessages(id: number): Promise<void> {
-  // Message.matchedFilterId 代表命中来源；删除过滤器时同步删除关联消息，
-  // 避免列表里留下无法解释来源的历史命中记录。
-  await db.$transaction([
-    db.message.deleteMany({ where: { matchedFilterId: id } }),
-    db.filter.delete({ where: { id } }),
-  ]);
+  await withMessageMembershipTransaction(async (transaction) => {
+    const memberships = await transaction.messageFilterMembership.findMany({
+      where: { filterId: id }, select: { messageId: true },
+    });
+    const ids = memberships.map((membership) => membership.messageId);
+    // 删除规则不是用户屏蔽消息；级联清理该规则归属与移除记录，不影响其他规则。
+    await transaction.filter.delete({ where: { id } });
+    for (const messageIds of toMessageIdBatches(ids)) {
+      await synchronizeMessageMemberships(transaction, messageIds);
+    }
+  });
 }

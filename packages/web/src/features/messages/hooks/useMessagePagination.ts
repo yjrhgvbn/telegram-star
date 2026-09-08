@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { api } from "@/api/client";
 import { getApiBaseUrl } from "@/shared/api/url";
 import type { Message } from "@/types";
+import { removeMessageRule } from "../utils/messageRemoval";
 import {
   appendUniqueMessages,
   markMessagesAsRead,
@@ -50,6 +51,7 @@ export interface UseMessagePaginationReturn {
   markAsReadLocal: (ids: number[]) => void;
   setMessageReadState: (id: number, isRead: boolean) => void;
   refresh: () => void;
+  removeFromRuleLocal: (filterId: number, ids: number[]) => void;
 }
 
 const DEFAULT_MESSAGE_LIMIT = 20;
@@ -285,6 +287,23 @@ export function useMessagePagination(
     void initialize(false);
   }, [initialize]);
 
+  const removeFromRuleLocal = useCallback((filterId: number, ids: number[]) => {
+    if (!ids.length) return;
+    // Discard pages requested before the removal so stale rows cannot reappear.
+    // Existing pages stay local; a user refresh obtains the latest server view.
+    queryGenerationRef.current += 1;
+    initializingRef.current = false;
+    pendingInitialEventRef.current = false;
+    loadingOlderRef.current = false;
+    loadingNewerRef.current = false;
+    setLoading(false);
+    setLoadingOlder(false);
+    setLoadingNewer(false);
+    const next = removeMessageRule(messagesRef.current, filterId, new Set(ids), optionsRef.current.filterId);
+    messagesRef.current = next;
+    setMessages(next);
+  }, []);
+
   return {
     messages: enabled && initializedQueryRef.current === queryKey ? messages : [],
     hasOlder,
@@ -303,5 +322,6 @@ export function useMessagePagination(
     markAsReadLocal,
     setMessageReadState,
     refresh,
+    removeFromRuleLocal,
   };
 }

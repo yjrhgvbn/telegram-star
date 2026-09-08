@@ -7,7 +7,7 @@ import {
   extractMessageContentLinks,
   serializeMessageContentLinks,
 } from "./messageContentLinks.js";
-import { createMessageIfAbsent } from "./messagePersistence.js";
+import { persistMessageForFilters } from "./messagePersistence.js";
 import { buildTelegramLink, getMessageTimestampMs, getSenderSummary } from "./utils.js";
 
 export interface ActiveMessageFilter {
@@ -75,11 +75,12 @@ export function getMessageTimingFields(message: any, nowMs = Date.now()): Messag
   };
 }
 
-export function findFirstMatchingFilter(
+export function findMatchingFilters(
   chatId: string,
   content: string,
   filters: ActiveMessageFilter[],
-): { filter: ActiveMessageFilter; matchedKeyword: string | null } | null {
+): { filter: ActiveMessageFilter; matchedKeyword: string | null }[] {
+  const matches: { filter: ActiveMessageFilter; matchedKeyword: string | null }[] = [];
   for (const filter of filters) {
     const conditions = parseConditions(filter.conditions);
     if (conditions.length === 0) continue;
@@ -98,11 +99,19 @@ export function findFirstMatchingFilter(
       continue;
     }
     if (match.matched) {
-      return { filter, matchedKeyword: match.matchedKeyword };
+      matches.push({ filter, matchedKeyword: match.matchedKeyword });
     }
   }
 
-  return null;
+  return matches;
+}
+
+export function findFirstMatchingFilter(
+  chatId: string,
+  content: string,
+  filters: ActiveMessageFilter[],
+): { filter: ActiveMessageFilter; matchedKeyword: string | null } | null {
+  return findMatchingFilters(chatId, content, filters)[0] ?? null;
 }
 
 /** 由实时监听和历史回补共用的唯一消息入库入口。 */
@@ -118,8 +127,8 @@ export async function ingestTelegramMessage(
   if (!chatId) return "unmatched";
 
   const textContent = getMessageTextContent(message);
-  const matched = findFirstMatchingFilter(chatId, textContent, activeFilters);
-  if (!matched) return "unmatched";
+  const matches = findMatchingFilters(chatId, textContent, activeFilters);
+  if (matches.length === 0) return "unmatched";
 
   const chatTitle = chat.title || chat.firstName || chat.username || chatId;
   const mediaInfo = extractMediaInfo(message);
@@ -132,7 +141,7 @@ export async function ingestTelegramMessage(
   const receivedAtMs = Date.now();
   const timing = getMessageTimingFields(message, receivedAtMs);
 
-  const rowId = await createMessageIfAbsent({
+  const persisted = await persistMessageForFilters({
     telegramMessageId: message.id,
     chatId,
     chatTitle,
@@ -143,8 +152,6 @@ export async function ingestTelegramMessage(
     messageDate: timing.messageDate,
     telegramLink,
     isRead: false,
-    matchedFilterId: matched.filter.id,
-    matchedKeyword: matched.matchedKeyword,
     createdAt: new Date().toISOString(),
     ...(mediaInfo && {
       mediaType: mediaInfo.mediaType,
@@ -155,9 +162,18 @@ export async function ingestTelegramMessage(
       mediaThumbBase64: mediaInfo.mediaThumbBase64,
       mediaExtra: mediaInfo.mediaExtra,
     }),
-  });
+  }, matches.map((match) => ({ filterId: match.filter.id, matchedKeyword: match.matchedKeyword })));
 
-  if (rowId === null) return "duplicate";
+  if (persisted.rowId === null) return "unmatched";
+  // 仅新增规则归属时沿用已有消息的处理方式，不重复通知或广播新消息。
+  if (!persisted.created) return "duplicate";
+  const rowId = persisted.rowId;
+  // 延续每条消息仅触发一次通知的行为，只选择本次新增且未被移除的规则。
+  const latestMatch = persisted.addedMatches[0];
+  const matched = {
+    filter: activeFilters.find((filter) => filter.id === latestMatch.filterId)!,
+    matchedKeyword: latestMatch.matchedKeyword,
+  };
 
   let notifyStatus: "not-requested" | "no-targets" | "queued" | "queue-failed" =
     "not-requested";
@@ -206,6 +222,7 @@ export async function ingestTelegramMessage(
     chatId,
     telegramMessageId: Number(message.id),
     filterId: matched.filter.id,
+    addedFilterIds: persisted.addedFilterIds,
     mediaType: mediaInfo?.mediaType ?? null,
     telegramDate: timing.messageDate,
     editDate: timing.editDate,

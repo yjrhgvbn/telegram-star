@@ -1,5 +1,10 @@
 import { db } from "../../db/index.js";
 import type { Prisma } from "../../generated/prisma/client.js";
+import type { MessageRemovalInput } from "@telegram-star/shared/contracts/messages";
+import {
+  synchronizeMessageMemberships,
+  withMessageMembershipTransaction,
+} from "../../services/messageMemberships.js";
 import {
   MESSAGE_INCLUDE,
   type MessageRow,
@@ -10,8 +15,9 @@ import {
   type MessageCursorPosition,
 } from "./messagePagination.js";
 
-const MESSAGE_ORDER_ASC = [{ messageDate: "asc" }, { telegramMessageId: "asc" }] as const;
-const MESSAGE_ORDER_DESC = [{ messageDate: "desc" }, { telegramMessageId: "desc" }] as const;
+const MESSAGE_ORDER_ASC: Prisma.MessageOrderByWithRelationInput[] = [{ messageDate: "asc" }, { telegramMessageId: "asc" }];
+const MESSAGE_ORDER_DESC: Prisma.MessageOrderByWithRelationInput[] = [{ messageDate: "desc" }, { telegramMessageId: "desc" }];
+const MESSAGE_MEMBERSHIPS_SELECT = { select: { filterId: true } } as const;
 
 export interface MessageWindow {
   rows: MessageRow[];
@@ -52,28 +58,33 @@ export async function findMessageCursor(id: number) {
 export async function findMessageReadState(id: number) {
   return db.message.findUnique({
     where: { id },
-    select: { id: true, isRead: true, matchedFilterId: true },
+    select: { id: true, isRead: true },
   });
 }
 
 export async function setMessageReadState(id: number, isRead: boolean) {
-  return db.$transaction(async (transaction) => {
+  return withMessageMembershipTransaction(async (transaction) => {
+    // 排队期间最后一个归属可能已被移除；按不存在处理，而不是向客户端泄漏 Prisma 错误。
+    const existing = await transaction.message.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) return null;
     const updated = await transaction.message.update({
       where: { id },
       data: { isRead },
-      select: { id: true, isRead: true, matchedFilterId: true },
+      select: { id: true, isRead: true, filterMemberships: MESSAGE_MEMBERSHIPS_SELECT },
     });
 
-    if (isRead && updated.matchedFilterId !== null) {
+    if (isRead) {
       const now = new Date().toISOString();
-      await transaction.filter.update({
-        where: { id: updated.matchedFilterId },
-        data: {
-          lastEngagedAt: now,
-          lastEngagementType: "marked_read",
-          lastEngagedMessageId: updated.id,
-        },
-      });
+      for (const { filterId } of updated.filterMemberships) {
+        await transaction.filter.update({
+          where: { id: filterId },
+          data: {
+            lastEngagedAt: now,
+            lastEngagementType: "marked_read",
+            lastEngagedMessageId: updated.id,
+          },
+        });
+      }
     }
 
     return updated;
@@ -81,10 +92,10 @@ export async function setMessageReadState(id: number, isRead: boolean) {
 }
 
 export async function markMessagesRead(ids: number[]) {
-  return db.$transaction(async (transaction) => {
+  return withMessageMembershipTransaction(async (transaction) => {
     const unreadMessages = await transaction.message.findMany({
       where: { id: { in: ids }, isRead: false },
-      select: { id: true, matchedFilterId: true },
+      select: { id: true, filterMemberships: MESSAGE_MEMBERSHIPS_SELECT },
     });
     const result = await transaction.message.updateMany({
       where: { id: { in: ids } },
@@ -94,8 +105,7 @@ export async function markMessagesRead(ids: number[]) {
     const unreadById = new Map(unreadMessages.map((message) => [message.id, message]));
     const latestMessageByFilter = new Map<number, number>();
     for (const id of ids) {
-      const filterId = unreadById.get(id)?.matchedFilterId;
-      if (filterId !== null && filterId !== undefined) {
+      for (const { filterId } of unreadById.get(id)?.filterMemberships ?? []) {
         latestMessageByFilter.set(filterId, id);
       }
     }
@@ -120,14 +130,14 @@ export async function recordMessageGroupEngagement(
   messageId: number,
   type: MessageGroupEngagementType,
 ): Promise<MessageGroupEngagementRecord | null> {
-  return db.$transaction(async (transaction) => {
+  return withMessageMembershipTransaction(async (transaction) => {
     const message = await transaction.message.findUnique({
       where: { id: messageId },
-      select: { id: true, matchedFilterId: true },
+      select: { id: true, matchedFilterId: true, filterMemberships: MESSAGE_MEMBERSHIPS_SELECT },
     });
     if (!message) return null;
 
-    if (message.matchedFilterId === null) {
+    if (message.filterMemberships.length === 0) {
       return {
         recorded: false,
         filterId: null,
@@ -138,22 +148,58 @@ export async function recordMessageGroupEngagement(
     }
 
     const now = new Date().toISOString();
-    await transaction.filter.update({
-      where: { id: message.matchedFilterId },
-      data: {
-        lastEngagedAt: now,
-        lastEngagementType: type,
-        lastEngagedMessageId: message.id,
-      },
-    });
+    for (const { filterId } of message.filterMemberships) {
+      await transaction.filter.update({
+        where: { id: filterId },
+        data: {
+          lastEngagedAt: now,
+          lastEngagementType: type,
+          lastEngagedMessageId: message.id,
+        },
+      });
+    }
 
     return {
       recorded: true,
-      filterId: message.matchedFilterId,
+      filterId: message.matchedFilterId ?? message.filterMemberships[0].filterId,
       lastEngagedAt: now,
       lastEngagementType: type,
       lastEngagedMessageId: message.id,
     };
+  });
+}
+
+export async function removeMessagesFromFilter(input: MessageRemovalInput) {
+  return withMessageMembershipTransaction(async (transaction) => {
+    // 只对仍属于目标规则的消息写标记；重试不能升级已移除消息的补录限制。
+    const messages = await transaction.message.findMany({
+      where: {
+        id: { in: [...new Set(input.ids)] },
+        filterMemberships: { some: { filterId: input.filterId } },
+      },
+      select: { id: true, chatId: true, telegramMessageId: true },
+    });
+    if (messages.length === 0) return { removedIds: [] };
+
+    const removedAt = new Date().toISOString();
+    for (const message of messages) {
+      const key = {
+        chatId: message.chatId,
+        telegramMessageId: message.telegramMessageId,
+        filterId: input.filterId,
+      };
+      await transaction.messageRemoval.upsert({
+        where: { chatId_telegramMessageId_filterId: key },
+        create: { ...key, removedAt, blockBackfill: input.blockBackfill ?? false },
+        update: { removedAt, blockBackfill: input.blockBackfill ?? false },
+      });
+    }
+    const removedIds = messages.map((message) => message.id);
+    await transaction.messageFilterMembership.deleteMany({
+      where: { filterId: input.filterId, messageId: { in: removedIds } },
+    });
+    await synchronizeMessageMemberships(transaction, removedIds);
+    return { removedIds };
   });
 }
 
@@ -293,7 +339,8 @@ export async function listMessagesAroundCursor(
       orderBy: MESSAGE_ORDER_ASC,
       take: halfLimit + 1,
     }),
-    db.message.findUnique({ where: { id: cursorId }, include: MESSAGE_INCLUDE }),
+    // 游标可以保留在其它规则中；它仅用于定位，不能绕过当前列表过滤条件。
+    db.message.findFirst({ where: { AND: [where, { id: cursorId }] }, include: MESSAGE_INCLUDE }),
   ]);
 
   const hasOlder = beforeRaw.length > halfLimit;

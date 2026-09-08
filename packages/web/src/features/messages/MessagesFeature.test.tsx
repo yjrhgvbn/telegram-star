@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentProps, ReactNode } from "react";
 import type { MessageList } from "./components/MessageList";
 
-const mocks = vi.hoisted(() => ({useMessages: vi.fn(), apply: vi.fn()}));
+const mocks = vi.hoisted(() => ({useMessages: vi.fn(), apply: vi.fn(), remove: vi.fn()}));
 vi.mock("./hooks/useMessages", () => ({useMessages: mocks.useMessages}));
 vi.mock("./hooks/useMessageCompletion", () => ({useMessageCompletion: () => ({
   pendingIds: new Set(), error: null, apply: mocks.apply, toggle: vi.fn(), dismissError: vi.fn(),
@@ -25,6 +25,7 @@ vi.mock("./components/MessageList", () => ({MessageList: (props: ComponentProps<
     <output data-testid="locate-request">{props.locateRequest}</output>
     <output data-testid="selected-messages">{Array.from(props.selectedIds ?? []).join(",")}</output>
     <button onClick={props.onLocateHandled}>确认定位完成</button>
+    {props.messages.map(message => <button key={`remove-${message.id}`} onClick={() => props.onRemove?.(message.id)}>移除消息 {message.id}</button>)}
     {props.isSelecting && props.messages.map(message => <button key={message.id} onClick={() => props.onSelect?.(message.id)}>选择消息 {message.id}</button>)}
   </section>
 )}));
@@ -35,11 +36,12 @@ beforeEach(() => {
   sessionStorage.clear(); localStorage.clear();
   vi.stubGlobal("matchMedia", () => ({matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn()}));
   mocks.apply.mockResolvedValue(undefined);
+  mocks.remove.mockResolvedValue({ success: true, removedIds: [1], count: 1 });
   mocks.useMessages.mockImplementation((options: {filterId?: number}) => ({
-    messages: [{id: options.filterId ?? 1, isRead: false}], hasOlder: false, hasNewer: false,
+    messages: [{id: options.filterId ?? 1, matchedFilterId: options.filterId ?? 1, filterName: "分组一", isRead: false}], hasOlder: false, hasNewer: false,
     loading: false, error: null, loadingOlder: false, loadingNewer: false, anchorId: null, restoredAnchorId: null,
     hasPendingNew: false, loadOlder: vi.fn(), loadNewer: vi.fn(), flushPending: vi.fn(), setAtBottom: vi.fn(),
-    toggleRead: vi.fn(), recordTelegramOpen: vi.fn(), markAsReadLocal: vi.fn(), refresh: vi.fn(),
+    toggleRead: vi.fn(), recordTelegramOpen: vi.fn(), markAsReadLocal: vi.fn(), refresh: vi.fn(), removeMessages: mocks.remove,
   }));
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); sessionStorage.clear(); localStorage.clear(); });
@@ -48,6 +50,34 @@ function mount() {
 }
 
 describe("MessagesFeature integration", () => {
+  it("removes a single row from its rule and reports the result in the page", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "移除消息 1" }));
+    expect(screen.getByRole("alertdialog").textContent).toContain("从“分组一”移除 1 条消息？");
+    fireEvent.click(screen.getByRole("button", { name: "移除 1 条" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(mocks.remove).toHaveBeenCalledWith({ filterId: 1, ids: [1], blockBackfill: false });
+    expect(screen.getByText("已从“分组一”移除 1 条消息").closest('[role="status"]')).toBeTruthy();
+  });
+
+  it("keeps failed batch selections available and locks completion until the request finishes", async () => {
+    let reject!: (error: Error) => void;
+    mocks.remove.mockImplementation(() => new Promise((_resolve, fail) => { reject = fail; }));
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "选择" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择当前已加载的消息" }));
+    fireEvent.click(screen.getByRole("button", { name: "移除" }));
+    fireEvent.click(screen.getByRole("button", { name: "移除 1 条" }));
+    expect((screen.getByRole("button", { name: "标记完成", hidden: true }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => reject(new Error("网络断开")));
+    expect(screen.getByRole("alert").textContent).toContain("网络断开");
+    expect(screen.getByTestId("selected-messages").textContent).toBe("1");
+    mocks.remove.mockResolvedValue({ success: true, removedIds: [1], count: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "移除 1 条" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(screen.getByTestId("selected-messages").textContent).toBe("");
+  });
+
   it("scopes a locate request to the current query and clears it when consumed", () => {
     mount();
     fireEvent.click(screen.getByRole("button", {name: "定位待完成"}));

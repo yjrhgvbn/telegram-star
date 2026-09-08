@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   findFirstMatchingFilter,
+  findMatchingFilters,
   getMessageLagLogLevel,
   getMessageTimingFields,
 } from "./messageIngestion.js";
 import { isDuplicateMessageError } from "./messagePersistence.js";
 
 describe("Telegram message ingestion", () => {
+  it("collects all matching rules so removing one rule cannot hide another match", () => {
+    const filters = [
+      { id: 1, name: "release", conditions: JSON.stringify([{ type: "keyword", values: ["release"] }]) },
+      { id: 2, name: "version", conditions: JSON.stringify([{ type: "regex", values: ["V\\d+"] }]) },
+      { id: 3, name: "other", conditions: JSON.stringify([{ type: "keyword", values: ["missing"] }]) },
+    ];
+    expect(findMatchingFilters("chat-1", "Release V2 is ready", filters).map(({ filter }) => filter.id)).toEqual([1, 2]);
+  });
   it("selects the first enabled filter that matches all of its conditions", () => {
     const result = findFirstMatchingFilter("chat-1", "Release V2 is ready", [
       {

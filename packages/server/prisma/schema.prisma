@@ -23,6 +23,8 @@ model Filter {
   createdAt String      @map("created_at")
   updatedAt String      @map("updated_at")
   messages  Message[]
+  messageMemberships MessageFilterMembership[]
+  messageRemovals MessageRemoval[]
   backfillJobs FilterBackfillJob[]
   forwardTargets ForwardTarget[] @relation("FilterToForwardTarget")
   manualGroup FilterGroup? @relation(fields: [manualGroupId], references: [id], onDelete: SetNull)
@@ -56,6 +58,7 @@ model FilterBackfillJob {
   matchedCount             Int      @default(0) @map("matched_count")
   savedCount               Int      @default(0) @map("saved_count")
   skippedExistingCount     Int      @default(0) @map("skipped_existing_count")
+  skippedRemovedCount      Int      @default(0) @map("skipped_removed_count")
   currentChatTitle         String?  @map("current_chat_title")
   error                    String?
   createdAt                String   @map("created_at")
@@ -84,6 +87,7 @@ model Message {
   matchedKeyword    String?  @map("matched_keyword")
   createdAt         String   @map("created_at")
   matchedFilter     Filter?  @relation(fields: [matchedFilterId], references: [id], onDelete: SetNull)
+  filterMemberships MessageFilterMembership[]
 
   // --- 媒体元信息 ---
   mediaType         String?  @map("media_type")           // "photo"|"video"|"sticker"|"document"|"voice"|"audio"|"gif"|"videoNote"|"contact"|"geo"|"poll"
@@ -100,6 +104,33 @@ model Message {
   @@unique([chatId, telegramMessageId], map: "messages_chat_id_telegram_message_id_key")
 
   @@map("messages")
+}
+
+// 消息正文仅保存一份；每个规则的归属与主动移除状态独立维护。
+model MessageFilterMembership {
+  messageId Int @map("message_id")
+  filterId Int @map("filter_id")
+  matchedKeyword String? @map("matched_keyword")
+  createdAt String @map("created_at")
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  filter Filter @relation(fields: [filterId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, filterId])
+  @@index([filterId, messageId])
+  @@map("message_filter_memberships")
+}
+
+model MessageRemoval {
+  chatId String @map("chat_id")
+  telegramMessageId Int @map("telegram_message_id")
+  filterId Int @map("filter_id")
+  removedAt String @map("removed_at")
+  blockBackfill Boolean @default(false) @map("block_backfill")
+  filter Filter @relation(fields: [filterId], references: [id], onDelete: Cascade)
+
+  @@id([chatId, telegramMessageId, filterId])
+  @@index([filterId])
+  @@map("message_removals")
 }
 
 model ReadSyncLog {

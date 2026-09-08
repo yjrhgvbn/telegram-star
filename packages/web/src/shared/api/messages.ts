@@ -6,9 +6,11 @@ import {
   messageListResponseSchema,
   messageReadStateResponseSchema,
   messageStatsSchema,
+  messageRemovalResponseSchema,
   readSyncLogsResponseSchema,
   type MessageListParams,
   type MessageEngagementInput,
+  type MessageRemovalInput,
 } from "@telegram-star/shared/contracts/messages";
 import { request } from "./request";
 
@@ -29,6 +31,9 @@ function toMessageQuery(params?: MessageListParams): string {
 }
 
 export const messagesApi = {
+  remove: (input: MessageRemovalInput) => request("/messages/remove", {
+    method: "POST", body: JSON.stringify(input),
+  }, messageRemovalResponseSchema),
   list: (params?: MessageListParams) =>
     request(`/messages${toMessageQuery(params)}`, undefined, messageListResponseSchema),
   toggleRead: (id: number) =>

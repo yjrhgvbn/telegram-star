@@ -81,3 +81,4 @@
 @media (prefers-reduced-motion: reduce) {
   .message-card[data-anchor="true"] { animation: none; }
 }
+.message-card-menu .message-card-menu__remove { color: var(--destructive); }

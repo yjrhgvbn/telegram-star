@@ -268,6 +268,7 @@ export const filterBackfillResponseSchema = z.object({
   matchedCount: z.number().int().nonnegative(),
   savedCount: z.number().int().nonnegative(),
   skippedExistingCount: z.number().int().nonnegative(),
+  skippedRemovedCount: z.number().int().nonnegative().optional(),
 });
 
 export const filterBackfillModeSchema = z.enum(["time", "count"]);
@@ -333,6 +334,7 @@ export const filterBackfillJobSchema = z.object({
   matchedCount: z.number().int().nonnegative(),
   savedCount: z.number().int().nonnegative(),
   skippedExistingCount: z.number().int().nonnegative(),
+  skippedRemovedCount: z.number().int().nonnegative().optional(),
   currentChatTitle: z.string().nullable(),
   error: z.string().nullable(),
   createdAt: z.string(),

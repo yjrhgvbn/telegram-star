@@ -176,7 +176,7 @@ export function FilterForm({
         </details>
         {historyBackfill}
       </div>
-      <p className="rule-form__impact">保存条件后会重算历史消息，并删除不再命中的内容。</p>
+      <p className="rule-form__impact">保存条件会重算当前规则的历史消息，移除不再命中的内容；其他规则的收录不受影响。</p>
     </div>
   );
 }

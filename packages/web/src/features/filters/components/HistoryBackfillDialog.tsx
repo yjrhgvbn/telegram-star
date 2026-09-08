@@ -164,6 +164,7 @@ function BackfillProgress({ job }: { job: FilterBackfillJob }) {
           </dd>
         </div>
       </dl>
+      {(job.skippedRemovedCount ?? 0) > 0 && <p className="text-sm text-muted-foreground">已跳过 {numberFormatter.format(job.skippedRemovedCount ?? 0)} 条在此规则中移除并禁止补录的消息。</p>}
 
       <div className="flex gap-3 text-sm leading-6 text-muted-foreground">
         <Info className="mt-0.5 size-4 shrink-0 text-primary" />
@@ -268,6 +269,7 @@ export function HistoryBackfillDialog({
                       <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
                       <p>
                         上次补录已保存 {numberFormatter.format(latestJob.savedCount)} 条消息。
+                        {(latestJob.skippedRemovedCount ?? 0) > 0 && ` 已跳过 ${numberFormatter.format(latestJob.skippedRemovedCount ?? 0)} 条在此规则中移除并禁止补录的消息。`}
                       </p>
                     </div>
                   ) : null}

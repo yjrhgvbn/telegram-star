@@ -15,7 +15,7 @@ export function buildMessageBaseWhere(
     where.isRead = query.isRead;
   }
   if (query.filterId !== undefined) {
-    where.matchedFilterId = query.filterId;
+    where.filterMemberships = { some: { filterId: query.filterId } };
   }
   if (query.search) {
     where.content = { contains: query.search };

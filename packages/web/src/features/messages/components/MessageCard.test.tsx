@@ -19,6 +19,19 @@ function createMessage(patch: Partial<Message> = {}): Message {
 }
 
 describe("MessageCard", () => {
+  it("offers rule removal in the menu and disables it during completion writes", async () => {
+    const user = userEvent.setup();
+    const remove = vi.fn();
+    const view = render(<MessageCard message={createMessage()} onToggleRead={vi.fn()} onRemove={remove} />);
+    await user.click(screen.getByRole("button", { name: "更多消息操作" }));
+    await user.click(await screen.findByRole("menuitem", { name: "从当前规则移除" }));
+    expect(remove).toHaveBeenCalledWith(1);
+    view.unmount();
+    render(<MessageCard message={createMessage()} onToggleRead={vi.fn()} onRemove={remove} completionDisabled />);
+    await user.click(screen.getByRole("button", { name: "更多消息操作" }));
+    expect((await screen.findByRole("menuitem", { name: "从当前规则移除" })).getAttribute("aria-disabled")).toBe("true");
+  });
+
   it("keeps original source, sender and text visible after completion", () => {
     const message = createMessage();
     const { container } = render(<MessageCard message={message} onToggleRead={vi.fn()} />);

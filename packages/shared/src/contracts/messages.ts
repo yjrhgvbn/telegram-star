@@ -66,6 +66,11 @@ export const messageSchema = z.object({
   matchedFilterId: z.number().int().nullable(),
   matchedKeyword: z.string().nullable(),
   filterName: z.string().nullable(),
+  filterMatches: z.array(z.object({
+    filterId: z.number().int().positive(),
+    filterName: z.string(),
+    matchedKeyword: z.string().nullable(),
+  })).optional(),
   createdAt: z.string(),
   mediaType: z.string().nullable(),
   mediaFileName: z.string().nullable(),
@@ -92,6 +97,18 @@ export const messageIdsInputSchema = z
     ids: z.array(z.number().int().positive()).min(1, "ids array is required"),
   })
   .strict();
+
+export const messageRemovalInputSchema = z.object({
+  filterId: z.number().int().positive(),
+  ids: z.array(z.number().int().positive()).min(1).max(500),
+  blockBackfill: z.boolean().default(false),
+}).strict();
+
+export const messageRemovalResponseSchema = z.object({
+  success: z.literal(true),
+  removedIds: z.array(z.number().int().positive()),
+  count: z.number().int().nonnegative(),
+});
 
 export const messageReadStateResponseSchema = z.object({
   id: z.number().int().positive(),
@@ -167,6 +184,8 @@ export type MessageReadStateResponse = z.infer<typeof messageReadStateResponseSc
 export type MessageEngagementInput = z.infer<typeof messageEngagementInputSchema>;
 export type MessageEngagementResponse = z.infer<typeof messageEngagementResponseSchema>;
 export type MessageBatchReadResponse = z.infer<typeof messageBatchReadResponseSchema>;
+export type MessageRemovalInput = z.input<typeof messageRemovalInputSchema>;
+export type MessageRemovalResponse = z.infer<typeof messageRemovalResponseSchema>;
 export type MessageForceSyncReadResponse = z.infer<typeof messageForceSyncReadResponseSchema>;
 export type MessageStats = z.infer<typeof messageStatsSchema>;
 export type ReadSyncLogLevel = z.infer<typeof readSyncLogLevelSchema>;

@@ -37,6 +37,7 @@ vi.mock("./messages.service.js", () => {
     markMessagesAsRead: vi.fn(),
     recordMessageEngagement: vi.fn(),
     toggleMessageRead: vi.fn(),
+    removeMessages: vi.fn(),
   };
 });
 
@@ -78,6 +79,7 @@ describe("message routes", () => {
     vi.mocked(messagesService.markMessagesAsRead).mockReset();
     vi.mocked(messagesService.recordMessageEngagement).mockReset();
     vi.mocked(messagesService.toggleMessageRead).mockReset();
+    vi.mocked(messagesService.removeMessages).mockReset();
   });
 
   it("parses message list query params and returns message list response", async () => {
@@ -242,5 +244,27 @@ describe("message routes", () => {
     expect(eventsResponse.statusCode).toBe(200);
     expect(parseJson(eventsResponse.payload)).toEqual({ ok: true });
     expect(messageEventStream.openMessageEventStream).toHaveBeenCalledOnce();
+  });
+
+  it("requires a bounded explicit rule scope and defaults manual backfill to allowed", async () => {
+    vi.mocked(messagesService.removeMessages).mockResolvedValue({ success: true, removedIds: [1], count: 1 });
+    const app = await createRouteTestApp(messageRoutes);
+    const response = await app.inject({ method: "POST", url: "/api/messages/remove", payload: { filterId: 3, ids: [1] } });
+    expect(response.statusCode).toBe(200);
+    expect(parseJson(response.payload)).toEqual({ success: true, removedIds: [1], count: 1 });
+    expect(messagesService.removeMessages).toHaveBeenCalledWith({ filterId: 3, ids: [1], blockBackfill: false });
+
+    for (const payload of [
+      { ids: [1] },
+      { filterId: 3, ids: [] },
+      { filterId: 3, ids: Array.from({ length: 501 }, (_, index) => index + 1) },
+      { filterId: 3, ids: [1], blockBackfill: "true" },
+      { filterId: 3, ids: [1], allRules: true },
+    ]) {
+      const invalid = await app.inject({ method: "POST", url: "/api/messages/remove", payload });
+      expect(invalid.statusCode).toBe(400);
+    }
+    expect(messagesService.removeMessages).toHaveBeenCalledOnce();
+    await app.close();
   });
 });

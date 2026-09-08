@@ -23,7 +23,7 @@ import {
   extractMessageContentLinks,
   serializeMessageContentLinks,
 } from "./messageContentLinks.js";
-import { createMessageIfAbsent } from "./messagePersistence.js";
+import { persistMessageForFilters } from "./messagePersistence.js";
 import type {
   JoinedChat,
   LiveChatMessage,
@@ -435,7 +435,7 @@ export async function previewHistoricalFilterMessages(options: {
 // --- 历史回填 ---
 
 /**
- * 基于过滤器条件扫描历史消息并将命中结果写入数据库（已存在的跳过）。
+ * 基于过滤器条件扫描历史消息并为目标规则补齐归属（已有归属的跳过）。
  * 通常由用户手动触发，用于补录过去未被实时监听到的消息。
  */
 export interface FilterBackfillHistoryProgress {
@@ -445,6 +445,7 @@ export interface FilterBackfillHistoryProgress {
   matchedCount: number;
   savedCount: number;
   skippedExistingCount: number;
+  skippedRemovedCount: number;
   currentChatTitle: string | null;
 }
 
@@ -464,6 +465,7 @@ export async function backfillFilterHistory(options: {
   matchedCount: number;
   savedCount: number;
   skippedExistingCount: number;
+  skippedRemovedCount: number;
 }> {
   const client = getClient();
   if (!client || !isClientConnected()) {
@@ -477,6 +479,7 @@ export async function backfillFilterHistory(options: {
       matchedCount: 0,
       savedCount: 0,
       skippedExistingCount: 0,
+      skippedRemovedCount: 0,
     };
   }
 
@@ -497,6 +500,7 @@ export async function backfillFilterHistory(options: {
   let matchedCount = 0;
   let savedCount = 0;
   let skippedExistingCount = 0;
+  let skippedRemovedCount = 0;
   let completedChats = 0;
 
   const reportProgress = async (currentChatTitle: string | null) => {
@@ -507,6 +511,7 @@ export async function backfillFilterHistory(options: {
       matchedCount,
       savedCount,
       skippedExistingCount,
+      skippedRemovedCount,
       currentChatTitle,
     });
   };
@@ -549,7 +554,7 @@ export async function backfillFilterHistory(options: {
         matchedCount += 1;
         const { senderName, senderId } = getSenderSummary(item.sender);
         const mediaInfo = extractMediaInfo(item);
-        const rowId = await createMessageIfAbsent({
+        const persisted = await persistMessageForFilters({
           telegramMessageId: item.id,
           chatId,
           chatTitle,
@@ -562,8 +567,6 @@ export async function backfillFilterHistory(options: {
           messageDate: new Date(timestampMs).toISOString(),
           telegramLink: buildTelegramLink(chatId, entity, item.id),
           isRead: false,
-          matchedFilterId: options.filterId,
-          matchedKeyword: match.matchedKeyword,
           createdAt: new Date().toISOString(),
           mediaType: mediaInfo?.mediaType,
           mediaFileName: mediaInfo?.mediaFileName,
@@ -572,9 +575,14 @@ export async function backfillFilterHistory(options: {
           mediaDuration: mediaInfo?.mediaDuration,
           mediaThumbBase64: mediaInfo?.mediaThumbBase64,
           mediaExtra: mediaInfo?.mediaExtra,
-        });
-        if (rowId !== null) savedCount += 1;
-        else skippedExistingCount += 1;
+        }, [{ filterId: options.filterId, matchedKeyword: match.matchedKeyword }], "manual");
+        if (persisted.blockedFilterIds.includes(options.filterId)) {
+          skippedRemovedCount += 1;
+        } else if (persisted.addedFilterIds.includes(options.filterId)) {
+          savedCount += 1;
+        } else {
+          skippedExistingCount += 1;
+        }
       }
 
       await reportProgress(chatTitle);
@@ -610,5 +618,6 @@ export async function backfillFilterHistory(options: {
     matchedCount,
     savedCount,
     skippedExistingCount,
+    skippedRemovedCount,
   };
 }
