@@ -1,60 +1,65 @@
 # Telegram Star
 
-Telegram 消息监听工具：从群组和频道中筛选关心的内容，按消息组追踪更新、标记完成，并通过 Apprise 转发。
+**筛选 Telegram 消息，集中阅读，按需转发。**
 
-## 功能
+Telegram Star 是一个自托管工具，使用你的 Telegram 账号，监听已加入的群组和频道。
 
-- **消息**：查看原文与附件，搜索、筛选、批量标记完成，恢复浏览位置。
-- **规则**：按消息来源、关键词等条件筛选，支持条件组、排除组和匹配样本预览。
-- **转发**：配置 Apprise 地址、接收规则及标题/正文模板。
-- **设置**：管理服务器连接、Telegram 凭据、媒体策略和客户端设备。
-- **多端**：Web/PWA，以及连接同一后端的 Tauri 桌面和手机轻壳。
+[下载安装](https://github.com/yjrhgvbn/telegram-star/releases) · [使用教程](docs/user-guide.md) · [部署指南](docs/user-deployment.md)
 
-“完成”表示内容已处理或视频已看完；打开消息、附件或 Telegram 链接本身不会自动标记完成。
+![Telegram Star 消息工作区，全部为虚构演示数据](docs/images/demo-messages.png)
 
-## 本地开发
+## 能做什么
 
-使用与 Docker 镜像一致的 Node.js 24，以及 [package.json](package.json) 指定的 pnpm 11.9.0。
+- **筛选消息**：按来源、关键词、正则或脚本创建规则，预览匹配结果、补录历史消息。
+- **集中处理**：按规则浏览、搜索和批量标记完成，查看原文与附件。
+- **转发通知**：将命中的消息通过 Apprise 发到通知平台，自定义标题和正文。
+- **多端使用**：浏览器、桌面和 Android 连接同一服务端，共享消息与配置。
 
-```bash
-cp .env.example .env
-pnpm install
-pnpm db:deploy
-pnpm dev
-```
+想先了解交互，可以查看[虚构数据 Demo 说明](docs/demo.md)。
 
-前端：http://localhost:5173；后端：http://localhost:3000。
+## 安装
 
-首次进入页面时填写从 [Telegram](https://my.telegram.org/apps) 获取的 API ID/Hash，按提示登录，再创建监听规则。凭据也可预先写入 `.env`。本地测试转发需要另行安装 Apprise CLI。
+先部署一个服务端，再通过浏览器或客户端使用。已有服务端时，直接安装客户端并填写服务端地址。
 
-## Docker 部署
+### 服务端：Docker
+
+安装 Docker，并确保网络能访问 Telegram，执行一条命令：
 
 ```bash
-cp .env.example .env
-docker compose up -d --build
+docker run -d --name telegram-star --restart unless-stopped --init \
+  -p 3000:3000 -v telegram-star-data:/app/data \
+  --log-driver local \
+  docker.io/yjrhgvbn/telegram-star:0.0.1
 ```
 
-访问 http://localhost:3000。容器启动时应用数据库迁移，SQLite 和 Telegram 会话保存在 `telegram-star-data` 命名卷。
+打开 [http://localhost:3000](http://localhost:3000)；远程部署时使用服务器地址。Docker 自动拉取镜像，Telegram 凭证在页面填写，无需下载配置文件。版本以[发布页](https://github.com/yjrhgvbn/telegram-star/releases)为准，首个版本发布后即可使用。
 
-## 代码结构
+当前为单用户应用，未内置访问认证，请放在可信网络或有认证的反向代理后。数据会保存在数据卷中，升级和备份见[部署指南](docs/user-deployment.md)。
 
-| 目录 | 职责 |
+### 桌面与 Android
+
+从同一下载页选择对应安装包：
+
+| 系统 | 安装包 |
 | --- | --- |
-| `packages/web` | React + Vite 业务界面 |
-| `packages/server` | Fastify、GramJS、Prisma v7 + SQLite；tsdown 构建后由 Node 运行 |
-| `packages/shared` | 前后端共享契约、校验与类型 |
-| `packages/desktop` | Tauri 桌面轻壳 |
-| `packages/mobile` | Tauri 手机轻壳 |
+| macOS | DMG，按 Apple Silicon / Intel 选择 |
+| Windows | EXE |
+| Linux | DEB / AppImage |
+| Android | APK，arm64 |
 
-## 文档
+安装后填写服务端地址；Android 使用 HTTPS 地址。系统安装提示及连接方法见[客户端说明](docs/user-guide.md#6-连接其他客户端)。各端安装包以下载页实际附件为准，暂无附件时需等待发布。
 
-- [开发](docs/user-development.md)：环境、命令、代码组织与数据库变更。
-- [部署](docs/user-deployment.md)：配置、更新、备份恢复与自动部署。
-- [UI 基准与页面行为](docs/ui-design.md)：统一样式、交互约定和四个 Tab 的当前行为。
-- [Agent 工程约束](AGENTS.md)：自动化开发的边界与验证要求。
+## 开始使用
 
-文档只维护当前用法和需要持续遵循的约定；改动过程与历史记录保留在 Git 中。
+1. **登录 Telegram**：从 [my.telegram.org/apps](https://my.telegram.org/apps) 获取 API ID / API Hash，在页面填写后，用手机号和验证码登录；启用两步验证的账号还需输入密码。
+2. **创建规则**：在「规则」选一个群组或频道，添加关键词，例如 `发布, 更新`，确认匹配样本后保存。
+3. **查看消息**：新命中的内容进入「消息」；想收录旧内容，在规则中执行「补录历史消息」。
+4. **处理或转发**：读完标记「完成」；需要通知时，在「转发」添加 Apprise 地址并关联规则。
 
-## License
+条件组合、转发模板和常见问题见[使用教程](docs/user-guide.md)。
 
-MIT
+## 开发与贡献
+
+[开发文档](docs/user-development.md) · [版本发布](docs/version-releases.md) · [参与贡献](CONTRIBUTING.md)
+
+[MIT License](LICENSE)。本项目与 Telegram 官方无隶属关系。

@@ -12,11 +12,20 @@
 .filter-library__title small { flex:none; font-size:11px; font-weight:400; color:var(--warning); }
 .filter-library__state { width:5px; height:5px; flex:none; border-radius:50%; background:var(--muted-foreground); }
 .filter-library__state[data-enabled=false] { width:6px; height:6px; border:1px solid var(--muted-foreground); background:transparent; }
+.filter-library__state-label { display:none; }
 .filter-library__summary { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:4px; color:var(--muted-foreground); font-size:12px; line-height:20px; }
 .filter-library__empty { padding:16px 10px; color:var(--muted-foreground); font-size:13px; line-height:22px; }
 .filter-library__loading { display:flex; flex-direction:column; gap:8px; }
 @media(max-width:680px) {
   .filter-library { background:var(--card); }
-  .filter-library__item { padding:13px 12px; }
-  .filter-library__summary { font-size:13px; }
+  .filter-library__items { gap:0; padding:0 22px 24px; }
+  .filter-library__item { padding:16px 0; border-bottom:1px solid var(--border); border-radius:0; }
+  .filter-library__item:last-child { border-bottom:0; }
+  .filter-library__item[aria-current=page] { background:transparent; }
+  .filter-library__title,
+  .filter-library__item[aria-current=page] .filter-library__title { font-size:16px; font-weight:550; line-height:24px; }
+  .filter-library__state,
+  .filter-library__state[data-enabled=false] { width:auto; height:auto; border:0; border-radius:0; background:transparent; color:var(--muted-foreground); font-size:12px; font-weight:400; line-height:20px; }
+  .filter-library__state-label { display:inline; }
+  .filter-library__summary { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; margin-top:8px; white-space:normal; font-size:13px; line-height:21px; }
 }

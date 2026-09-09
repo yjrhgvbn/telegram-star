@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   CLIENT_DEVICE_ID_STORAGE_KEY,
   buildClientRegisterInput,
@@ -6,6 +7,8 @@ import {
   detectClientRuntime,
   getClientDeviceId,
 } from "./clientRuntime";
+
+const packageVersion = JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")).version;
 
 function createMemoryStorage(initial: Record<string, string> = {}) {
   const store = new Map(Object.entries(initial));
@@ -21,6 +24,7 @@ function createMemoryStorage(initial: Record<string, string> = {}) {
 describe("client runtime", () => {
   it("detects browser and pwa runtime capabilities", () => {
     expect(detectClientRuntime({ standalone: false, notificationSupported: true })).toMatchObject({
+      appVersion: packageVersion,
       type: "web",
       platform: "browser",
       capabilities: {

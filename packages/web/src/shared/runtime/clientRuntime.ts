@@ -54,7 +54,7 @@ function getBrowserRuntimeOptions(): RuntimeDetectionOptions {
 
 function getAppVersion(): string {
   // Vitest 不会经过 Vite define 替换，测试环境使用稳定默认值即可。
-  return typeof __APP_VERSION__ === "undefined" ? "1.0.0" : __APP_VERSION__;
+  return typeof __APP_VERSION__ === "undefined" ? "0.0.1" : __APP_VERSION__;
 }
 
 export function detectClientOs(

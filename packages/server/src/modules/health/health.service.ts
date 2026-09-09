@@ -4,9 +4,9 @@ import { getConnectionStatus } from "../../services/telegram.js";
 
 // API 版本用于多端客户端做兼容判断，和 npm 包版本解耦，避免小修小补误触发强制升级。
 export const HEALTH_API_VERSION = "2026-07-01";
-export const HEALTH_MIN_CLIENT_VERSION = "0.1.0";
-export const HEALTH_RECOMMENDED_CLIENT_VERSION = "0.1.0";
-export const HEALTH_SERVER_VERSION = "1.0.0";
+export const HEALTH_MIN_CLIENT_VERSION = "0.0.1";
+export const HEALTH_RECOMMENDED_CLIENT_VERSION = "0.0.1";
+export const HEALTH_SERVER_VERSION = "0.0.1";
 
 type TelegramStatusLoader = typeof getConnectionStatus;
 

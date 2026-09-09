@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getMessageAvatarUrl } from "@/shared/api/url";
+import { isDemo } from "@/demo/mode";
 
 /** The source avatar matches the adjacent chat title. Loading never changes
  * the row's dimensions; unavailable Telegram photos retain a quiet fallback. */
@@ -10,7 +11,7 @@ export function MessageSourceAvatar({ messageId, source }: { messageId: number; 
   return (
     <span className="message-card__avatar" aria-hidden="true">
       {Array.from(source).slice(0, 2).join("")}
-      {failedSrc !== src && <img
+      {!isDemo && failedSrc !== src && <img
         key={src}
         src={src}
         alt=""

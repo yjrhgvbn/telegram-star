@@ -1,10 +1,13 @@
 {
   "name": "@telegram-star/web",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @telegram-star/shared build && vite",
+    "dev:demo": "pnpm --filter @telegram-star/shared build && vite --mode demo",
+    "build:demo": "pnpm --filter @telegram-star/shared build && tsc -b && vite build --mode demo",
+    "preview:demo": "vite preview --mode demo --outDir dist-demo --host 127.0.0.1 --port 4173 --strictPort",
     "build": "pnpm --filter @telegram-star/shared build && tsc -b && vite build",
     "preview": "vite preview"
   },

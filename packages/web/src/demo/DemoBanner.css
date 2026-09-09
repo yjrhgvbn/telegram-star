@@ -1,0 +1,15 @@
+.app-layout--demo { --demo-banner-height: 48px; }
+.demo-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: 0 0 var(--demo-banner-height); padding: 0 20px; background: var(--muted); border-bottom: 1px solid var(--border); font-size: 12px; }
+.demo-banner > div { display: flex; align-items: center; gap: 12px; }
+.demo-banner span { color: var(--muted-foreground); }
+.demo-banner a { text-decoration: underline; text-underline-offset: 3px; }
+.demo-banner a:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+@media (max-width: 680px) {
+  .app-layout--demo { --demo-banner-height: 76px; }
+  .demo-banner { padding: 8px 12px; gap: 8px; }
+  .demo-banner > div:first-child { flex-direction: column; align-items: flex-start; gap: 3px; }
+  .demo-banner__actions { flex-shrink: 0; }
+  .demo-banner__actions > a { display: none; }
+  .demo-banner button { min-height: 44px; }
+  .app-layout--demo .app-layout__body { top: calc(env(safe-area-inset-top, 0px) + var(--demo-banner-height)); }
+}

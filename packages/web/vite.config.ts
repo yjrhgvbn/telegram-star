@@ -2,8 +2,11 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
+  const { version } = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+  const isDemo = mode === "demo";
   // 同时读取仓库根目录和 Web 包目录的环境变量，兼容本地开发与部署配置。
   const rootEnv = loadEnv(mode, path.resolve(__dirname, "../.."), "");
   const webEnv = loadEnv(mode, __dirname, "");
@@ -17,13 +20,25 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    base: isDemo ? "./" : "/",
     define: {
       // 每次生产构建生成新的缓存版本号，用于 Service Worker 清理旧 app shell。
       __APP_BUILD_ID__: JSON.stringify(new Date().toISOString()),
-      // 客户端注册上报的应用版本；默认跟随当前 package 版本。
-      __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? "1.0.0"),
+      // 直接读取包版本，pnpm run 和直接调用 Vite 都上报同一版本。
+      __APP_VERSION__: JSON.stringify(version),
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), ...(isDemo ? [{
+      name: "standalone-demo",
+      transformIndexHtml(html: string) {
+        // The demo uses bundled fonts and no service worker. On static hosts,
+        // CSP also prevents an accidental future API call from leaving the page.
+        const cleaned = html.replace(/<link[^>]+(?:manifest|fonts\.googleapis\.com|fonts\.gstatic\.com)[^>]*>\s*/g, "")
+          .replace("<title>Telegram Star</title>", "<title>Telegram Star · 交互 Demo</title>");
+        return command === "build"
+          ? cleaned.replace("</head>", '<meta http-equiv="Content-Security-Policy" content="connect-src \'none\'; form-action \'none\'; object-src \'none\'; base-uri \'self\'" /></head>')
+          : cleaned;
+      },
+    }] : [])],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
@@ -33,7 +48,7 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
       port: 5173,
       strictPort: true,
-      proxy: {
+      proxy: isDemo ? undefined : {
         "/api": {
           target: target,
           changeOrigin: true,
@@ -41,9 +56,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
+      outDir: isDemo ? "dist-demo" : "dist",
       rollupOptions: {
         // 将 Service Worker 作为独立入口输出到 dist/sw.js，满足浏览器注册路径要求。
-        input: {
+        input: isDemo ? { app: path.resolve(__dirname, "index.html") } : {
           app: path.resolve(__dirname, "index.html"),
           sw: path.resolve(__dirname, "src/service-worker.ts"),
         },

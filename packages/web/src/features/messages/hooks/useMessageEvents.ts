@@ -4,6 +4,7 @@ import {
   type MessageEventPayload,
 } from "@telegram-star/shared/contracts/messages";
 import { getMessageEventsUrl as resolveMessageEventsUrl } from "@/shared/api/url";
+import { isDemo } from "@/demo/mode";
 
 export { getMessageEventsUrl } from "@/shared/api/url";
 
@@ -44,6 +45,7 @@ export function useMessageEvents({
   handlersRef.current = { onNewMessage, onReadMessages };
 
   useEffect(() => {
+    if (isDemo) return;
     const eventSource = createEventSource(eventsUrl);
     eventSource.onmessage = (event) => {
       const payload = parseMessageEventData(event.data);

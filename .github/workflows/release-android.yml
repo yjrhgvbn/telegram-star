@@ -1,0 +1,145 @@
+name: Build Android release
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Existing release tag, for example v0.0.1
+        required: true
+        type: string
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEY_ALIAS:
+        required: true
+      ANDROID_KEY_PASSWORD:
+        required: true
+      ANDROID_STORE_PASSWORD:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Signed Android arm64 APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      CI: "true"
+      RELEASE_TAG: ${{ inputs.tag }}
+      NDK_VERSION: 29.0.14206865
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Require release signing secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: node scripts/android-signing.mjs --check
+
+      - name: Check tag matches mobile version
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const tag = process.env.RELEASE_TAG;
+          const config = JSON.parse(readFileSync('packages/mobile/src-tauri/tauri.conf.json', 'utf8'));
+          if (!/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(tag) || tag !== `v${config.version}`) {
+            throw new Error('Release tag must be vX.Y.Z and match the mobile Tauri version.');
+          }
+          NODE
+
+      - name: Set up pnpm from packageManager
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+          cache: true
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          # Ignore yes's SIGPIPE while preserving the SDK manager's exit status.
+          set +o pipefail
+          yes | "$sdkmanager" --licenses > /dev/null
+          set -o pipefail
+          "$sdkmanager" --install "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;$NDK_VERSION"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Set up Rust and pinned Tauri CLI
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup target add aarch64-linux-android
+          cargo install tauri-cli --version '=2.11.4' --locked
+
+      - name: Generate Android project and app icons
+        working-directory: packages/mobile
+        run: |
+          cargo tauri android init --ci --skip-targets-install
+          cargo tauri icon ../web/public/icons/icon-512.png --output src-tauri/icons
+
+      - name: Configure release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: node scripts/android-signing.mjs
+
+      - name: Build signed release APK
+        working-directory: packages/mobile
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: cargo tauri android build --ci --apk --target aarch64
+
+      - name: Verify release APK and stage artifact
+        shell: bash
+        run: |
+          # Do not use an APK glob: unsigned and debug output must never be uploaded.
+          apk="packages/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk"
+          test "$("$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest debuggable "$apk")" = "false"
+          mkdir -p release-artifacts
+          cp "$apk" "release-artifacts/Telegram-Star-$RELEASE_TAG-android-arm64.apk"
+
+      - name: Upload signed Android APK for release assembly
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-android-arm64
+          path: release-artifacts/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove temporary keystore
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${ANDROID_KEYSTORE_PATH:-}" ]; then
+            rm -f -- "$ANDROID_KEYSTORE_PATH"
+          fi

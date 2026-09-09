@@ -6,9 +6,12 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: production-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -19,20 +22,21 @@ jobs:
       - name: Run deployment commands on server
       # Use a pinned major version maintained by appleboy.
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_DIRECTORY: ${{ secrets.DEPLOY_PATH }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
+          envs: DEPLOY_DIRECTORY
           script: |
             set -e
-
-            cd "${{ secrets.DEPLOY_PATH }}"
-
+            cd "$DEPLOY_DIRECTORY"
             git fetch --all --prune
             git checkout main
             git pull --ff-only origin main
-
-            docker compose up -d --build
-            docker compose ps
+            # This server builds main locally; Docker Hub version releases are independent.
+            docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build --wait --wait-timeout 180
+            docker compose -f docker-compose.yml -f docker-compose.build.yml ps

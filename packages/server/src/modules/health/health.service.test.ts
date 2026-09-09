@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getHealthStatus } from "./health.service.js";
+import { readFileSync } from "node:fs";
+
+const packageVersion = JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")).version;
 
 describe("health service", () => {
   it("maps Telegram runtime status into the public health payload", async () => {
@@ -19,10 +22,10 @@ describe("health service", () => {
 
     expect(status).toEqual({
       appName: "Telegram Star",
-      serverVersion: "1.0.0",
+      serverVersion: packageVersion,
       apiVersion: "2026-07-01",
-      minClientVersion: "0.1.0",
-      recommendedClientVersion: "0.1.0",
+      minClientVersion: "0.0.1",
+      recommendedClientVersion: "0.0.1",
       features: ["sse", "media"],
       telegram: {
         configured: true,

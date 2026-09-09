@@ -5,10 +5,12 @@ import {
 import { normalizeServerUrl } from "@/shared/runtime/serverConfig";
 import { formatServerUnavailableMessage, isNetworkError } from "./errors";
 import { getApiUrl } from "./url";
+import { isDemo } from "@/demo/mode";
 
 export type ServerConnectionState = "unknown" | "checking" | "connected" | "failed";
 
 export async function checkServerHealth(serverUrl: string): Promise<HealthStatus> {
+  if (isDemo) throw new Error("Demo 不连接真实服务器，请部署自己的实例后再测试连接。");
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
   const healthUrl = getApiUrl("/health", normalizedServerUrl);
   let response: Response;

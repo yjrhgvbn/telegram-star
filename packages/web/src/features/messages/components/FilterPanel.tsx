@@ -401,7 +401,7 @@ export function FilterPanel({
   return (
     <Popover.Root open={menuOpen} triggerId={menu?.triggerId ?? null} onOpenChange={handleOpenChange}>
       <div ref={panelRef} className="message-filter-panel">
-        <ListSearchToolbar>
+        <ListSearchToolbar mobileTitle="消息">
           <SearchInput
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -424,7 +424,7 @@ export function FilterPanel({
                 const isCollapsed = groupId !== null && !normalizedQuery && collapsed.has(groupId);
                 const Chevron = isCollapsed ? ChevronRight : ChevronDown;
                 return (
-                  <section key={sectionId} className={cn("message-filter-section", groupId === null && "is-independent")}>
+                  <section key={sectionId} className={cn("message-filter-section", groupId === null && "is-independent", group && visibleItems.length === 0 && "is-empty")}>
                     {group ? (
                       <div className="message-filter-section-heading">
                         <button
@@ -443,6 +443,7 @@ export function FilterPanel({
                           <Chevron aria-hidden="true" />
                           <h3>{group.name}</h3>
                         </button>
+                        {!isCollapsed && visibleItems.length === 0 ? <span className="message-filter-empty-inline">空目录</span> : null}
                         <MenuTrigger kind="group" id={group.id} name={group.name} disabled={actionPending} />
                       </div>
                     ) : null}

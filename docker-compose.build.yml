@@ -1,0 +1,5 @@
+# Optional override for contributors building from a local checkout.
+services:
+  telegram-star:
+    image: telegram-star:local
+    build: .

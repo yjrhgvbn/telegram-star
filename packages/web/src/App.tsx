@@ -7,6 +7,7 @@ import { NotFoundPage } from "./pages/NotFoundPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ClientShellBridgeProvider } from "./shared/runtime/ClientShellBridgeProvider";
 import { useClientDeviceRegistration } from "./shared/runtime/useClientDeviceRegistration";
+import { isDemo } from "./demo/mode";
 
 function App() {
   useClientDeviceRegistration();
@@ -25,7 +26,7 @@ function App() {
         <Route path="/settings/:sectionId" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-      <PwaUpdatePrompt />
+      {!isDemo && <PwaUpdatePrompt />}
     </ClientShellBridgeProvider>
   );
 }

@@ -35,7 +35,7 @@ export function TargetList({
 
   return (
     <section className="forward-library" aria-label="转发通道">
-      <ListSearchToolbar>
+      <ListSearchToolbar mobileTitle="转发">
         <SearchInput
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -89,9 +89,9 @@ export function TargetList({
               >
                 <span className="forward-library__title">
                   <span>{target.name.trim() || "新建通道"}</span>
-                  {!target.enabled || invalid ? (
-                    <small>{invalid ? "待完善" : "已停用"}</small>
-                  ) : null}
+                  <small data-mobile-only={target.enabled && !invalid ? true : undefined}>
+                    {invalid ? "待完善" : target.enabled ? "已启用" : "已停用"}
+                  </small>
                 </span>
                 <span className="forward-library__summary">
                   {target.filterIds.length} 条规则

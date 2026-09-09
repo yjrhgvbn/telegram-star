@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   buildMobileCapabilities,
   getMobileClientId,
   registerMobileClient,
 } from "./clientDevice";
 import { MOBILE_CLIENT_ID_STORAGE_KEY } from "./serverConfig";
+
+const packageVersion = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version;
 
 class MemoryStorage {
   private readonly values = new Map<string, string>();
@@ -50,7 +53,7 @@ describe("mobile client device", () => {
           type: "mobile",
           platform: "tauri",
           os: "ios",
-          appVersion: "0.1.0",
+          appVersion: packageVersion,
           capabilities: buildMobileCapabilities(),
           lastSeenAt: "2026-07-02T00:00:00.000Z",
           createdAt: "2026-07-02T00:00:00.000Z",
@@ -78,6 +81,7 @@ describe("mobile client device", () => {
       }),
     );
     const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.appVersion).toBe(packageVersion);
     expect(body).toMatchObject({
       clientId: "mobile-1",
       type: "mobile",

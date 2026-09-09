@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  # Release tags run the checks in release.yml; this workflow is for manual checks.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Build, test, and validate migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # CI uses disposable data and never receives Telegram credentials or a saved session.
+      DATABASE_URL: file:${{ runner.temp }}/telegram-star-ci/telegram-star.db
+      DB_PATH: ${{ runner.temp }}/telegram-star-ci/telegram-star.db
+      SESSION_PATH: ${{ runner.temp }}/telegram-star-ci/session.txt
+      TELEGRAM_API_ID: ""
+      TELEGRAM_API_HASH: ""
+      HOST: 127.0.0.1
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Set up pnpm from packageManager
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+          cache: true
+
+      - name: Prepare isolated runtime data
+        run: |
+          mkdir -p "$RUNNER_TEMP/telegram-star-ci"
+          : > "$SESSION_PATH"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Check release tooling and version consistency
+        run: |
+          pnpm test:release
+          pnpm release:check
+
+      - name: Validate database migrations
+        run: pnpm db:deploy
+
+      - name: Build standalone demo
+        run: pnpm build:demo

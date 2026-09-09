@@ -32,6 +32,7 @@
 .message-filter-updated.is-empty { opacity: .78; }
 .message-filter-menu-trigger { margin-right: 4px; color: var(--muted-foreground); }
 .message-filter-empty-directory { margin: 4px 12px 9px; color: var(--muted-foreground); font-size: 12px; line-height: 24px; }
+.message-filter-empty-inline { display: none; }
 .message-filter-empty { margin: 16px 10px; color: var(--muted-foreground); font-size: 13px; line-height: 1.8; }
 .message-filter-error { margin: 5px 8px 8px; color: var(--destructive); font-size: 12px; line-height: 1.6; }
 
@@ -52,14 +53,23 @@
 
 @media (max-width: 680px) {
   .message-filter-panel { background: var(--card); }
-  .message-filter-items { padding: 0 14px 22px; }
-  .message-filter-select, .message-filter-row { min-height: 50px; }
-  .message-filter-select { padding: 13px 9px 13px 12px; }
-  .message-filter-name { font-size: 15px; }
+  .message-filter-items { gap: 8px; padding: 0 16px 22px; }
+  .message-filter-section { margin: 0; padding: 4px; border-radius: 12px; background: var(--muted); }
+  .message-filter-section.is-independent { padding: 0; background: transparent; }
+  .message-filter-section + .message-filter-section.is-independent { margin-top: 8px; }
+  .message-filter-directory-items { padding: 0 4px 4px; }
+  .message-filter-select, .message-filter-row { min-height: 56px; }
+  .message-filter-select { padding: 16px 8px 16px 12px; }
+  .message-filter-name { font-size: 16px; font-weight: 550; line-height: 24px; }
+  .message-filter-row.is-selected { background: transparent; }
+  .message-filter-row.is-selected .message-filter-name { color: var(--foreground); font-weight: 550; }
+  .message-filter-select:active { background: var(--accent); }
   .message-filter-updated { font-size: 12px; }
-  .message-filter-menu-trigger { width: 34px; height: 40px; }
-  .message-filter-section-toggle { min-height: 39px; }
-  .message-filter-section-toggle h3 { font-size: 13px; }
+  .message-filter-menu-trigger { width: 44px; height: 44px; margin-right: 0; }
+  .message-filter-section-toggle { min-height: 44px; padding-inline: 8px; }
+  .message-filter-section-toggle h3 { font-size: 13px; font-weight: 600; color: var(--foreground); }
+  .message-filter-empty-inline { display: block; flex-shrink: 0; color: var(--muted-foreground); font-size: 12px; }
+  .message-filter-section.is-empty .message-filter-directory-items { display: none; }
   .message-filter-popover { width: 264px; padding: 7px; border-radius: 11px; }
   .message-filter-popover-heading { min-height: 34px; }
   .message-filter-popover .message-filter-menu-item { min-height: 42px; padding: 10px; font-size: 14px; }

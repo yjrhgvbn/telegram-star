@@ -11,6 +11,7 @@ import {
   saveServerUrl,
 } from "@/shared/runtime/serverConfig";
 import { queryKeys } from "@/shared/query/queryKeys";
+import { isDemo } from "@/demo/mode";
 
 export interface ServerConnectionSummary {
   title: string;
@@ -142,6 +143,10 @@ export function useServerConnectionSettings() {
 
   const saveConnection = useCallback(() => {
     clearFeedback();
+    if (isDemo) {
+      setInputError("Demo 不连接真实服务器，也不保存服务器地址。");
+      return false;
+    }
     const validationError = connectionMode === "custom" ? validateServerUrl(serverUrlInput) : null;
     if (validationError) {
       setInputError(validationError);
@@ -160,6 +165,10 @@ export function useServerConnectionSettings() {
 
   const clearConnection = useCallback(() => {
     clearFeedback();
+    if (isDemo) {
+      setInputError("Demo 不连接真实服务器，也不保存服务器地址。");
+      return;
+    }
     saveServerUrl("");
     setCurrentServerUrl("");
     setServerUrlInput("");

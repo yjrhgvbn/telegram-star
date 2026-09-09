@@ -2,12 +2,19 @@ import type { ZodType } from "zod";
 import { getRuntimeServerUrl } from "@/shared/runtime/serverConfig";
 import { formatServerUnavailableMessage, isNetworkError } from "./errors";
 import { getApiUrl } from "./url";
+import { isDemo } from "@/demo/mode";
 
 export async function request<T>(
   url: string,
   options?: RequestInit,
   responseSchema?: ZodType<T>,
 ): Promise<T> {
+  if (isDemo) {
+    // A separate chunk keeps fictional data out of normal production builds.
+    const { requestDemo } = await import("@/demo/api");
+    const data = await requestDemo(url, options);
+    return responseSchema ? responseSchema.parse(data) : (data as T);
+  }
   const hasBody = options?.body !== undefined && options?.body !== null;
   const serverUrl = getRuntimeServerUrl();
   const requestUrl = getApiUrl(url, serverUrl);

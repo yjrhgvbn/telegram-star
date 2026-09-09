@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import type { AuthStatus } from "@/types";
 import { useWorkspaceHistoryGuard, type WorkspaceNavigationGuard } from "./WorkspaceHistoryGuard";
 import "./AppShell.css";
+import { isDemo } from "@/demo/mode";
+import { DemoBanner } from "@/demo/DemoBanner";
 
 type AppTab = "messages" | "filters" | "notifications" | "settings";
 
@@ -44,7 +46,8 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, o
   }, [activeTab, navigate, onNavigateRequest]);
 
   return (
-    <div className={cn("app-layout", activeTab === "messages" && "message-theme", activeTab === "filters" && "rules-theme", activeTab === "notifications" && "forward-theme", activeTab === "settings" && "settings-theme")}>
+    <div className={cn("app-layout", isDemo && "app-layout--demo", activeTab === "messages" && "message-theme", activeTab === "filters" && "rules-theme", activeTab === "notifications" && "forward-theme", activeTab === "settings" && "settings-theme")}>
+      {isDemo && <DemoBanner />}
       {authLoading ? (
         <div className="app-layout__loading" role="status">
           <LoaderCircle className="size-4 animate-spin" />
@@ -52,7 +55,7 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, o
         </div>
       ) : (
         <>
-          {!authStatus.authorized && <TelegramLogin authStatus={authStatus} onLoginSuccess={onLoginSuccess} />}
+          {!isDemo && !authStatus.authorized && <TelegramLogin authStatus={authStatus} onLoginSuccess={onLoginSuccess} />}
           <header className="app-layout__header">
             <Link className="app-layout__brand" to="/messages" aria-label="Telegram Star 消息首页" onClick={(event) => {
               if (onNavigateRequest && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
@@ -60,7 +63,7 @@ export function AppShell({ activeTab, authStatus, authLoading, onLoginSuccess, o
                 onNavigateRequest(() => navigate("/messages"), "/messages");
               }
             }}>
-              <img src="/icons/icon.svg" alt="" width="34" height="34" />
+              <img src={`${import.meta.env.BASE_URL}icons/icon.svg`} alt="" width="34" height="34" />
               <span>Telegram Star</span>
             </Link>
             <nav className="app-navigation" aria-label="主导航">

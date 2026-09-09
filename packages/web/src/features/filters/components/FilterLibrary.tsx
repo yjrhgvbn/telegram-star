@@ -60,7 +60,7 @@ export function FilterLibrary({
 
   return (
     <aside className="filter-library" aria-label="规则列表">
-      <ListSearchToolbar>
+      <ListSearchToolbar mobileTitle="规则">
         <SearchInput
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -105,7 +105,11 @@ export function FilterLibrary({
                   className="filter-library__state"
                   data-enabled={filter.enabled}
                   aria-label={filter.enabled ? "已启用" : "已停用"}
-                />
+                >
+                  <span className="filter-library__state-label">
+                    {filter.enabled ? "已启用" : "已停用"}
+                  </span>
+                </span>
               </span>
               <span className="filter-library__summary">{summary}</span>
             </button>

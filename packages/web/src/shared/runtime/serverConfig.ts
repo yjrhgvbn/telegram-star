@@ -1,4 +1,5 @@
 import { getBrowserStorage } from "@telegram-star/shared/browser-storage";
+import { isDemo } from "@/demo/mode";
 
 export const SERVER_CONFIG_STORAGE_KEY = "telegram-star:server-url:v1";
 
@@ -17,12 +18,14 @@ export function normalizeServerUrl(value: string | null | undefined): string {
 }
 
 export function getDefaultServerUrl(): string {
+  if (isDemo) return "";
   return normalizeServerUrl(import.meta.env.VITE_DEFAULT_SERVER_URL);
 }
 
 export function readSavedServerUrl(
   storage: ServerConfigStorage | undefined = getBrowserStorage("local"),
 ): string | null {
+  if (isDemo) return null;
   if (!storage) return null;
 
   try {
@@ -38,6 +41,7 @@ export function saveServerUrl(
   serverUrl: string,
   storage: ServerConfigStorage | undefined = getBrowserStorage("local"),
 ): void {
+  if (isDemo) throw new Error("Demo 不连接真实服务器，也不保存服务器地址。");
   if (!storage) return;
 
   try {

@@ -68,7 +68,7 @@ function getClientDeviceName(os: ClientOs | undefined): string {
 }
 
 function getMobileAppVersion(): string {
-  return typeof __MOBILE_APP_VERSION__ === "undefined" ? "0.1.0" : __MOBILE_APP_VERSION__;
+  return typeof __MOBILE_APP_VERSION__ === "undefined" ? "0.0.1" : __MOBILE_APP_VERSION__;
 }
 
 function getClientEndpoint(serverUrl: string, path: string): string {

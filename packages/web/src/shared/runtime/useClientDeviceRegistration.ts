@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { clientsApi } from "@/shared/api/clients";
+import { isDemo } from "@/demo/mode";
 import {
   buildClientRegisterInput,
   detectClientRuntime,
@@ -18,6 +19,7 @@ export function useClientDeviceRegistration(): string {
   const [clientId] = useState(() => getClientDeviceId());
 
   useEffect(() => {
+    if (isDemo) return;
     let stopped = false;
     let heartbeatTimer: ReturnType<typeof window.setInterval> | undefined;
 
