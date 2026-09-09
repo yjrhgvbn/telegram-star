@@ -28,9 +28,6 @@ jobs:
       commit: ${{ steps.version.outputs.commit }}
     env:
       RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
-      DATABASE_URL: file:${{ runner.temp }}/release-check/telegram-star.db
-      DB_PATH: ${{ runner.temp }}/release-check/telegram-star.db
-      SESSION_PATH: ${{ runner.temp }}/release-check/session.txt
       TELEGRAM_API_ID: ""
       TELEGRAM_API_HASH: ""
     steps:
@@ -47,6 +44,19 @@ jobs:
         with:
           run_install: false
           cache: true
+      - name: Prepare isolated runtime data
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Export runner paths for subsequent steps instead of using runner in job-level env.
+          runtime_data_dir="$RUNNER_TEMP/release-check"
+          mkdir -p "$runtime_data_dir"
+          : > "$runtime_data_dir/session.txt"
+          {
+            echo "DATABASE_URL=file:$runtime_data_dir/telegram-star.db"
+            echo "DB_PATH=$runtime_data_dir/telegram-star.db"
+            echo "SESSION_PATH=$runtime_data_dir/session.txt"
+          } >> "$GITHUB_ENV"
       - name: Verify tag and all package versions
         id: version
         shell: bash

@@ -18,9 +18,6 @@ jobs:
     timeout-minutes: 20
     env:
       # CI uses disposable data and never receives Telegram credentials or a saved session.
-      DATABASE_URL: file:${{ runner.temp }}/telegram-star-ci/telegram-star.db
-      DB_PATH: ${{ runner.temp }}/telegram-star-ci/telegram-star.db
-      SESSION_PATH: ${{ runner.temp }}/telegram-star-ci/session.txt
       TELEGRAM_API_ID: ""
       TELEGRAM_API_HASH: ""
       HOST: 127.0.0.1
@@ -44,9 +41,18 @@ jobs:
           cache: true
 
       - name: Prepare isolated runtime data
+        shell: bash
         run: |
-          mkdir -p "$RUNNER_TEMP/telegram-star-ci"
-          : > "$SESSION_PATH"
+          set -euo pipefail
+          # Runner paths are available at step execution, not in job-level env expressions.
+          runtime_data_dir="$RUNNER_TEMP/telegram-star-ci"
+          mkdir -p "$runtime_data_dir"
+          : > "$runtime_data_dir/session.txt"
+          {
+            echo "DATABASE_URL=file:$runtime_data_dir/telegram-star.db"
+            echo "DB_PATH=$runtime_data_dir/telegram-star.db"
+            echo "SESSION_PATH=$runtime_data_dir/session.txt"
+          } >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

@@ -15,7 +15,14 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pages: read
     steps:
+      # Enable Pages once in Settings > Pages > Source: GitHub Actions.
+      # Check before installing/building; GITHUB_TOKEN cannot enable a new Pages site.
+      - name: Check GitHub Pages configuration
+        uses: actions/configure-pages@v6
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -29,8 +36,7 @@ jobs:
           cache: true
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:demo
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: packages/web/dist-demo
 
@@ -46,4 +52,4 @@ jobs:
     steps:
       - name: Deploy static demo
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
