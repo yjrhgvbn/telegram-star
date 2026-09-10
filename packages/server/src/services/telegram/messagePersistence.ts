@@ -42,8 +42,14 @@ export async function persistMessageForFilters(
       where: {
         chatId_telegramMessageId: { chatId: data.chatId, telegramMessageId: data.telegramMessageId },
       },
-      select: { id: true, content: true, filterMemberships: { select: { filterId: true } } },
+      select: { id: true, content: true, senderUserId: true, filterMemberships: { select: { filterId: true } } },
     });
+    // 旧 senderId 未区分用户和频道，不能猜测。只在正常再次获取消息时补齐已确认的用户身份，
+    // 保留已存正文、已读状态和规则归属，也不为这项元数据补齐发起额外 Telegram 请求。
+    const senderUserId = existing?.senderUserId ?? data.senderUserId ?? null;
+    if (existing && existing.senderUserId === null && senderUserId !== null) {
+      await tx.message.update({ where: { id: existing.id }, data: { senderUserId } });
+    }
     const existingFilterIds = new Set(existing?.filterMemberships.map((membership) => membership.filterId));
     const candidateIds = new Set(uniqueMatches.map((match) => match.filterId));
     // 规则可能在 Telegram 网络等待期间被修改。旧匹配结果仅提供候选 ID，
@@ -72,7 +78,7 @@ export async function persistMessageForFilters(
       const conditions = parseConditions(filter.conditions);
       // 损坏或执行失败的规则不新增归属，也不影响已经保存的消息。
       if (conditions.length === 0) continue;
-      const match = matchFilterConditions({ chatId: data.chatId, content }, conditions);
+      const match = matchFilterConditions({ chatId: data.chatId, content, senderUserId }, conditions);
       if (match.error) {
         appLogger.warn({ event: "filter.script.execution_failed", filterId: filter.id, err: match.error }, "Custom filter script execution failed during persistence");
         continue;

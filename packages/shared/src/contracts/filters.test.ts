@@ -8,6 +8,8 @@ import {
   filterMatchEvidenceSchema,
   filterPreviewInputSchema,
   filterUpdateInputSchema,
+  isValidTelegramUserId,
+  liveChatMessageSchema,
 } from "./filters";
 
 describe("filters contract", () => {
@@ -101,6 +103,48 @@ describe("filters contract", () => {
         conditions: [{ type: "regex", values: ["("] }],
       }),
     ).toThrow();
+  });
+
+  it("accepts sender IDs in create, update, and preview without losing precision", () => {
+    const conditions = [
+      { type: "sender", values: [" 123456789 ", "9007199254740993"] },
+      { type: "sender", effect: "exclude", values: ["9223372036854775807"] },
+    ];
+    const expected = [
+      { type: "sender", values: ["123456789", "9007199254740993"] },
+      { type: "sender", effect: "exclude", values: ["9223372036854775807"] },
+    ];
+
+    expect(filterCreateInputSchema.parse({ name: "指定用户", conditions }).conditions).toEqual(expected);
+    expect(filterUpdateInputSchema.parse({ conditions }).conditions).toEqual(expected);
+    expect(filterPreviewInputSchema.parse({ conditions }).conditions).toEqual(expected);
+    expect(isValidTelegramUserId("1")).toBe(true);
+    expect(isValidTelegramUserId("123\n")).toBe(false);
+    expect(liveChatMessageSchema.shape.senderUserId.parse(undefined)).toBeNull();
+  });
+
+  it.each([
+    "0", "-123", "+123", "@username", "0123", "1.2", "1e3", "１２３",
+    "9223372036854775808", "10000000000000000000", "", " ",
+  ])("rejects an invalid sender ID: %s", (value) => {
+    expect(isValidTelegramUserId(value)).toBe(false);
+    const conditions = [{ type: "sender", values: ["123", value] }];
+    expect(filterCreateInputSchema.safeParse({ name: "指定用户", conditions }).success).toBe(false);
+    expect(filterUpdateInputSchema.safeParse({ conditions }).success).toBe(false);
+    expect(filterPreviewInputSchema.safeParse({ conditions }).success).toBe(false);
+  });
+
+  it("allows sender alternatives with content but keeps chat scope in a separate group", () => {
+    const conditions = [
+      { type: "chat", groupId: "source", values: ["1001"] },
+      { type: "sender", groupId: "content", values: ["123"] },
+      { type: "keyword", groupId: "content", values: ["更新"] },
+    ];
+    expect(filterCreateInputSchema.safeParse({ name: "指定用户或更新", conditions }).success).toBe(true);
+    expect(filterCreateInputSchema.safeParse({
+      name: "冲突来源",
+      conditions: conditions.map((condition) => ({ ...condition, groupId: "mixed" })),
+    }).success).toBe(false);
   });
 
   it("accepts exclusion and script conditions while keeping chat scope positive", () => {

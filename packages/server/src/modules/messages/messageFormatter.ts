@@ -37,6 +37,7 @@ export function formatMessageRow(
     chatTitle: row.chatTitle,
     senderName: row.senderName,
     senderId: row.senderId,
+    senderUserId: row.senderUserId ?? null,
     content: row.content,
     contentLinks: parseMessageContentLinks(row.contentLinks),
     messageDate: row.messageDate,

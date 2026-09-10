@@ -16,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useFilters } from "@/hooks/useFilters";
 import { queryKeys } from "@/shared/query/queryKeys";
-import type { Filter, FilterBackfillJobCreateInput, FilterCondition } from "@/types";
+import type { Filter, FilterBackfillJobCreateInput, FilterCondition, FilterConditionType } from "@/types";
 import { FilterForm } from "./components/FilterForm";
 import {
   FilterConfirmationDialog,
@@ -29,6 +29,7 @@ import type { DraftCondition } from "./types";
 import {
   assertValidRegexConditions,
   assertValidScriptConditions,
+  assertValidSenderConditions,
   createDraftCondition,
   createInitialDraftConditions,
   deriveFilterName,
@@ -207,6 +208,9 @@ export function FiltersFeature() {
   const hasIncompleteScriptCondition = conditions.some(
     (condition) => condition.type === "script" && !condition.input.trim(),
   );
+  const hasIncompleteSenderCondition = conditions.some(
+    (condition) => condition.type === "sender" && normalizeConditions([condition]).length === 0,
+  );
   const suggestedName = useMemo(
     () => deriveFilterName(persistedConditions, chats),
     [chats, persistedConditions],
@@ -252,12 +256,16 @@ export function FiltersFeature() {
     if (hasIncompleteScriptCondition) {
       return { request: null, error: "请填写自定义 JavaScript 代码" };
     }
+    if (hasIncompleteSenderCondition) {
+      return { request: null, error: "请填写发送者用户 ID" };
+    }
 
     if (persistedConditions.length === 0) return { request: null, error: "" };
 
     try {
       assertValidRegexConditions(persistedConditions);
       assertValidScriptConditions(persistedConditions);
+      assertValidSenderConditions(persistedConditions);
       return {
         request: {
           conditions: persistedConditions,
@@ -275,6 +283,7 @@ export function FiltersFeature() {
   }, [
     currentConditionSignature,
     hasIncompleteScriptCondition,
+    hasIncompleteSenderCondition,
     isEditorSelected,
     persistedConditions,
     previewPerChatLimit,
@@ -436,6 +445,9 @@ export function FiltersFeature() {
     if (hasIncompleteScriptCondition) {
       throw new Error("请填写自定义 JavaScript 代码");
     }
+    if (hasIncompleteSenderCondition) {
+      throw new Error("请填写发送者用户 ID");
+    }
 
     if (persistedConditions.length === 0) {
       throw new Error("至少添加一个有效条件");
@@ -443,6 +455,7 @@ export function FiltersFeature() {
 
     assertValidRegexConditions(persistedConditions);
     assertValidScriptConditions(persistedConditions);
+    assertValidSenderConditions(persistedConditions);
     return persistedConditions;
   };
 
@@ -469,8 +482,9 @@ export function FiltersFeature() {
     markDirty();
   };
 
-  const addCondition = (effect: "require" | "exclude" = "require") => {
-    const condition = createDraftCondition("keyword", undefined, effect);
+  const addCondition = (effect: "require" | "exclude" = "require", type: FilterConditionType = "keyword") => {
+    // A new sender constraint gets its own AND group; OR is an explicit group action.
+    const condition = createDraftCondition(type, undefined, effect);
     addedGroupToFocus.current = condition.groupId ?? condition.id;
     setConditions((current) => [...current, condition]);
     markDirty();
@@ -1009,6 +1023,7 @@ export function FiltersFeature() {
                   onAppendValues={appendConditionValues}
                   onAddAlternative={addAlternative}
                   onAddCondition={() => addCondition()}
+                  onAddSenderCondition={() => addCondition("require", "sender")}
                   onAddExclusion={() => addCondition("exclude")}
                   historyBackfill={
                     <HistoryBackfillDialog

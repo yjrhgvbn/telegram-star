@@ -72,6 +72,11 @@
 .rules-condition-input::placeholder { color: var(--muted-foreground); opacity: 1; }
 .rules-condition-input:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-bottom-color: transparent; border-radius: 4px; box-shadow: none; }
 .rules-condition-input[aria-invalid="true"] { border-bottom-color: var(--destructive); }
+.rules-condition-entry--sender,
+.rules-condition-line:first-child .rules-condition-entry--sender { grid-template-columns: 148px minmax(0, 1fr) 26px; }
+.rules-condition-line:first-child .rules-condition-entry--sender { grid-template-columns: 148px minmax(0, 1fr); }
+.rules-condition-input--sender { flex-basis: 150px; min-height: 32px; resize: vertical; }
+.rules-condition-description { grid-column: 1 / -1; margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 18px; }
 .rules-condition-script { min-height: 80px; padding: 7px 8px; border: 1px solid var(--input); border-radius: 6px; background: var(--card); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 20px; }
 .rules-condition-remove { width: 26px; height: 36px; margin: 0; border-radius: 5px; color: var(--muted-foreground); }
 .rules-condition-remove:hover { background: color-mix(in oklab, var(--destructive) 8%, transparent); color: var(--destructive); }
@@ -98,6 +103,9 @@
   .rules-condition-entry,
   .rules-condition-line:first-child .rules-condition-entry { grid-template-columns: minmax(0, 1fr) 28px; gap: 5px; }
   .rules-condition-type { grid-column: 1; grid-row: 1; width: 110px; max-width: 100%; }
+  .rules-condition-entry--sender,
+  .rules-condition-line:first-child .rules-condition-entry--sender { grid-template-columns: minmax(0, 1fr) 28px; }
+  .rules-condition-entry--sender .rules-condition-type { width: 148px; }
   .rules-condition-line:first-child .rules-condition-type { max-width: calc(100% - 60px); }
   .rules-condition-values,
   .rules-condition-script { grid-column: 1 / -1; }
@@ -119,6 +127,7 @@
   .rules-condition-entry,
   .rules-condition-line:first-child .rules-condition-entry { grid-template-columns: minmax(0, 1fr) 44px; }
   .rules-condition-line:first-child .rules-condition-type { max-width: 110px; }
+  .rules-condition-line:first-child .rules-condition-entry--sender .rules-condition-type { max-width: 148px; }
   .rules-condition-menu [role="menuitem"] { min-height: var(--menu-item-height); font-size: 14px; }
   .rules-condition-script { font-size: 16px; }
 }

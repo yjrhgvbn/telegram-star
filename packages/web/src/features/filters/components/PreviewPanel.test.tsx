@@ -13,6 +13,7 @@ function createPreviewMessage(overrides: Partial<HistoricalFilterPreviewMessage>
     chatTitle: "测试会话",
     senderName: "测试用户",
     senderId: "user-1",
+    senderUserId: null,
     content: "红包 V12.4，又一个红包，版本 v13.5",
     contentLinks: [],
     messageDate: "2026-08-24T00:00:00.000Z",
@@ -67,6 +68,18 @@ function props(overrides: Partial<ComponentProps<typeof PreviewPanel>> = {}): Co
 
 describe("PreviewPanel", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it("labels sender evidence and locates its condition without highlighting an ID as message content", async () => {
+    const user = userEvent.setup();
+    const onLocateCondition = vi.fn();
+    const { container } = render(<PreviewPanel {...props({ onLocateCondition, previewMessages: [createPreviewMessage({
+      content: "123456789 发布了更新", senderUserId: "123456789", matchedKeyword: null,
+      matchEvidence: [{ conditionIndex: 0, groupId: "sender-group", type: "sender", effect: "require", passed: true, groupPassed: true, matchedValues: ["123456789"], matchedTexts: [] }],
+    })] })} />);
+    await user.click(screen.getByRole("button", { name: "发送者用户 ID · 123456789" }));
+    expect(onLocateCondition).toHaveBeenCalledWith("sender-group");
+    expect(container.querySelector("mark")).toBeNull();
+  });
 
   it("lets the user expand the preview scan range", async () => {
     const user = userEvent.setup();

@@ -59,6 +59,8 @@ docker logs --tail=200 telegram-star
 
 更新后确认页面和 `/api/health` 可访问，Telegram 状态、消息、规则与转发配置仍可读取。Web/PWA 刷新后加载新版本；客户端壳有更新时，从 Release 下载安装包升级。当前不提供自动更新服务。
 
+发送者用户 ID 过滤新增可空的 `messages.sender_user_id` 字段，由现有 `db:deploy` 自动迁移，不改写旧 `sender_id`。旧值可能是频道 ID，不能直接作为用户身份；旧消息在正常再次收录或手动补录时才补齐已确认的用户 ID，不增加自动扫描频率。
+
 ## 数据备份与恢复
 
 停止服务后复制完整数据目录，避免复制正在写入的 SQLite 文件：

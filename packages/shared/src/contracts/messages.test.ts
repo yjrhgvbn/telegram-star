@@ -63,7 +63,7 @@ describe("messages contract", () => {
         anchorId: 1,
       }),
     ).toEqual({
-      data: [{ ...message, contentLinks: [] }],
+      data: [{ ...message, senderUserId: null, contentLinks: [] }],
       hasOlder: true,
       hasNewer: false,
       anchorId: 1,

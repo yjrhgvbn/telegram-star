@@ -9,6 +9,7 @@ function createMessageRow(overrides: Partial<MessageRow> = {}): MessageRow {
     chatTitle: "Chat",
     senderName: "Sender",
     senderId: "sender-1",
+    senderUserId: null,
     content: "hello",
     contentLinks: null,
     messageDate: "2026-06-26T00:00:00.000Z",

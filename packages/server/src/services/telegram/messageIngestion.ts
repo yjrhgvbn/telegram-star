@@ -9,6 +9,7 @@ import {
 } from "./messageContentLinks.js";
 import { persistMessageForFilters } from "./messagePersistence.js";
 import { buildTelegramLink, getMessageTimestampMs, getSenderSummary } from "./utils.js";
+import { getSenderUserId } from "./senderIdentity.js";
 
 export interface ActiveMessageFilter {
   id: number;
@@ -79,13 +80,14 @@ export function findMatchingFilters(
   chatId: string,
   content: string,
   filters: ActiveMessageFilter[],
+  senderUserId?: string | null,
 ): { filter: ActiveMessageFilter; matchedKeyword: string | null }[] {
   const matches: { filter: ActiveMessageFilter; matchedKeyword: string | null }[] = [];
   for (const filter of filters) {
     const conditions = parseConditions(filter.conditions);
     if (conditions.length === 0) continue;
 
-    const match = matchFilterConditions({ chatId, content }, conditions);
+    const match = matchFilterConditions({ chatId, content, senderUserId }, conditions);
     if (match.error) {
       // 实时链路遇到单条自定义脚本错误时跳过该规则，继续尝试后续规则。
       appLogger.warn(
@@ -110,8 +112,9 @@ export function findFirstMatchingFilter(
   chatId: string,
   content: string,
   filters: ActiveMessageFilter[],
+  senderUserId?: string | null,
 ): { filter: ActiveMessageFilter; matchedKeyword: string | null } | null {
-  return findMatchingFilters(chatId, content, filters)[0] ?? null;
+  return findMatchingFilters(chatId, content, filters, senderUserId)[0] ?? null;
 }
 
 /** 由实时监听和历史回补共用的唯一消息入库入口。 */
@@ -128,8 +131,9 @@ export async function ingestTelegramMessage(
   if (!chatId) return "unmatched";
 
   const textContent = getMessageTextContent(message);
+  const senderUserId = getSenderUserId(message);
   const filterMatchStartedAtMs = Date.now();
-  const matches = findMatchingFilters(chatId, textContent, activeFilters);
+  const matches = findMatchingFilters(chatId, textContent, activeFilters, senderUserId);
   const filterMatchMs = Date.now() - filterMatchStartedAtMs;
   if (matches.length === 0) return "unmatched";
 
@@ -184,6 +188,7 @@ export async function ingestTelegramMessage(
     chatTitle,
     senderName,
     senderId,
+    senderUserId,
     content: textContent,
     contentLinks: serializeMessageContentLinks(contentLinks),
     messageDate: timing.messageDate,

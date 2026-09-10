@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Menu } from "@base-ui/react/menu";
 import { ChevronDown, LoaderCircle, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ interface FilterFormProps {
   onAppendValues: (id: string) => void;
   onAddAlternative: (groupId: string) => void;
   onAddCondition: () => void;
+  onAddSenderCondition?: () => void;
   onAddExclusion?: () => void;
   historyBackfill?: ReactNode;
 }
@@ -52,6 +54,7 @@ export function FilterForm({
   onAppendValues,
   onAddAlternative,
   onAddCondition,
+  onAddSenderCondition,
   onAddExclusion,
   historyBackfill,
 }: FilterFormProps) {
@@ -95,10 +98,27 @@ export function FilterForm({
           ))}
         </div>
         <div className="rule-form__add-actions">
-          <Button type="button" variant="ghost" size="sm" onClick={onAddCondition}>
-            <Plus data-icon="inline-start" />
-            添加条件组
-          </Button>
+          {onAddSenderCondition ? (
+            <Menu.Root>
+              <Menu.Trigger render={<Button type="button" variant="ghost" size="sm" />}>
+                <Plus data-icon="inline-start" />添加条件组<ChevronDown data-icon="inline-end" />
+              </Menu.Trigger>
+              <Menu.Portal>
+                <Menu.Positioner className="rules-menu-positioner" align="start" sideOffset={5}>
+                  <Menu.Popup className="rules-theme rules-condition-menu">
+                    <Menu.Group>
+                      <Menu.Item onClick={onAddCondition}>消息内容</Menu.Item>
+                      <Menu.Item onClick={onAddSenderCondition}>发送者用户 ID</Menu.Item>
+                    </Menu.Group>
+                  </Menu.Popup>
+                </Menu.Positioner>
+              </Menu.Portal>
+            </Menu.Root>
+          ) : (
+            <Button type="button" variant="ghost" size="sm" onClick={onAddCondition}>
+              <Plus data-icon="inline-start" />添加条件组
+            </Button>
+          )}
           {onAddExclusion ? (
             <Button type="button" variant="ghost" size="sm" onClick={onAddExclusion}>
               <Plus data-icon="inline-start" />

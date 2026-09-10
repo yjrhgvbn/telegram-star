@@ -48,6 +48,23 @@ describe("rule changes preserve other memberships", () => {
     expect(await fixture.db.messageRemoval.count()).toBe(0);
   });
 
+  it("preserves another rule while a sender condition removes only nonmatching users", async () => {
+    const rows = [];
+    for (const [index, senderUserId] of ["123", "456", null].entries()) {
+      const saved = await persistMessageForFilters({
+        telegramMessageId: 200 + index, chatId: "chat", content: "hello", senderUserId,
+        senderId: "123", messageDate: now, createdAt: now, isRead: true,
+      }, [{ filterId: 1, matchedKeyword: "hello" }, { filterId: 2, matchedKeyword: "hello" }]);
+      rows.push(saved.rowId!);
+    }
+    await updateFilterRow(1, { conditions: [{ type: "sender", values: ["123"] }] });
+    expect(await fixture.db.messageFilterMembership.findMany({ where: { filterId: 1 } })).toMatchObject([
+      { messageId: rows[0], matchedKeyword: null },
+    ]);
+    expect(await fixture.db.messageFilterMembership.count({ where: { filterId: 2 } })).toBe(3);
+    expect(await fixture.db.message.count({ where: { isRead: true } })).toBe(3);
+  });
+
   it("keeps B when A is deleted, then cleans up after the last rule is deleted", async () => {
     const messageId = await seed();
     const events: unknown[] = [];

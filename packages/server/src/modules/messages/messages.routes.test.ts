@@ -49,6 +49,7 @@ function createMessage(id: number, patch: Partial<Message> = {}): Message {
     chatTitle: "Chat",
     senderName: "Sender",
     senderId: "sender-1",
+    senderUserId: null,
     content: `message-${id}`,
     contentLinks: [],
     messageDate: `2026-06-29T00:00:0${id}.000Z`,

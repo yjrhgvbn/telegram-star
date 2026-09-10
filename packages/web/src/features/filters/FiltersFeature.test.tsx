@@ -48,10 +48,11 @@ vi.mock("@/components/AppShell", () => ({
 }));
 
 vi.mock("./components/FilterForm", () => ({
-  FilterForm: ({ conditions, onUpdateCondition, onCreateForwardTarget, historyBackfill }: {
+  FilterForm: ({ conditions, onUpdateCondition, onAddSenderCondition, onCreateForwardTarget, historyBackfill }: {
     conditions: DraftCondition[];
     onUpdateCondition: (id: string, updater: (condition: DraftCondition) => DraftCondition) => void;
     onCreateForwardTarget: () => void;
+    onAddSenderCondition: () => void;
     historyBackfill: ReactNode;
   }) => (
     <>
@@ -60,6 +61,10 @@ vi.mock("./components/FilterForm", () => ({
         ...condition, type: "keyword", values: ["测试关键词"], input: "",
       }))}>设置测试条件</button>
       <button onClick={onCreateForwardTarget}>新建通道</button>
+      <button onClick={onAddSenderCondition}>添加用户条件</button>
+      {conditions.filter((condition) => condition.type === "sender").map((condition) => (
+        <input key={condition.id} aria-label="测试用户 ID" value={condition.input} onChange={(event) => onUpdateCondition(condition.id, (current) => ({ ...current, input: event.target.value }))} />
+      ))}
       {historyBackfill}
     </>
   ),
@@ -198,6 +203,33 @@ describe("FiltersFeature", () => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
+  });
+
+  it("blocks empty or invalid sender constraints for preview and save, then saves valid IDs with AND scope", async () => {
+    const user = userEvent.setup();
+    const updateFilter = vi.fn().mockResolvedValue(selectedFilter);
+    useFiltersMock.mockReturnValue({ ...useFiltersMock(), updateFilter });
+    renderWorkspace("/filters/7");
+    await user.click(screen.getByRole("button", { name: "添加用户条件" }));
+    await user.click(screen.getByRole("button", { name: "保存", exact: true }));
+    expect(screen.getByRole("alert").textContent).toContain("请填写发送者用户 ID");
+    expect(useQueryMock.mock.calls.at(-1)?.[0].enabled).toBe(false);
+    const field = screen.getByRole("textbox", { name: "测试用户 ID" });
+    await user.type(field, "@user");
+    await user.click(screen.getByRole("button", { name: "保存", exact: true }));
+    expect(screen.getByRole("alert").textContent).toContain("用户 ID 无效");
+    expect(useQueryMock.mock.calls.at(-1)?.[0].enabled).toBe(false);
+    expect(updateFilter).not.toHaveBeenCalled();
+
+    await user.clear(field);
+    await user.type(field, "123456789,987654321");
+    await user.click(screen.getByRole("button", { name: "保存", exact: true }));
+    await waitFor(() => expect(updateFilter).toHaveBeenCalledOnce());
+    const savedConditions = updateFilter.mock.calls[0][1].conditions;
+    const sender = savedConditions.find((condition: { type: string }) => condition.type === "sender");
+    const keyword = savedConditions.find((condition: { type: string }) => condition.type === "keyword");
+    expect(sender.values).toEqual(["123456789", "987654321"]);
+    expect(sender.groupId).not.toBe(keyword.groupId);
   });
 
   it("returns to the page that opened the filter editor", async () => {

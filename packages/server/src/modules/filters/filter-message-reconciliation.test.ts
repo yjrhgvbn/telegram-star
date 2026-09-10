@@ -2,6 +2,19 @@ import { describe, expect, it } from "vitest";
 import { planFilterMessageReconciliation } from "./filter-message-reconciliation.js";
 
 describe("planFilterMessageReconciliation", () => {
+  it("rechecks confirmed user identities without treating legacy sender IDs as users", () => {
+    const messages = [
+      { id: 1, chatId: "chat-1", senderUserId: "123", content: "release", matchedKeyword: "release" },
+      { id: 2, chatId: "chat-1", senderUserId: "456", content: "release", matchedKeyword: "release" },
+      { id: 3, chatId: "chat-1", senderUserId: null, content: "release", matchedKeyword: "release" },
+    ];
+    expect(planFilterMessageReconciliation(messages, [{ type: "sender", values: ["123"] }])).toEqual({
+      messageIdsToDelete: [2, 3],
+      keywordUpdates: [{ messageIds: [1], matchedKeyword: null }],
+    });
+    expect(planFilterMessageReconciliation(messages, [{ type: "sender", effect: "exclude", values: ["123"] }]).messageIdsToDelete).toEqual([1]);
+  });
+
   it("removes messages that no longer satisfy every updated condition", () => {
     const plan = planFilterMessageReconciliation(
       [

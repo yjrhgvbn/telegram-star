@@ -58,6 +58,7 @@ export const messageSchema = z.object({
   chatTitle: z.string(),
   senderName: z.string(),
   senderId: z.string(),
+  senderUserId: z.string().nullable().default(null),
   content: z.string(),
   contentLinks: messageContentLinksSchema.default([]),
   messageDate: z.string(),

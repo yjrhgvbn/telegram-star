@@ -13,6 +13,7 @@ function createMessage(id: number): Message {
     chatTitle: "Chat",
     senderName: "Sender",
     senderId: "sender",
+    senderUserId: null,
     content: `message-${id}`,
     contentLinks: [],
     messageDate: `2026-06-${String(id).padStart(2, "0")}T00:00:00.000Z`,

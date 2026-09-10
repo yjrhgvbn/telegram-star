@@ -78,6 +78,8 @@ model Message {
   chatTitle         String   @default("") @map("chat_title")
   senderName        String   @default("") @map("sender_name")
   senderId          String   @default("") @map("sender_id")
+  // 仅保存已确认的 User 身份；旧 senderId 也可能是频道/群组，不能直接作为用户 ID。
+  senderUserId      String?  @map("sender_user_id")
   content           String   @default("")
   contentLinks      String?  @map("content_links")       // JSON: Telegram 文本链接实体 [{offset,length,url}]
   messageDate       String   @map("message_date")

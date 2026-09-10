@@ -54,6 +54,7 @@ const scopeOptions = [
 ];
 const evidenceTypeLabels: Record<FilterMatchEvidence["type"], string> = {
   keyword: "关键词",
+  sender: "发送者用户 ID",
   chat: "消息来源",
   regex: "正则",
   script: "脚本",

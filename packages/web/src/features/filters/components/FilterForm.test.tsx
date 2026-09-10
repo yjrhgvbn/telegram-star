@@ -30,6 +30,7 @@ function FilterFormHarness({
   onAutoLocateChange,
   onToggleForwardTarget,
   onAddCondition,
+  onAddSenderCondition,
   onAddAlternative = vi.fn(),
   onToggleGroupEffect = vi.fn(),
   conditions,
@@ -40,6 +41,7 @@ function FilterFormHarness({
   onAutoLocateChange: (value: boolean) => void;
   onToggleForwardTarget: (id: number) => void;
   onAddCondition: () => void;
+  onAddSenderCondition?: () => void;
   onAddAlternative?: (groupId: string) => void;
   onToggleGroupEffect?: (groupId: string) => void;
   conditions?: DraftCondition[];
@@ -93,6 +95,7 @@ function FilterFormHarness({
       onAppendValues={vi.fn()}
       onAddAlternative={onAddAlternative}
       onAddCondition={onAddCondition}
+      onAddSenderCondition={onAddSenderCondition}
     />
   );
 }
@@ -101,6 +104,17 @@ describe("FilterForm", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it("offers a separate sender constraint from the add-group menu", async () => {
+    const user = userEvent.setup();
+    const onAddCondition = vi.fn();
+    const onAddSenderCondition = vi.fn();
+    render(<FilterFormHarness onAutoLocateChange={vi.fn()} onToggleForwardTarget={vi.fn()} onAddCondition={onAddCondition} onAddSenderCondition={onAddSenderCondition} />);
+    await user.click(screen.getByRole("button", { name: "添加条件组" }));
+    await user.click(await screen.findByRole("menuitem", { name: "发送者用户 ID" }));
+    expect(onAddSenderCondition).toHaveBeenCalledOnce();
+    expect(onAddCondition).not.toHaveBeenCalled();
   });
 
   it("keeps conditions separate and handles the remaining actions", async () => {

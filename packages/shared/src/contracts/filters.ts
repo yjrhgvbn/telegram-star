@@ -1,9 +1,17 @@
 import { z } from "zod";
 import { messageContentLinksSchema } from "./messages.js";
 
-export const filterConditionTypeSchema = z.enum(["keyword", "chat", "regex", "script"]);
+export const filterConditionTypeSchema = z.enum(["keyword", "chat", "sender", "regex", "script"]);
 export const filterConditionEffectSchema = z.enum(["require", "exclude"]);
 export const filterConditionGroupIdSchema = z.string().trim().min(1).max(120);
+
+const MAX_TELEGRAM_USER_ID = "9223372036854775807";
+
+export function isValidTelegramUserId(value: string): boolean {
+  // Telegram 的 long 用十进制字符串比较，避免转换成 Number 后丢失精度。
+  return value === value.trim() && /^[1-9]\d{0,18}$/.test(value) &&
+    (value.length < MAX_TELEGRAM_USER_ID.length || value <= MAX_TELEGRAM_USER_ID);
+}
 
 export function isValidFilterRegexPattern(pattern: string): boolean {
   try {
@@ -23,6 +31,17 @@ export const filterConditionSchema = z
     values: z.array(z.string().trim().min(1)).min(1),
   })
   .superRefine((condition, ctx) => {
+    if (condition.type === "sender") {
+      condition.values.forEach((value, index) => {
+        if (isValidTelegramUserId(value)) return;
+        ctx.addIssue({
+          code: "custom",
+          path: ["values", index],
+          message: "invalid Telegram user ID",
+        });
+      });
+    }
+
     if (
       condition.effect !== undefined &&
       condition.groupEffect !== undefined &&
@@ -231,6 +250,7 @@ export const liveChatMessageSchema = z.object({
   chatTitle: z.string(),
   senderName: z.string(),
   senderId: z.string(),
+  senderUserId: z.string().nullable().default(null),
   content: z.string(),
   contentLinks: messageContentLinksSchema.default([]),
   messageDate: z.string(),

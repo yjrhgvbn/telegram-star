@@ -4,6 +4,10 @@ import type {
   FilterConditionType,
   FilterMatchEvidence,
 } from "@telegram-star/shared/contracts/filters";
+import {
+  filterConditionSchema,
+  isValidTelegramUserId,
+} from "@telegram-star/shared/contracts/filters";
 
 export type {
   FilterCondition,
@@ -211,6 +215,23 @@ const conditionHandlers = {
       };
     },
   },
+  sender: {
+    allowsExclude: true,
+    normalizeValues: (values) => values,
+    validate: (condition) => condition.values.some((value) => !isValidTelegramUserId(value.trim()))
+      ? "condition.sender values must be valid Telegram user IDs"
+      : null,
+    evaluate: (input, condition) => {
+      // 只使用已确认的用户身份；频道、匿名发送者或旧消息的 senderId 不作为用户 ID。
+      const userId = input.senderUserId;
+      const matched = typeof userId === "string" &&
+        isValidTelegramUserId(userId) && condition.values.includes(userId);
+      return {
+        ...createEmptyConditionMatch(matched),
+        matchedValues: matched ? [userId] : [],
+      };
+    },
+  },
   regex: {
     allowsExclude: true,
     normalizeValues: (values) => values.filter(isValidRegexPattern),
@@ -275,6 +296,7 @@ function isSupportedConditionType(type: unknown): type is FilterConditionType {
 export interface FilterMatchInput {
   chatId: string;
   content: string;
+  senderUserId?: string | null;
 }
 
 export interface FilterMatchResult {
@@ -335,6 +357,11 @@ export function parseConditions(raw: string): FilterCondition[] {
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    // 用户限制损坏时让整条规则失效，不能像旧内容条件一样被丢弃后扩大匹配范围。
+    if (parsed.some((item) => item?.type === "sender" && !filterConditionSchema.safeParse(item).success)) {
       return [];
     }
 
@@ -411,6 +438,10 @@ export function parseConditions(raw: string): FilterCondition[] {
 }
 
 export function serializeConditions(conditions: FilterCondition[]): string {
+  for (const condition of conditions) {
+    if (condition.type === "sender") filterConditionSchema.parse(condition);
+  }
+
   return JSON.stringify(
     conditions.map((condition) => ({
       type: condition.type,
@@ -431,7 +462,7 @@ export function validateConditions(conditions: FilterCondition[]): { valid: bool
 
   for (const condition of conditions) {
     if (!condition || !isSupportedConditionType(condition.type)) {
-      return { valid: false, error: "condition.type must be keyword, chat, regex, or script" };
+      return { valid: false, error: "condition.type must be keyword, chat, sender, regex, or script" };
     }
 
     if (condition.effect !== undefined && !isSupportedConditionEffect(condition.effect)) {

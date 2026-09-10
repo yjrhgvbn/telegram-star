@@ -39,6 +39,122 @@ describe("filter matching", () => {
     expect(result).toEqual({ matched: true, matchedKeyword: "release" });
   });
 
+  it("matches exact sender IDs as alternatives without producing content highlights", () => {
+    const result = evaluateFilterConditions(
+      { chatId: "chat-1", senderUserId: "9007199254740993", content: "User 9007199254740993 posted" },
+      [{ type: "sender", values: ["9007199254740992", "9007199254740993"] }],
+    );
+    expect(result).toEqual({
+      matched: true,
+      matchedKeyword: null,
+      evidence: [{
+        conditionIndex: 0,
+        type: "sender",
+        effect: "require",
+        passed: true,
+        matchedValues: ["9007199254740993"],
+        matchedTexts: [],
+      }],
+    });
+    expect(matchFilterConditions(
+      { chatId: "chat-1", senderUserId: "9007199254740992", content: "9007199254740993" },
+      [{ type: "sender", values: ["9007199254740993"] }],
+    )).toEqual({ matched: false, matchedKeyword: null });
+  });
+
+  it.each([undefined, null, "-123", "@username", "0", "0123"])(
+    "does not infer a user from content when senderUserId is %s",
+    (senderUserId) => {
+      const input = { chatId: "123", senderUserId, content: "sender 123" };
+      expect(matchFilterConditions(input, [{ type: "sender", values: ["123"] }]))
+        .toEqual({ matched: false, matchedKeyword: null });
+      expect(matchFilterConditions(input, [{ type: "sender", effect: "exclude", values: ["123"] }]))
+        .toEqual({ matched: true, matchedKeyword: null });
+    },
+  );
+
+  it("combines sender, chat, and keyword restrictions with AND", () => {
+    const conditions = [
+      { type: "sender" as const, values: ["123", "456"] },
+      { type: "chat" as const, values: ["chat-1"] },
+      { type: "keyword" as const, values: ["BTC"] },
+    ];
+    const input = { chatId: "chat-1", senderUserId: "456", content: "BTC update" };
+    expect(matchFilterConditions(input, conditions)).toEqual({ matched: true, matchedKeyword: "BTC" });
+    expect(matchFilterConditions({ ...input, senderUserId: "789" }, conditions).matched).toBe(false);
+    expect(matchFilterConditions({ ...input, chatId: "chat-2" }, conditions).matched).toBe(false);
+    expect(matchFilterConditions({ ...input, content: "other update" }, conditions).matched).toBe(false);
+  });
+
+  it("combines sender alternatives with content and excludes any blocked sender", () => {
+    const conditions = [
+      { type: "chat" as const, groupId: "source", values: ["chat-1"] },
+      { type: "sender" as const, groupId: "include", values: ["123"] },
+      { type: "keyword" as const, groupId: "include", values: ["BTC"] },
+      { type: "sender" as const, groupId: "blocked", groupEffect: "exclude" as const, values: ["456", "789"] },
+    ];
+    const senderOnly = evaluateFilterConditions(
+      { chatId: "chat-1", senderUserId: "123", content: "ordinary update" }, conditions,
+    );
+    expect(senderOnly.matched).toBe(true);
+    expect(senderOnly.matchedKeyword).toBeNull();
+    expect(senderOnly.evidence[1]).toMatchObject({
+      groupId: "include", groupPassed: true, conditionMatched: true,
+      matchedValues: ["123"], matchedTexts: [],
+    });
+    expect(matchFilterConditions(
+      { chatId: "chat-1", senderUserId: "111", content: "BTC update" }, conditions,
+    )).toEqual({ matched: true, matchedKeyword: "BTC" });
+    const excluded = evaluateFilterConditions(
+      { chatId: "chat-1", senderUserId: "789", content: "BTC update" }, conditions,
+    );
+    expect(excluded.matched).toBe(false);
+    expect(excluded.evidence[3]).toMatchObject({
+      groupId: "blocked", effect: "exclude", passed: false, groupPassed: false,
+      conditionMatched: true, matchedValues: ["789"], matchedTexts: [],
+    });
+    expect(matchFilterConditions(
+      { chatId: "chat-2", senderUserId: "123", content: "BTC update" }, conditions,
+    ).matched).toBe(false);
+  });
+
+  it("round-trips sender IDs and exclusion groups", () => {
+    const serialized = serializeConditions([
+      { type: "sender", groupId: "allowed", values: [" 123 ", "9007199254740993"] },
+      { type: "sender", groupId: "blocked", groupEffect: "exclude", values: [" 456 "] },
+    ]);
+    expect(parseConditions(serialized)).toEqual([
+      { type: "sender", groupId: "allowed", values: ["123", "9007199254740993"] },
+      { type: "sender", groupId: "blocked", groupEffect: "exclude", values: ["456"] },
+    ]);
+  });
+
+  it.each(["0", "-123", "+123", "@user", "0123", "1.2", "1e3", "9223372036854775808"])(
+    "rejects invalid sender ID %s without broadening a stored rule",
+    (value) => {
+      const conditions = [
+        { type: "keyword" as const, values: ["BTC"] },
+        { type: "sender" as const, values: ["123", value] },
+      ];
+      expect(validateConditions(conditions)).toEqual({
+        valid: false,
+        error: "condition.sender values must be valid Telegram user IDs",
+      });
+      expect(parseConditions(JSON.stringify(conditions))).toEqual([]);
+      expect(() => serializeConditions(conditions)).toThrow();
+    },
+  );
+
+  it.each([{ values: [] }, { values: [123] }, { values: [""] }, { values: ["123", null] }])(
+    "rejects malformed persisted sender values $values",
+    ({ values }) => {
+      expect(parseConditions(JSON.stringify([
+        { type: "keyword", values: ["BTC"] },
+        { type: "sender", values },
+      ]))).toEqual([]);
+    },
+  );
+
   it("matches regex conditions case-insensitively", () => {
     const result = matchFilterConditions(
       { chatId: "chat-1", content: "Release V12.4 is live" },

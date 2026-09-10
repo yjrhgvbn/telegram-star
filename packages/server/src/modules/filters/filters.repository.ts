@@ -115,7 +115,7 @@ export async function updateFilterRow(id: number, input: FilterUpdateInput): Pro
       where: { filterId: id },
       select: {
         matchedKeyword: true,
-        message: { select: { id: true, chatId: true, content: true } },
+        message: { select: { id: true, chatId: true, content: true, senderUserId: true } },
       },
     });
     const messages = memberships.map(({ message, matchedKeyword }) => ({ ...message, matchedKeyword }));

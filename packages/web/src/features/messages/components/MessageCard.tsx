@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from "react";
+import { isValidTelegramUserId } from "@telegram-star/shared/contracts/filters";
 import { Menu } from "@base-ui/react/menu";
 import { CheckCircle2, ChevronDown, ChevronUp, Circle, Copy, Ellipsis, ExternalLink, Link, LoaderCircle } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -55,6 +56,8 @@ export function MessageCard({
   const source = message.chatTitle || message.senderName || "Telegram";
   const hasMedia = Boolean(message.mediaType);
   const visualMedia = ["photo", "video", "videoNote", "gif"].includes(message.mediaType || "");
+  const senderUserId = message.senderUserId && isValidTelegramUserId(message.senderUserId)
+    ? message.senderUserId : null;
 
   async function copyText(text: string, success: string) {
     try {
@@ -109,6 +112,11 @@ export function MessageCard({
                     <Menu.Item className="message-card-menu__item" disabled={!message.telegramLink} onClick={() => void copyText(message.telegramLink, "原文链接已复制")}>
                       <Link aria-hidden="true" />{message.telegramLink ? "复制原文链接" : "无原文链接"}
                     </Menu.Item>
+                    {senderUserId ? (
+                      <Menu.Item className="message-card-menu__item" onClick={() => void copyText(senderUserId, `发送者用户 ID 已复制：${senderUserId}`)}>
+                        <Copy aria-hidden="true" />复制发送者用户 ID
+                      </Menu.Item>
+                    ) : null}
                     {onRemove && <Menu.Item className="message-card-menu__item message-card-menu__remove" disabled={removalDisabled || completionDisabled || !getMessageFilterMatches(message).length} onClick={() => onRemove(message.id)}>{removalLabel}</Menu.Item>}
                   </Menu.Group>
                 </Menu.Popup>

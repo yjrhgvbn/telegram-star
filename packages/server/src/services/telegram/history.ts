@@ -24,6 +24,7 @@ import {
   serializeMessageContentLinks,
 } from "./messageContentLinks.js";
 import { persistMessageForFilters } from "./messagePersistence.js";
+import { getSenderUserId } from "./senderIdentity.js";
 import type {
   JoinedChat,
   LiveChatMessage,
@@ -156,6 +157,7 @@ export async function listSingleChatMessages(options: {
       chatTitle,
       senderName,
       senderId,
+      senderUserId: getSenderUserId(item),
       content,
       contentLinks: extractMessageContentLinks(item, content),
       messageDate: new Date((item.date || 0) * 1000).toISOString(),
@@ -254,6 +256,7 @@ async function loadPreviewChatSnapshot(options: {
         chatTitle: options.chatTitle,
         senderName,
         senderId,
+        senderUserId: getSenderUserId(item),
         content: textContent,
         contentLinks: extractMessageContentLinks(item, textContent),
         messageDate: new Date(getMessageTimestampMs(item)).toISOString(),
@@ -358,7 +361,7 @@ export async function previewHistoricalFilterMessages(options: {
 
       for (const baseMessage of snapshot) {
         const match = evaluateFilterConditions(
-          { chatId, content: baseMessage.content },
+          { chatId, content: baseMessage.content, senderUserId: baseMessage.senderUserId },
           options.conditions,
         );
         if (match.error) throw new Error(match.error);
@@ -544,8 +547,9 @@ export async function backfillFilterHistory(options: {
         if (!hasMessageContent(item)) continue;
 
         const textContent = getMessageTextContent(item);
+        const senderUserId = getSenderUserId(item);
         const match = matchFilterConditions(
-          { chatId, content: textContent },
+          { chatId, content: textContent, senderUserId },
           options.conditions,
         );
         if (match.error) throw new Error(match.error);
@@ -560,6 +564,7 @@ export async function backfillFilterHistory(options: {
           chatTitle,
           senderName,
           senderId,
+          senderUserId,
           content: textContent,
           contentLinks: serializeMessageContentLinks(
             extractMessageContentLinks(item, textContent),

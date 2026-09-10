@@ -1,3 +1,4 @@
+import { isValidTelegramUserId } from "@telegram-star/shared/contracts/filters";
 import type {
   FilterCondition,
   FilterConditionEffect,
@@ -68,10 +69,10 @@ export function normalizeConditions(conditions: DraftCondition[]): FilterConditi
   return conditions
     .map((condition) => {
       const values = (
-        // 关键词条件允许"输入框未点添加就直接保存"，把暂存输入一并并入最终值
+        // 多值条件允许未确认输入直接保存；用户 ID 始终保留为字符串。
         condition.type === "script"
           ? [condition.input]
-          : condition.type === "keyword"
+          : condition.type === "keyword" || condition.type === "sender"
           ? [
               ...condition.values,
               ...condition.input
@@ -184,6 +185,16 @@ export function assertValidRegexConditions(conditions: FilterCondition[]): void 
   }
 }
 
+export function assertValidSenderConditions(conditions: FilterCondition[]): void {
+  const invalidValue = conditions
+    .filter((condition) => condition.type === "sender")
+    .flatMap((condition) => condition.values)
+    .find((value) => !isValidTelegramUserId(value));
+  if (invalidValue !== undefined) {
+    throw new Error(`用户 ID 无效：${invalidValue}。请输入正整数，不含 @、负号或前导 0`);
+  }
+}
+
 function compileFilterScript(source: string): void {
   // 这里只做语法检查；真正执行统一在服务端完成，避免预览与实时监听出现两套结果。
   new Function("message", `"use strict";\n${source}`);
@@ -257,6 +268,12 @@ export function deriveFilterName(
     );
   }
 
+  const senderCondition = conditions.find((condition) => condition.type === "sender");
+  if (senderCondition?.values[0]) {
+    const prefix = getFilterConditionEffect(senderCondition) === "exclude" ? "排除用户：" : "用户：";
+    return truncateFilterName(`${prefix}${senderCondition.values[0]}`);
+  }
+
   const firstChatId = conditions.find((condition) => condition.type === "chat")
     ?.values[0];
   if (firstChatId) {
@@ -278,6 +295,11 @@ export function describeFilterCondition(
 
   if (condition.type === "regex") {
     const description = `内容匹配${formatQuotedList(condition.values, "尚未填写的正则表达式")}`;
+    return isExcluded ? `排除${description}` : description;
+  }
+
+  if (condition.type === "sender") {
+    const description = `发送者用户 ID 为${formatQuotedList(condition.values, "尚未填写的用户 ID")}`;
     return isExcluded ? `排除${description}` : description;
   }
 

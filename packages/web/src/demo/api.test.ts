@@ -3,7 +3,7 @@ import { joinedChatListSchema } from "@telegram-star/shared/contracts/chats";
 import { clientDeviceListSchema } from "@telegram-star/shared/contracts/clients";
 import { appConfigStatusSchema } from "@telegram-star/shared/contracts/config";
 import { filterGroupLayoutSchema, filterGroupListSchema } from "@telegram-star/shared/contracts/filter-groups";
-import { filterListSchema, filterSchema } from "@telegram-star/shared/contracts/filters";
+import { filterListSchema, filterSchema, isValidTelegramUserId } from "@telegram-star/shared/contracts/filters";
 import { forwardTargetListSchema, forwardTargetSchema } from "@telegram-star/shared/contracts/forward-targets";
 import {
   messageBatchReadResponseSchema,
@@ -17,6 +17,15 @@ import { createDemoApi } from "./api";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("isolated browser demo API", () => {
+  it("provides usable fictional user IDs and stores sender rules with the real contract", async () => {
+    const api = createDemoApi();
+    const messages = messageListResponseSchema.parse(await api("/messages"));
+    expect(messages.data.every((message) => message.senderUserId && isValidTelegramUserId(message.senderUserId))).toBe(true);
+    const conditions = [{ type: "sender", values: [messages.data[0].senderUserId], groupEffect: "exclude" }];
+    const filter = filterSchema.parse(await api("/filters", { method: "POST", body: JSON.stringify({ name: "用户过滤", conditions }) }));
+    expect(filter.conditions).toEqual(conditions);
+    await expect(api("/filters", { method: "POST", body: JSON.stringify({ name: "非法用户", conditions: [{ type: "sender", values: ["@user"] }] }) })).rejects.toThrow();
+  });
   it("serves all four tabs using the real response contracts and no remote media", async () => {
     const api = createDemoApi();
     const routes = [

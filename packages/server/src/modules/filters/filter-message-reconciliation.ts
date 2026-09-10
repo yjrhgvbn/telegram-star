@@ -5,6 +5,7 @@ export interface FilterMessageCandidate {
   id: number;
   chatId: string;
   content: string;
+  senderUserId?: string | null;
   matchedKeyword: string | null;
 }
 
@@ -31,7 +32,7 @@ export function planFilterMessageReconciliation(
 
   for (const message of messages) {
     const match = matchFilterConditions(
-      { chatId: message.chatId, content: message.content },
+      { chatId: message.chatId, content: message.content, senderUserId: message.senderUserId },
       conditions,
     );
 

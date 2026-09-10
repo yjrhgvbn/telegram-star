@@ -15,6 +15,7 @@ function createMessage(id: number, isRead = false): Message {
     chatTitle: "Chat",
     senderName: "Sender",
     senderId: "sender",
+    senderUserId: null,
     content: "",
     messageDate: "2026-06-26T00:00:00.000Z",
     telegramLink: "",

@@ -11,6 +11,7 @@ function createMessage(patch: Partial<Message> = {}): Message {
   return {
     id: 1, telegramMessageId: 101, chatId: "chat-1",
     chatTitle: "日漫更新-日产动漫/每日更新🎎【唐人街-日漫小巷】", senderName: "尼古喵喵", senderId: "sender-1",
+    senderUserId: null,
     content: "第 04 集", contentLinks: [], messageDate: "2026-07-31T10:00:00.000Z", telegramLink: "", isRead: true,
     matchedFilterId: 12, matchedKeyword: "尼古喵喵", filterName: "日漫", createdAt: "2026-07-31T10:00:00.000Z",
     mediaType: null, mediaFileName: null, mediaFileSize: null, mediaMimeType: null, mediaDuration: null,
@@ -19,6 +20,23 @@ function createMessage(patch: Partial<Message> = {}): Message {
 }
 
 describe("MessageCard", () => {
+  it("copies the verified user ID independently of legacy senderId", async () => {
+    const user = userEvent.setup();
+    const copy = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+    render(<MessageCard message={createMessage({ senderUserId: "123456789", senderId: "different-legacy-id" })} onToggleRead={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "更多消息操作" }));
+    await user.click(await screen.findByRole("menuitem", { name: "复制发送者用户 ID" }));
+    expect(copy).toHaveBeenCalledWith("123456789");
+    expect((await screen.findByRole("status")).textContent).toContain("发送者用户 ID 已复制");
+  });
+
+  it.each([null, "-100123", "00123"])("does not offer a user-ID copy action for unknown or invalid identity %s", async (senderUserId) => {
+    const user = userEvent.setup();
+    render(<MessageCard message={createMessage({ senderUserId, senderId: "123456789" })} onToggleRead={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "更多消息操作" }));
+    await screen.findByRole("menuitem", { name: "复制消息" });
+    expect(screen.queryByRole("menuitem", { name: "复制发送者用户 ID" })).toBeNull();
+  });
   it("offers rule removal in the menu and disables it during completion writes", async () => {
     const user = userEvent.setup();
     const remove = vi.fn();

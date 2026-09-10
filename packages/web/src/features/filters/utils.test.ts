@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   assertValidRegexConditions,
   assertValidScriptConditions,
+  assertValidSenderConditions,
+  createDraftCondition,
   createInitialDraftConditions,
   deriveFilterName,
   describeFilterRule,
@@ -12,6 +14,24 @@ import {
 import type { DraftCondition } from "./types";
 
 describe("filter form utils", () => {
+  it("normalizes sender IDs without numeric coercion and keeps them in an independent AND group", () => {
+    const keyword = createDraftCondition("keyword");
+    const sender = { ...createDraftCondition("sender"), values: ["123456789"], input: " 987654321，1000000001\n1000000002 " };
+    const result = normalizeConditions([{ ...keyword, input: "更新" }, sender]);
+    expect(result[1]).toMatchObject({ type: "sender", values: ["123456789", "987654321", "1000000001", "1000000002"] });
+    expect(result[0].groupId).not.toBe(result[1].groupId);
+    expect(() => assertValidSenderConditions(result)).not.toThrow();
+    expect(deriveFilterName([result[1]])).toBe("用户：123456789");
+    expect(describeFilterRule(result)).toContain("并且发送者用户 ID 为");
+    expect(describeFilterRule([{ ...result[1], groupEffect: "exclude" }])).toContain("排除");
+  });
+
+  it.each(["@user", "-100123", "0", "00123", "12.3", "1e5"])("rejects invalid sender ID %s without silently dropping it", (value) => {
+    const normalized = normalizeConditions([{ id: "sender", type: "sender", values: [], input: value }]);
+    expect(normalized[0].values).toEqual([value]);
+    expect(() => assertValidSenderConditions(normalized)).toThrow("用户 ID 无效");
+  });
+
   it("starts a new rule with an implicit all-chat scope and a keyword condition", () => {
     expect(createInitialDraftConditions()).toMatchObject([
       { type: "chat", values: [], input: "" },

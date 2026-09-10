@@ -25,6 +25,7 @@ function createMessage(patch: Partial<Message> = {}): Message {
   return {
     id: 21, telegramMessageId: 101, chatId: "chat-1",
     chatTitle: "动画更新", senderName: "ANi", senderId: "sender-1",
+    senderUserId: null,
     content: "第 04 集", contentLinks: [], messageDate: "2026-07-31T10:00:00.000Z",
     telegramLink: "https://t.me/c/1/101", isRead: false,
     matchedFilterId: 12, matchedKeyword: "动画", filterName: "动画",

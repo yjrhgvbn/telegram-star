@@ -55,6 +55,29 @@ function EditorHarness({
 describe("ConditionGroupEditor", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
+  it("edits sender IDs with multiline paste, validates input and clears values when changing type", async () => {
+    const user = userEvent.setup();
+    render(<EditorHarness />);
+    await user.click(screen.getByRole("combobox", { name: "消息内容匹配方式" }));
+    await user.click(await screen.findByRole("option", { name: "发送者用户 ID" }));
+    expect(screen.queryByText("新番")).toBeNull();
+    const field = screen.getByRole("textbox", { name: "发送者用户 ID" });
+    await user.click(field);
+    await user.paste("123456789\n987654321");
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("123456789")).not.toBeNull();
+    expect(screen.getByText("987654321")).not.toBeNull();
+    await user.type(field, "@user");
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByRole("alert").textContent).toContain("用户 ID 无效");
+
+    await user.click(screen.getByRole("combobox", { name: "消息内容匹配方式" }));
+    await user.click(await screen.findByRole("option", { name: "关键词包含" }));
+    expect(screen.queryByText("123456789")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect((screen.getByRole("textbox", { name: "关键词" }) as HTMLInputElement).value).toBe("");
+  });
+
   it("supports repeated additions and keeps focus in the new field after confirming a value", async () => {
     const user = userEvent.setup();
     render(<EditorHarness />);

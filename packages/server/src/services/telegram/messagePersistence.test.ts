@@ -63,6 +63,27 @@ beforeEach(async () => {
 afterAll(async () => state.fixture?.cleanup());
 
 describe("rule-scoped message persistence", () => {
+  it("checks current sender conditions inside the write transaction", async () => {
+    await db.filter.update({ where: { id: 1 }, data: { conditions: JSON.stringify([{ type: "sender", values: ["123"] }]) } });
+    expect(await persistMessageForFilters({ ...data, senderId: "123" }, [matchA])).toMatchObject({ rowId: null });
+    expect(await persistMessageForFilters({ ...data, senderUserId: "456" }, [matchA])).toMatchObject({ rowId: null });
+    const saved = await persistMessageForFilters({ ...data, senderUserId: "123" }, [matchA]);
+    expect(saved.addedMatches).toEqual([{ filterId: 1, matchedKeyword: null }]);
+    expect(await db.message.findUnique({ where: { id: saved.rowId! } })).toMatchObject({ senderUserId: "123" });
+  });
+
+  it("enriches legacy user identity on normal ingestion without overwriting content or completion", async () => {
+    const first = await persistMessageForFilters({ ...data, senderId: "123", isRead: true }, [matchA]);
+    await db.filter.update({ where: { id: 2 }, data: { conditions: JSON.stringify([{ type: "sender", values: ["123"] }]) } });
+    const repeated = await persistMessageForFilters({ ...data, content: "edited release", senderUserId: "123" }, [matchB]);
+    expect(repeated).toMatchObject({ rowId: first.rowId, created: false, addedFilterIds: [2] });
+    expect(await db.message.findUnique({ where: { id: first.rowId! } })).toMatchObject({ senderUserId: "123", content: "release", isRead: true });
+    // 已确认的存储身份与正文一致，再次获取缺少身份时不回退为旧的无类型 senderId。
+    expect(await persistMessageForFilters({ ...data, senderId: "456" }, [matchB])).toMatchObject({ rowId: first.rowId, addedFilterIds: [] });
+    expect(state.notify).not.toHaveBeenCalled();
+    expect(state.emit).not.toHaveBeenCalled();
+  });
+
   it("preserves caller rule priority for the primary membership and the first notification", async () => {
     const ruleA = { id: 1, name: "A", conditions: keywordConditions("release") };
     const ruleB = { id: 2, name: "B", conditions: keywordConditions("release") };

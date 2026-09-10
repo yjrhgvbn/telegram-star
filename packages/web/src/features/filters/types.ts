@@ -27,7 +27,7 @@ export type ConditionTypeDefinition = {
 
 /**
  * 条件注册表是规则编辑器的扩展边界。
- * 后续新增发送者、媒体类型或时间范围时，先在这里描述用户可见语义，
+ * 后续新增媒体类型或时间范围时，先在这里描述用户可见语义，
  * 再为该类型提供对应的值编辑器，而不是重写整个过滤器页面。
  */
 export const conditionTypeDefinitions = {
@@ -44,6 +44,13 @@ export const conditionTypeDefinitions = {
     subject: "消息内容",
     operatorLabel: "包含任一关键词",
     description: "关键词之间满足任意一个即可，大小写不敏感",
+  },
+  sender: {
+    value: "sender",
+    label: "发送者用户 ID",
+    subject: "当前发送者",
+    operatorLabel: "来自任一用户",
+    description: "匹配当前发送者，多个 ID 满足任意一个即可；转发按转发人，匿名或频道身份不提供真实用户 ID",
   },
   regex: {
     value: "regex",
