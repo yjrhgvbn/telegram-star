@@ -2,6 +2,8 @@
 
 Demo 复用 Telegram Star 的四个工作区，用虚构消息、规则和转发通道演示交互。无需 Telegram 账号、API 凭据、后端或 SQLite，所有操作只发生在浏览器中。
 
+[打开在线 Demo](https://yjrhgvbn.github.io/telegram-star/)，无需安装或登录。
+
 ![虚构数据 Demo 的消息工作区](images/demo-messages.png)
 
 ## 本地体验
@@ -62,9 +64,9 @@ Demo 使用相对资源路径及 Hash 路由，例如 `/#/messages` 或 `/telegr
 1. 将代码推送到仓库默认分支。
 2. 打开仓库的 [Pages 设置](https://github.com/yjrhgvbn/telegram-star/settings/pages)，在 **Build and deployment → Source** 选择 **GitHub Actions**。首次发布必须先完成这一步。
 3. 在 **Actions → Publish Demo → Run workflow** 从 `main` 手动运行。
-4. 成功后打开工作流部署环境给出的页面地址，检查四个 Tab，再把该地址加到 README 和仓库 About 的 Website。
+4. 成功后打开工作流部署环境给出的页面地址，检查四个 Tab；更换地址时同步 README 和仓库 About 的 Website。
 
-工作流只构建和上传静态 Demo，无需 Telegram 或 SSH Secrets，不启动生产服务。当前仅准备了配置，是否已上线以 GitHub 的实际部署结果为准。官方配置说明见 [GitHub Pages 自定义工作流](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。
+工作流只构建和上传静态 Demo，无需 Telegram 或 SSH Secrets，不启动生产服务。线上内容以最近一次成功部署为准。官方配置说明见 [GitHub Pages 自定义工作流](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。
 
 如果出现 `Get Pages site failed / 404`，先检查上面的 Pages 设置。工作流已为构建任务配置 `pages: read`，并在安装依赖前检查站点；默认 `GITHUB_TOKEN` 不能代替首次启用。若修改过工作流，提交推送后从 `main` 新建一次 **Run workflow**，不要直接重跑仍使用旧提交的失败记录。Pages actions 使用 Node.js 24 版本。
 

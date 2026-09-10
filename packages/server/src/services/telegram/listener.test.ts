@@ -57,7 +57,8 @@ vi.mock("./messageCatchUp.js", () => ({
   requestMessageCatchUp: mocks.requestMessageCatchUp,
 }));
 
-vi.mock("./messageIngestion.js", () => ({
+vi.mock("./messageIngestion.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./messageIngestion.js")>(),
   ingestTelegramMessage: mocks.ingestTelegramMessage,
 }));
 

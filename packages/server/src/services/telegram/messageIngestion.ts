@@ -118,6 +118,7 @@ export function findFirstMatchingFilter(
 export async function ingestTelegramMessage(
   input: IngestTelegramMessageInput,
 ): Promise<MessageIngestionResult> {
+  const ingestionStartedAtMs = Date.now();
   const { message, chat, activeFilters } = input;
   if (!message || !chat || !hasMessageContent(message) || activeFilters.length === 0) {
     return "unmatched";
@@ -127,20 +128,56 @@ export async function ingestTelegramMessage(
   if (!chatId) return "unmatched";
 
   const textContent = getMessageTextContent(message);
+  const filterMatchStartedAtMs = Date.now();
   const matches = findMatchingFilters(chatId, textContent, activeFilters);
+  const filterMatchMs = Date.now() - filterMatchStartedAtMs;
   if (matches.length === 0) return "unmatched";
+
+  const messageKey = `${chatId}:${message.id}`;
+  const ingestionStartedAt = new Date(ingestionStartedAtMs).toISOString();
+  // 在任何发送者查询和写库前留下匹配证据，仅记录关联 ID，不记录正文或关键词。
+  appLogger.info(
+    {
+      event: "telegram.message.matched",
+      messageKey,
+      source: input.source,
+      runId: input.runId ?? null,
+      filterIds: matches.map(({ filter }) => filter.id),
+      ingestionStartedAt,
+    },
+    "Telegram message matched active filters",
+  );
 
   const chatTitle = chat.title || chat.firstName || chat.username || chatId;
   const mediaInfo = extractMediaInfo(message);
   const contentLinks = extractMessageContentLinks(message, textContent);
   const telegramLink = buildTelegramLink(chatId, chat, message.id);
-  const sender = typeof message.getSender === "function"
-    ? await message.getSender()
-    : message.sender;
+  const senderResolveStartedAtMs = Date.now();
+  let sender: any;
+  try {
+    sender = typeof message.getSender === "function"
+      ? await message.getSender()
+      : message.sender;
+  } catch (error) {
+    appLogger.error(
+      {
+        event: "telegram.message.ingestion_failed",
+        stage: "getSender",
+        messageKey,
+        source: input.source,
+        runId: input.runId ?? null,
+        senderResolveMs: Date.now() - senderResolveStartedAtMs,
+      },
+      "Failed to resolve the matched Telegram message sender",
+    );
+    throw error;
+  }
+  const senderResolveMs = Date.now() - senderResolveStartedAtMs;
   const { senderName, senderId } = getSenderSummary(sender);
   const receivedAtMs = Date.now();
   const timing = getMessageTimingFields(message, receivedAtMs);
 
+  const persistStartedAtMs = Date.now();
   const persisted = await persistMessageForFilters({
     telegramMessageId: message.id,
     chatId,
@@ -162,7 +199,22 @@ export async function ingestTelegramMessage(
       mediaThumbBase64: mediaInfo.mediaThumbBase64,
       mediaExtra: mediaInfo.mediaExtra,
     }),
-  }, matches.map((match) => ({ filterId: match.filter.id, matchedKeyword: match.matchedKeyword })));
+  }, matches.map((match) => ({ filterId: match.filter.id, matchedKeyword: match.matchedKeyword })))
+    .catch((error: unknown) => {
+      appLogger.error(
+        {
+          event: "telegram.message.ingestion_failed",
+          stage: "persist",
+          messageKey,
+          source: input.source,
+          runId: input.runId ?? null,
+          persistMs: Date.now() - persistStartedAtMs,
+        },
+        "Failed to persist the matched Telegram message",
+      );
+      throw error;
+    });
+  const persistMs = Date.now() - persistStartedAtMs;
 
   if (persisted.rowId === null) return "unmatched";
   // 仅新增规则归属时沿用已有消息的处理方式，不重复通知或广播新消息。
@@ -178,7 +230,9 @@ export async function ingestTelegramMessage(
   let notifyStatus: "not-requested" | "no-targets" | "queued" | "queue-failed" =
     "not-requested";
   let notifyTargetCount = 0;
+  let notificationQueueMs = 0;
   if (input.notify) {
+    const notificationQueueStartedAtMs = Date.now();
     try {
       notifyTargetCount = await forwardMatchedMessage({
         filterId: matched.filter.id,
@@ -206,6 +260,8 @@ export async function ingestTelegramMessage(
         },
         "Failed to queue matched message notifications",
       );
+    } finally {
+      notificationQueueMs = Date.now() - notificationQueueStartedAtMs;
     }
   }
 
@@ -228,6 +284,12 @@ export async function ingestTelegramMessage(
     editDate: timing.editDate,
     receivedAt: new Date(receivedAtMs).toISOString(),
     savedAt: new Date().toISOString(),
+    ingestionStartedAt,
+    filterMatchMs,
+    senderResolveMs,
+    persistMs,
+    notificationQueueMs,
+    ingestionDurationMs: Date.now() - ingestionStartedAtMs,
     lagMs: timing.lagMs,
     notifyStatus,
     notifyTargetCount,

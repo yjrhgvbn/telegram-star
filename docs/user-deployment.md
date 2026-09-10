@@ -89,6 +89,19 @@ docker inspect --format '{{.HostConfig.LogConfig.Type}} {{json .HostConfig.LogCo
 
 排查单条消息可搜索日志中的 `rowId` 或 `messageKey`（`chatId:telegramMessageId`）；监听延迟与回补日志包含 `lagMs` 和 `telegram.catch_up`。
 
+实时消息诊断日志在默认 `LOG_LEVEL=info` 下可见，只记录 ID、时间和处理结果，不记录消息正文或规则内容：
+
+| 事件 | 排查用途 |
+| --- | --- |
+| `telegram.update.received` | 新消息或编辑更新到达应用 Raw 回调的时间、`updateType`、`messageType`、`pts/ptsCount`；回调先于业务处理执行，但不等同于网络包到达时间；`MessageService` 会被消息业务回调跳过 |
+| `telegram.update.gap` | Telegram 发出的 `UpdateChannelTooLong` / `UpdatesTooLong` 告警；仅记录，不额外触发扫描 |
+| `telegram.message.processed` | 实时处理结果 `created` / `duplicate` / `unmatched` / `no-active-filters` / `missing-chat`，以及 `filterLoadMs`、`chatResolveMs`、`ingestionMs`、`processingMs` |
+| `telegram.message.matched` | 匹配成功、开始查询发送者前的消息键与规则 ID；之后没有完成日志时可继续定位处理是否停滞 |
+| `telegram.message.saved` | 入库完成；新增 `filterMatchMs`、`senderResolveMs`、`persistMs`、`notificationQueueMs` 和 `ingestionDurationMs` 分段耗时 |
+| `telegram.message.handle_failed` / `telegram.message.ingestion_failed` | 失败阶段 `stage`、耗时和消息键 |
+
+`saved` 中原有 `receivedAt` 仍指发送者查询完成后的时间，`lagMs` 仍优先按编辑时间计算；判断实时到达延迟应查看 `update.received`。`notificationQueueMs` 包含目标查询、模板渲染及任务启动，不等待发送完成；实际发送耗时查看同一消息键的 `notification.apprise.sent/failed`。实时处理结果日志不包含周期扫描中的每条未匹配消息；自动回补仍按原有 10 分钟周期执行。
+
 ## Docker Compose 部署
 
 已使用 Compose 的实例继续在原部署目录按原方式维护，保留项目名、`.env` 和数据卷。Compose 卷名通常带项目名前缀；直接改用上面的 `docker run` 可能挂载一个新空卷，不能直接切换。

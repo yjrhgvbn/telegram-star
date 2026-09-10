@@ -20,7 +20,7 @@ import { emitMessageEvent } from "../messageEvents.js";
 import { writeReadSyncLog } from "../readSyncLog.js";
 import { appLogger } from "../../shared/logging.js";
 import { extractReactionMessageRef, hasUserReactionSignal } from "./readReactionSignal.js";
-import { ingestTelegramMessage } from "./messageIngestion.js";
+import { getMessageTimingFields, ingestTelegramMessage } from "./messageIngestion.js";
 import {
   isMessageCatchUpActive,
   requestMessageCatchUp,
@@ -35,6 +35,67 @@ function connectionStateName(state: number | undefined): string {
   if (state === UpdateConnectionState.disconnected) return "disconnected";
   if (state === UpdateConnectionState.broken) return "broken";
   return "unknown";
+}
+
+const MESSAGE_UPDATE_TYPES = new Set([
+  "UpdateNewMessage",
+  "UpdateNewChannelMessage",
+  "UpdateEditMessage",
+  "UpdateEditChannelMessage",
+  "UpdateShortMessage",
+  "UpdateShortChatMessage",
+]);
+
+function getMessageLogReference(message: any) {
+  // 直接读取 peer ID，不为诊断调用 getChat/getSender，也不序列化消息正文或实体。
+  const peer = message?.peerId ?? message;
+  const chatId = (peer?.channelId ?? peer?.chatId ?? peer?.userId)?.toString() ?? null;
+  const telegramMessageId = message?.id ?? null;
+  return {
+    chatId,
+    telegramMessageId,
+    messageKey: chatId && telegramMessageId !== null ? `${chatId}:${telegramMessageId}` : null,
+  };
+}
+
+function logIncomingUpdate(update: any): void {
+  const updateType = update?.className;
+  if (updateType === "UpdateChannelTooLong" || updateType === "UpdatesTooLong") {
+    appLogger.warn(
+      {
+        event: "telegram.update.gap",
+        updateType,
+        chatId: update.channelId?.toString() ?? null,
+        pts: update.pts ?? null,
+        receivedAt: new Date().toISOString(),
+      },
+      "Telegram reported an update gap",
+    );
+    return;
+  }
+  if (!MESSAGE_UPDATE_TYPES.has(updateType)) return;
+
+  // Short 更新的 message 是字符串；完整更新的 message 才是消息对象。
+  const message = typeof update.message === "object" && update.message !== null
+    ? update.message
+    : update;
+  const receivedAtMs = Date.now();
+  const timing = getMessageTimingFields(message, receivedAtMs);
+  appLogger.info(
+    {
+      event: "telegram.update.received",
+      updateType,
+      messageType: message === update ? "Message" : message.className ?? null,
+      ...getMessageLogReference(message),
+      pts: update.pts ?? null,
+      ptsCount: update.ptsCount ?? null,
+      telegramDate: timing.messageDate,
+      editDate: timing.editDate,
+      receivedAt: new Date(receivedAtMs).toISOString(),
+      lagMs: timing.lagMs,
+    },
+    "Telegram message update received",
+  );
 }
 
 // --- 实时链路：Raw 事件 ---
@@ -193,24 +254,84 @@ async function handleIncomingMessage(
   const message = event.message;
   if (!message) return;
 
-  const activeFilters = await db.filter.findMany({
-    where: { enabled: true, systemKey: null },
-    orderBy: { id: "asc" },
-    select: { id: true, name: true, conditions: true },
-  });
-  if (activeFilters.length === 0) return;
+  const startedAtMs = Date.now();
+  let stageStartedAtMs = startedAtMs;
+  let stage = "load-filters";
+  let result = "failed";
+  let filterCount: number | undefined;
+  let filterLoadMs: number | undefined;
+  let chatResolveMs: number | undefined;
+  let ingestionMs: number | undefined;
+  let reference = getMessageLogReference(message);
 
-  const chat = await message.getChat();
-  if (!chat) return;
+  try {
+    const activeFilters = await db.filter.findMany({
+      where: { enabled: true, systemKey: null },
+      orderBy: { id: "asc" },
+      select: { id: true, name: true, conditions: true },
+    });
+    filterLoadMs = Date.now() - stageStartedAtMs;
+    filterCount = activeFilters.length;
+    if (activeFilters.length === 0) {
+      result = "no-active-filters";
+      return;
+    }
 
-  await ingestTelegramMessage({
-    message,
-    chat,
-    activeFilters,
-    source,
-    notify: true,
-    emitEvent: true,
-  });
+    stage = "resolve-chat";
+    stageStartedAtMs = Date.now();
+    const chat = await message.getChat();
+    chatResolveMs = Date.now() - stageStartedAtMs;
+    if (!chat) {
+      result = "missing-chat";
+      return;
+    }
+    const chatId = chat.id?.toString?.() ?? reference.chatId;
+    reference = { ...reference, chatId, messageKey: chatId ? `${chatId}:${message.id}` : null };
+
+    stage = "ingest";
+    stageStartedAtMs = Date.now();
+    result = await ingestTelegramMessage({
+      message,
+      chat,
+      activeFilters,
+      source,
+      notify: true,
+      emitEvent: true,
+    });
+    ingestionMs = Date.now() - stageStartedAtMs;
+  } catch (err) {
+    appLogger.error(
+      {
+        err,
+        event: "telegram.message.handle_failed",
+        source,
+        ...reference,
+        stage,
+        stageDurationMs: Date.now() - stageStartedAtMs,
+        processingMs: Date.now() - startedAtMs,
+      },
+      "Failed to handle Telegram message",
+    );
+  } finally {
+    if (result !== "failed") {
+      appLogger.info(
+        {
+          event: "telegram.message.processed",
+          source,
+          ...reference,
+          result,
+          filterCount,
+          handlerStartedAt: new Date(startedAtMs).toISOString(),
+          completedAt: new Date().toISOString(),
+          filterLoadMs,
+          chatResolveMs,
+          ingestionMs,
+          processingMs: Date.now() - startedAtMs,
+        },
+        "Telegram message processing completed",
+      );
+    }
+  }
 }
 
 // --- 监听器启动 ---
@@ -228,27 +349,13 @@ export function startMessageListener(): void {
   if (!client || listenerStartedClients.has(client)) return;
   listenerStartedClients.add(client);
 
-  client.addEventHandler(async (event: NewMessageEvent) => {
-    try {
-      await handleIncomingMessage(event, "live");
-    } catch (err) {
-      appLogger.error(
-        { err, event: "telegram.message.handle_failed", source: "live" },
-        "Failed to handle Telegram message",
-      );
-    }
-  }, new NewMessage({}));
+  // GramJS 按注册顺序 await 回调。先记录 Raw 到达，避免时间混入后续实体查询和入库耗时。
+  // 此回调仅观察更新，不触发回补；typing/reaction 等高频更新不逐条记录。
+  client.addEventHandler(logIncomingUpdate, new Raw({}));
 
-  client.addEventHandler(async (event: EditedMessageEvent) => {
-    try {
-      await handleIncomingMessage(event, "live-edit");
-    } catch (err) {
-      appLogger.error(
-        { err, event: "telegram.message.handle_failed", source: "live-edit" },
-        "Failed to handle edited Telegram message",
-      );
-    }
-  }, new EditedMessage({}));
+  client.addEventHandler((event: NewMessageEvent) => handleIncomingMessage(event, "live"), new NewMessage({}));
+
+  client.addEventHandler((event: EditedMessageEvent) => handleIncomingMessage(event, "live-edit"), new EditedMessage({}));
 
   client.addEventHandler(async (update: any) => {
     try {
@@ -317,7 +424,7 @@ export function startMessageListener(): void {
   }, new Raw({ types: [UpdateConnectionState] }));
 
   appLogger.info(
-    { event: "telegram.listener.started", handlers: ["new-message", "edited-message", "raw"] },
+    { event: "telegram.listener.started", handlers: ["update-diagnostics", "new-message", "edited-message", "raw"] },
     "Telegram message listener started",
   );
 }

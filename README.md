@@ -4,7 +4,7 @@
 
 Telegram Star 是一个自托管工具，使用你的 Telegram 账号，监听已加入的群组和频道。
 
-[下载安装](https://github.com/yjrhgvbn/telegram-star/releases) · [使用教程](docs/user-guide.md) · [部署指南](docs/user-deployment.md)
+[在线 Demo](https://yjrhgvbn.github.io/telegram-star/) · [下载安装](https://github.com/yjrhgvbn/telegram-star/releases) · [使用教程](docs/user-guide.md) · [部署指南](docs/user-deployment.md)
 
 ![Telegram Star 消息工作区，全部为虚构演示数据](docs/images/demo-messages.png)
 
@@ -15,7 +15,7 @@ Telegram Star 是一个自托管工具，使用你的 Telegram 账号，监听�
 - **转发通知**：将命中的消息通过 Apprise 发到通知平台，自定义标题和正文。
 - **多端使用**：浏览器、桌面和 Android 连接同一服务端，共享消息与配置。
 
-想先了解交互，可以查看[虚构数据 Demo 说明](docs/demo.md)。
+在线 Demo 使用虚构数据，无需登录；体验范围见 [Demo 说明](docs/demo.md)。
 
 ## 安装
 
