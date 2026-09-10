@@ -57,16 +57,13 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
-      - name: Set up pnpm from packageManager
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-          cache: true
-
       - name: Check version consistency
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: node scripts/release-version.mjs --check "$RELEASE_TAG"
+
+      - name: Test version synchronization
+        run: node --test scripts/release-version.test.mjs
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -78,6 +75,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libwebkit2gtk-4.1-dev libappindicator3-dev libxdo-dev libssl-dev librsvg2-dev patchelf xdg-utils
+
+      # Initialize the pnpm cache only when dependency installation is ready to run.
+      - name: Set up pnpm from packageManager
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+          cache: true
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

@@ -29,7 +29,10 @@ export async function planVersionChanges(root, value) {
     const data = JSON.parse(before);
     if (typeof data.version !== "string") throw new Error(`Missing version: ${file}`);
     data.version = version;
-    changes.push({ file, before, after: JSON.stringify(data, null, 2) + "\n" });
+    // Windows checkout may use CRLF; retain it so --check only flags real changes.
+    const newline = before.includes("\r\n") ? "\r\n" : "\n";
+    const after = (JSON.stringify(data, null, 2) + "\n").replace(/\n/g, newline);
+    changes.push({ file, before, after });
   }
   for (const platform of ["desktop", "mobile"]) {
     for (const name of ["Cargo.toml", "Cargo.lock"]) {
