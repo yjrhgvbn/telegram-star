@@ -52,12 +52,15 @@ describe("NotificationsPage history protection", () => {
     expect(router.state.location.pathname).toBe(origin);
     const confirmation = await screen.findByRole("alertdialog");
     await user.click(within(confirmation).getByRole("button", { name: "放弃修改" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe(destination));
-    expect((screen.getByLabelText("Apprise 地址") as HTMLInputElement).value).toBe("test://1");
-    expect(screen.queryByText("未保存")).toBeNull();
-    expect(screen.queryByRole("alertdialog")).toBeNull();
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(destination);
+      expect((screen.getByLabelText("Apprise 地址") as HTMLInputElement).value).toBe("test://1");
+      expect(screen.queryByText("未保存")).toBeNull();
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
     await user.click(within(screen.getByRole("navigation", { name: "主导航" })).getByRole("button", { name: "消息" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/messages"));
+    expect(await screen.findByText("消息页面")).toBeTruthy();
+    expect(router.state.location.pathname).toBe("/messages");
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(api.update).not.toHaveBeenCalled();
   });
@@ -72,9 +75,15 @@ describe("NotificationsPage history protection", () => {
     expect((screen.getByLabelText("Apprise 地址") as HTMLInputElement).value).toBe("test://1/edited");
     await act(async () => { void router.navigate(-1); });
     await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "放弃修改" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/notifications/2"));
-    expect((screen.getByLabelText("Apprise 地址") as HTMLInputElement).value).toBe("test://2");
-    expect(screen.queryByText("未保存")).toBeNull();
+    // Router state changes before RouterProvider's transition commits the new editor.
+    // Wait for the visible target as well, so a reset of the old target cannot satisfy this check.
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/notifications/2");
+      expect((screen.getByLabelText("Apprise 地址") as HTMLInputElement).value).toBe("test://2");
+      expect(screen.queryByText("未保存")).toBeNull();
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+    expect(api.update).not.toHaveBeenCalled();
   });
 
   it("replaces a page leave prompt with the history prompt and clears its abandoned destination", async () => {
@@ -88,11 +97,16 @@ describe("NotificationsPage history protection", () => {
     await waitFor(() => expect(screen.queryByText("离开后，当前通道未保存的修改将不会保留。")).toBeNull());
     expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "放弃修改" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/notifications"));
-    expect((screen.getByLabelText("Apprise 地址") as HTMLInputElement).value).toBe("test://1");
-    expect(screen.queryByRole("alertdialog")).toBeNull();
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/notifications");
+      expect((screen.getByLabelText("Apprise 地址") as HTMLInputElement).value).toBe("test://1");
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
     await user.click(screen.getByRole("button", { name: /通道 2/ }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/notifications/2"));
-    expect(screen.queryByRole("alertdialog")).toBeNull();
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/notifications/2");
+      expect((screen.getByLabelText("Apprise 地址") as HTMLInputElement).value).toBe("test://2");
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
   });
 });
