@@ -22,7 +22,7 @@ docker ps --filter name=telegram-star
 docker logs --tail=200 telegram-star
 ```
 
-公开 Docker Hub 镜像可匿名拉取。若出现 `denied` 或 `manifest unknown`，检查镜像仓库是否为 Public、该版本是否已经发布；示例版本要在首次发布完成后才可用，见[版本发布](version-releases.md)。发布构建固定使用版本 tag 的源码；修复构建脚本后需用包含修复的新版本 tag 构建，重跑旧 tag 不会自动采用 `main` 的修复。
+公开 Docker Hub 镜像可匿名拉取。若出现 `denied` 或 `manifest unknown`，检查镜像仓库是否为 Public、该版本是否已经发布；示例版本要在首次发布完成后才可用，见[版本发布](version-releases.md)。发布构建使用版本 tag 指向的源码；修复后需让 tag 指向包含修复的提交。尚未正式发布且未分发的版本，经明确确认可更新原 tag；已发布或分发的版本需使用新版本号。重跑未移动的旧 tag 不会采用 `main` 的修复。
 
 ## 配置与持久化
 

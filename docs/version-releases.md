@@ -40,7 +40,7 @@ git push origin v0.0.1
 
 在 Actions 等待 **Build Version Release** 成功，再打开 [Releases](https://github.com/yjrhgvbn/telegram-star/releases) 的草稿，试装、补充更新说明，然后点 **Publish release**。草稿包含安装包、Docker 启动命令、校验文件，以及可选的 Compose 和环境模板附件。镜像在生成草稿前已推送 Docker Hub；这条发布流程不部署服务器。
 
-网络或 runner 临时故障可在 Actions 用已有 tag 重跑。若修复了代码或构建脚本，需要将修复提交包含在新版本 tag 中；仅更新 `main` 再重跑旧 tag 仍会使用旧源码。已公开的版本需换新版本号。若提示草稿含过期附件，审阅后删除旧附件再重跑。完整执行逻辑见[发布工作流](../.github/workflows/release.yml)。
+网络或 runner 临时故障可在 Actions 用已有 tag 重跑。若修复了代码或构建脚本，tag 需指向包含修复的提交；尚未正式发布且未分发的版本，经明确确认可更新原 tag，已发布或分发的版本需使用新版本号。仅更新 `main` 再重跑未移动的旧 tag 仍会使用旧源码。若提示草稿含过期附件，审阅后删除旧附件再重跑。完整执行逻辑见[发布工作流](../.github/workflows/release.yml)。
 
 桌面发布在初始化 pnpm 缓存前检查版本并运行版本同步回归测试。版本脚本保留 JSON 原有的 LF / CRLF 换行符，Windows 检出时的换行转换不会被误判成版本不一致；实际版本不同仍会阻止打包。
 
