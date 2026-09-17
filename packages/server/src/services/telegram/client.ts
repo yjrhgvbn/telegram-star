@@ -9,6 +9,7 @@ import { dirname } from "path";
 import { appConfig } from "../../config.js";
 import { getTelegramConfigStatus } from "../appConfig.js";
 import { StructuredGramJsLogger } from "./gramJsLogger.js";
+import { installGramJsDiagnostics } from "./gramJsDiagnostics.js";
 
 // --- 单例状态（模块内私有）---
 
@@ -26,6 +27,7 @@ export function getClient(): TelegramClient | null {
 }
 
 export function setClient(c: TelegramClient | null): void {
+  if (c) installGramJsDiagnostics(c);
   _client = c;
 }
 

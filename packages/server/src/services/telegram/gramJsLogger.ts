@@ -16,6 +16,10 @@ export class StructuredGramJsLogger extends Logger {
   }
 
   override log(level: LogLevel, message: string): void {
+    // GramJS 的 info 日志会拼接未知 TL 对象/无主 RPC 的原始字节；诊断只需类型。
+    message = message
+      .replace(/^(Type \d+ not found), remaining data [\s\S]*$/, "$1; payload omitted")
+      .replace(/^Received response without parent request:[\s\S]*$/, "Received response without parent request; payload omitted");
     const payload = { event: "telegram.gramjs", component: "gramjs", gramjsLevel: level };
     if (level === LogLevel.ERROR) {
       appLogger.error(payload, message);

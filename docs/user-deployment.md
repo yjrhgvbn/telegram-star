@@ -104,6 +104,22 @@ docker inspect --format '{{.HostConfig.LogConfig.Type}} {{json .HostConfig.LogCo
 
 `saved` 中原有 `receivedAt` 仍指发送者查询完成后的时间，`lagMs` 仍优先按编辑时间计算；判断实时到达延迟应查看 `update.received`。`notificationQueueMs` 包含目标查询、模板渲染及任务启动，不等待发送完成；实际发送耗时查看同一消息键的 `notification.apprise.sent/failed`。实时处理结果日志不包含周期扫描中的每条未匹配消息；自动回补仍按原有 10 分钟周期执行。
 
+实时回调之前的 GramJS 接收层也有诊断日志，无需提高 `GRAMJS_LOG_LEVEL`。正常观测事件使用应用 `info`，异常使用 `warn`：
+
+| 事件 | 排查用途 |
+| --- | --- |
+| `telegram.transport.sender_attached` | 接收层诊断已挂载；包含进程内 `senderId`、`senderRole`（`updates` 主连接 / `auxiliary` 附属连接）、`dcId` 和实际包版本 |
+| `telegram.transport.decode_failed` | 更新包解密/解码失败；仅记录错误类型、构造器 ID、数据字节数，不记录原始字节 |
+| `telegram.transport.processing_failed` | 已解码包处理失败，包括原先可能静默处理的 RPC 错误；`wireMessageId` 是 MTProto 包 ID，`containerId/containerIndex` 定位容器中的失败项，`remainingMessageCount/remainingUpdates` 标识后续未处理项 |
+| `telegram.transport.update_dispatch` | 更新信封进入 GramJS 实体缓存、事件构建及 Raw 回调之前的观察点；包含 `seq/seqStart`、更新类型、消息键及 `pts/ptsCount` |
+| `telegram.transport.dispatch_failed` / `telegram.transport.client_error` | 同步更新派发失败 / GramJS 已捕获并上报的客户端错误；不代表覆盖库内部所有未返回 Promise 的异步异常 |
+| `telegram.transport.disconnect_requested` | 某个 sender 被调用断开；结合连接角色判断是否为媒体附属连接回收，不等同于意外断网或断开完成 |
+| `telegram.transport.diagnostics_unavailable` | 当前库版本或内部接口未通过兼容检查；该 sender 的接收层诊断未启用，业务仍按原流程运行 |
+
+用 `senderId`、`wireMessageId`、`messageKey` 关联这些事件。`update_dispatch` 有目标消息而 `telegram.update.received` 没有，说明需检查 GramJS 事件派发；若容器中断日志的 `remainingUpdates` 含目标消息，可证明它所在包的后续处理被中断。若两者都没有，仍不能仅凭日志断言 Telegram 未推送。每条更新引用列表最多保留 20 项，并用 `updatesTruncated` 标记截断；未解析、压缩或过深嵌套的子项可能无法提供消息键。错误日志不输出完整错误对象、堆栈、请求参数、正文或会话密钥；GramJS 原有未知对象/无主 RPC 的两类 info 日志也会移除原始数据。
+
+接收层观测只对当前已验证的 GramJS `2.26.22` 启用，不增加请求、轮询、回补或重试，也不改变原异常传播。升级 GramJS 时需核对内部接口并运行对应回归测试；新增日志在部署并重启服务后生效。
+
 ## Docker Compose 部署
 
 已使用 Compose 的实例继续在原部署目录按原方式维护，保留项目名、`.env` 和数据卷。Compose 卷名通常带项目名前缀；直接改用上面的 `docker run` 可能挂载一个新空卷，不能直接切换。
