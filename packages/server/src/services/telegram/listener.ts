@@ -15,7 +15,7 @@ import {
 import { UpdateConnectionState } from "telegram/network/index.js";
 import { db } from "../../db/index.js";
 import { getClient, isClientConnected, setConnected } from "./client.js";
-import { buildDialogEntityMap } from "./utils.js";
+import { buildDialogEntityMap, getChatId, getPeerChatId } from "./utils.js";
 import { emitMessageEvent } from "../messageEvents.js";
 import { writeReadSyncLog } from "../readSyncLog.js";
 import { appLogger } from "../../shared/logging.js";
@@ -49,7 +49,7 @@ const MESSAGE_UPDATE_TYPES = new Set([
 function getMessageLogReference(message: any) {
   // 直接读取 peer ID，不为诊断调用 getChat/getSender，也不序列化消息正文或实体。
   const peer = message?.peerId ?? message;
-  const chatId = (peer?.channelId ?? peer?.chatId ?? peer?.userId)?.toString() ?? null;
+  const chatId = getPeerChatId(peer) || null;
   const telegramMessageId = message?.id ?? null;
   return {
     chatId,
@@ -105,7 +105,8 @@ function logIncomingUpdate(update: any): void {
  * 当用户对消息点 Reaction 时，提取 chatId 与消息 ID，
  * 若在数据库中存在对应未读记录，立即将其标记为已读。
  */
-async function handleInteractionUpdate(update: any): Promise<void> {
+async function handleInteractionUpdate(update: any, isCurrentSource: () => boolean): Promise<void> {
+  if (!isCurrentSource()) return;
   const ref = extractReactionMessageRef(update);
   if (!ref) return;
 
@@ -119,9 +120,10 @@ async function handleInteractionUpdate(update: any): Promise<void> {
     where: { chatId: ref.chatId, telegramMessageId: ref.telegramMessageId, isRead: false },
     select: { id: true },
   });
-  if (!row) return;
+  if (!row || !isCurrentSource()) return;
 
   await db.message.update({ where: { id: row.id }, data: { isRead: true } });
+  if (!isCurrentSource()) return;
   emitMessageEvent({ type: "read", messageIds: [row.id] });
 
   appLogger.info(
@@ -165,11 +167,13 @@ export async function syncReadByTelegramInteractions(
 ): Promise<Set<number>> {
   const client = getClient();
   if (!client || !isClientConnected() || messages.length === 0) return new Set();
+  const isCurrentSource = () => getClient() === client && isClientConnected();
 
   const unread = messages.filter((m) => !m.isRead);
   if (unread.length === 0) return new Set();
 
   const dialogs = await client.getDialogs({ limit: 500 });
+  if (!isCurrentSource()) return new Set();
   const entityMap = buildDialogEntityMap(dialogs as any[]);
 
   // 按 chatId 分组，减少重复 API 调用
@@ -190,6 +194,7 @@ export async function syncReadByTelegramInteractions(
     const idToRowId = new Map<number, number>(refs.map((r) => [r.telegramMessageId, r.id]));
 
     const history = await client.getMessages(entity, { ids });
+    if (!isCurrentSource()) return new Set();
     for (const raw of history as any[]) {
       scannedCount += 1;
       const telegramMessageId = Number(raw?.id || 0);
@@ -206,6 +211,7 @@ export async function syncReadByTelegramInteractions(
     where: { id: { in: Array.from(shouldMarkReadIds) }, isRead: false },
     data: { isRead: true },
   });
+  if (!isCurrentSource()) return new Set();
 
   emitMessageEvent({ type: "read", messageIds: Array.from(shouldMarkReadIds) });
 
@@ -250,7 +256,9 @@ export async function syncReadByTelegramInteractions(
 async function handleIncomingMessage(
   event: NewMessageEvent | EditedMessageEvent,
   source: "live" | "live-edit",
+  isCurrentSource: () => boolean,
 ): Promise<void> {
+  if (!isCurrentSource()) return;
   const message = event.message;
   if (!message) return;
 
@@ -270,6 +278,7 @@ async function handleIncomingMessage(
       orderBy: { id: "asc" },
       select: { id: true, name: true, conditions: true },
     });
+    if (!isCurrentSource()) return;
     filterLoadMs = Date.now() - stageStartedAtMs;
     filterCount = activeFilters.length;
     if (activeFilters.length === 0) {
@@ -280,12 +289,13 @@ async function handleIncomingMessage(
     stage = "resolve-chat";
     stageStartedAtMs = Date.now();
     const chat = await message.getChat();
+    if (!isCurrentSource()) return;
     chatResolveMs = Date.now() - stageStartedAtMs;
     if (!chat) {
       result = "missing-chat";
       return;
     }
-    const chatId = chat.id?.toString?.() ?? reference.chatId;
+    const chatId = getChatId(chat) || reference.chatId;
     reference = { ...reference, chatId, messageKey: chatId ? `${chatId}:${message.id}` : null };
 
     stage = "ingest";
@@ -297,6 +307,7 @@ async function handleIncomingMessage(
       source,
       notify: true,
       emitEvent: true,
+      isCurrentSource,
     });
     ingestionMs = Date.now() - stageStartedAtMs;
   } catch (err) {
@@ -350,16 +361,26 @@ export function startMessageListener(): void {
   listenerStartedClients.add(client);
 
   // GramJS 按注册顺序 await 回调。先记录 Raw 到达，避免时间混入后续实体查询和入库耗时。
-  // 此回调仅观察更新，不触发回补；typing/reaction 等高频更新不逐条记录。
-  client.addEventHandler(logIncomingUpdate, new Raw({}));
+  // 仅明确缺口信号触发限频回补；typing/reaction 等高频更新不逐条记录。
+  const isCurrentSource = () => getClient() === client && isClientConnected();
+  let lastGapRecoveryMs = 0;
+  client.addEventHandler((update: any) => {
+    if (!isCurrentSource()) return;
+    logIncomingUpdate(update);
+    if (["UpdateChannelTooLong", "UpdatesTooLong"].includes(update?.className) && Date.now() - lastGapRecoveryMs >= 30_000) {
+      lastGapRecoveryMs = Date.now();
+      void requestMessageCatchUp("gap-catchup");
+    }
+  }, new Raw({}));
 
-  client.addEventHandler((event: NewMessageEvent) => handleIncomingMessage(event, "live"), new NewMessage({}));
+  client.addEventHandler((event: NewMessageEvent) => handleIncomingMessage(event, "live", isCurrentSource), new NewMessage({}));
 
-  client.addEventHandler((event: EditedMessageEvent) => handleIncomingMessage(event, "live-edit"), new EditedMessage({}));
+  client.addEventHandler((event: EditedMessageEvent) => handleIncomingMessage(event, "live-edit", isCurrentSource), new EditedMessage({}));
 
   client.addEventHandler(async (update: any) => {
+    if (!isCurrentSource()) return;
     try {
-      await handleInteractionUpdate(update);
+      await handleInteractionUpdate(update, isCurrentSource);
     } catch (err) {
       appLogger.error(
         { err, event: "telegram.interaction.handle_failed" },
@@ -369,6 +390,7 @@ export function startMessageListener(): void {
   }, new Raw({}));
 
   client.addEventHandler((update: UpdateConnectionState) => {
+    if (getClient() !== client) return;
     const previousState = connectionStateByClient.get(client);
     connectionStateByClient.set(client, update.state);
 

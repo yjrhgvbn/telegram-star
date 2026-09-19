@@ -12,6 +12,7 @@ import {
   type FilterBackfillHistoryProgress,
 } from "../../services/telegram.js";
 import { appLogger } from "../../shared/logging.js";
+import { withMessageMembershipTransaction } from "../../services/messageMemberships.js";
 
 const runningJobIds = new Set<string>();
 const PROGRESS_WRITE_INTERVAL_MS = 750;
@@ -174,41 +175,42 @@ export async function createFilterBackfillJob(
   filterId: number,
   input: FilterBackfillJobCreateInput,
 ): Promise<FilterBackfillJob> {
-  const filter = await db.filter.findUnique({
-    where: { id: filterId },
-    select: { id: true, systemKey: true },
-  });
-  if (!filter) throw new FilterBackfillJobNotFoundError("Filter not found");
-  if (filter.systemKey === ALL_MESSAGES_SYSTEM_KEY) {
-    throw new FilterBackfillJobNotFoundError("System message groups cannot be backfilled");
-  }
+  // Re-check and create under the same serialized SQLite transaction. Concurrent
+  // requests now return the same active job instead of starting duplicate scans.
+  const job = await withMessageMembershipTransaction(async (tx) => {
+    const filter = await tx.filter.findUnique({
+      where: { id: filterId },
+      select: { id: true, systemKey: true },
+    });
+    if (!filter) throw new FilterBackfillJobNotFoundError("Filter not found");
+    if (filter.systemKey === ALL_MESSAGES_SYSTEM_KEY) {
+      throw new FilterBackfillJobNotFoundError("System message groups cannot be backfilled");
+    }
 
-  const existing = await db.filterBackfillJob.findFirst({
-    where: { filterId, status: { in: ["queued", "running"] } },
-    orderBy: { createdAt: "desc" },
-  });
-  if (existing) {
-    scheduleBackfillJob(existing.id);
-    return toApiBackfillJob(existing);
-  }
+    const existing = await tx.filterBackfillJob.findFirst({
+      where: { filterId, status: { in: ["queued", "running"] } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (existing) return existing;
 
-  const now = new Date().toISOString();
-  const created = await db.filterBackfillJob.create({
-    data: {
-      filterId,
-      mode: input.mode,
-      status: "queued",
-      startAt: input.mode === "time" ? input.startAt ?? null : null,
-      endAt: input.mode === "time" ? input.endAt ?? null : null,
-      perChatLimit: input.mode === "count" ? input.perChatLimit ?? null : null,
-      createdAt: now,
-      updatedAt: now,
-    },
+    const now = new Date().toISOString();
+    return tx.filterBackfillJob.create({
+      data: {
+        filterId,
+        mode: input.mode,
+        status: "queued",
+        startAt: input.mode === "time" ? input.startAt ?? null : null,
+        endAt: input.mode === "time" ? input.endAt ?? null : null,
+        perChatLimit: input.mode === "count" ? input.perChatLimit ?? null : null,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
   });
 
   // 不等待扫描完成；任务进度持久化到数据库，页面关闭不会中断进程内任务。
-  scheduleBackfillJob(created.id);
-  return toApiBackfillJob(created);
+  scheduleBackfillJob(job.id);
+  return toApiBackfillJob(job);
 }
 
 export async function getLatestFilterBackfillJob(

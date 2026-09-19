@@ -13,7 +13,6 @@ vi.mock("../../db/index.js", async () => {
   return { db: state.fixture.db };
 });
 vi.mock("./client.js", () => ({ getClient: () => state.client, isClientConnected: () => true }));
-vi.mock("../notifier.js", () => ({ forwardMatchedMessage: state.notify }));
 vi.mock("../messageEvents.js", () => ({ emitMessageEvent: state.emit }));
 vi.mock("../../shared/logging.js", () => ({ appLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
@@ -66,8 +65,8 @@ describe("sender filtering across Telegram ingestion and history", () => {
     expect(await db.message.count()).toBe(0);
     for (const message of messages) expect(message.getSender).not.toHaveBeenCalled();
 
-    expect(findFirstMatchingFilter(chat.id, "release", filters, "123")?.filter.id).toBe(1);
-    expect(findFirstMatchingFilter(chat.id, "release", filters)).toBeNull();
+    expect((await findFirstMatchingFilter(chat.id, "release", filters, "123"))?.filter.id).toBe(1);
+    expect((await findFirstMatchingFilter(chat.id, "release", filters))).toBeNull();
     for (const message of messages) {
       const expectedMatch = expectedMessageIds.includes(message.id);
       expect(await ingestTelegramMessage({ message, chat, activeFilters: [filters[0]!], source: "live", notify: false, emitEvent: false }))
@@ -85,7 +84,7 @@ describe("sender filtering across Telegram ingestion and history", () => {
     for (const message of messages) {
       expect(message.getSender).toHaveBeenCalledTimes(expectedMessageIds.includes(message.id) ? 1 : 0);
     }
-    expect(state.notify).not.toHaveBeenCalled();
+    expect(await db.notificationOutbox.count()).toBe(0);
     expect(state.emit).not.toHaveBeenCalled();
   });
 });

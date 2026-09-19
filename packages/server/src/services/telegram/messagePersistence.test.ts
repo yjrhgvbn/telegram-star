@@ -11,7 +11,6 @@ vi.mock("../../db/index.js", async () => {
   state.fixture = createMessageMembershipTestDatabase();
   return { db: state.fixture.db };
 });
-vi.mock("../notifier.js", () => ({ forwardMatchedMessage: state.notify }));
 vi.mock("../messageEvents.js", () => ({ emitMessageEvent: state.emit }));
 
 import { db } from "../../db/index.js";
@@ -54,10 +53,13 @@ async function removeFromRule(messageId: number, filterId: number, blockBackfill
 beforeEach(async () => {
   state.notify.mockClear();
   state.emit.mockClear();
+  await db.notificationOutbox.deleteMany();
+  await db.forwardTarget.deleteMany();
   await db.messageRemoval.deleteMany();
   await db.message.deleteMany();
   await db.filter.deleteMany();
   await db.filter.createMany({ data: [1, 2, 3].map((id) => ({ id, name: `Rule ${id}`, conditions: JSON.stringify([{ type: "keyword", values: ["release"] }]), createdAt: now, updatedAt: now })) });
+  await db.forwardTarget.create({ data: { name: "Audit", appriseUrl: "test://audit", createdAt: now, updatedAt: now, filters: { connect: [1,2,3].map(id => ({id})) } } });
 });
 
 afterAll(async () => state.fixture?.cleanup());
@@ -80,7 +82,7 @@ describe("rule-scoped message persistence", () => {
     expect(await db.message.findUnique({ where: { id: first.rowId! } })).toMatchObject({ senderUserId: "123", content: "release", isRead: true });
     // 已确认的存储身份与正文一致，再次获取缺少身份时不回退为旧的无类型 senderId。
     expect(await persistMessageForFilters({ ...data, senderId: "456" }, [matchB])).toMatchObject({ rowId: first.rowId, addedFilterIds: [] });
-    expect(state.notify).not.toHaveBeenCalled();
+    expect(await db.notificationOutbox.count()).toBe(0);
     expect(state.emit).not.toHaveBeenCalled();
   });
 
@@ -97,7 +99,7 @@ describe("rule-scoped message persistence", () => {
     })).toBe("created");
     expect(await db.message.findFirst()).toMatchObject({ matchedFilterId: 2 });
     expect(await db.messageFilterMembership.count()).toBe(2);
-    expect(state.notify).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ filterId: 2 }));
+    expect(await db.notificationOutbox.findMany()).toMatchObject([{ filterId: 2 }]);
     expect(state.emit).toHaveBeenCalledExactlyOnceWith({ type: "new" });
   });
 
@@ -125,7 +127,7 @@ describe("rule-scoped message persistence", () => {
       content: "release", isRead: true, matchedFilterId: 1, matchedKeyword: "release", mediaType: "photo", mediaThumbBase64: "old",
     });
     expect(await db.messageFilterMembership.findMany()).toMatchObject([{ filterId: 1, matchedKeyword: "release" }]);
-    expect(state.notify).not.toHaveBeenCalled();
+    expect(await db.notificationOutbox.count()).toBe(0);
     expect(state.emit).not.toHaveBeenCalled();
   });
 
@@ -135,7 +137,7 @@ describe("rule-scoped message persistence", () => {
     expect(await ingestEdit("edited release", filters)).toBe("duplicate");
     expect(await db.message.findUnique({ where: { id: first.rowId! } })).toMatchObject({ content: "release", isRead: true });
     expect(await db.messageFilterMembership.count()).toBe(2);
-    expect(state.notify).not.toHaveBeenCalled();
+    expect(await db.notificationOutbox.count()).toBe(0);
     expect(state.emit).not.toHaveBeenCalled();
   });
 
@@ -153,11 +155,10 @@ describe("rule-scoped message persistence", () => {
     for (const source of ["live", "live-edit", "startup-catchup", "reconnect-catchup", "periodic-catchup"] as MessageIngestionSource[]) {
       expect(await ingestTelegramMessage({ ...input, activeFilters: [ruleA], source })).toBe("unmatched");
     }
-    expect(state.notify).not.toHaveBeenCalled();
+    expect(await db.notificationOutbox.count()).toBe(0);
     expect(state.emit).not.toHaveBeenCalled();
     expect(await ingestTelegramMessage({ ...input, activeFilters: [ruleA, ruleB], source: "live-edit" })).toBe("created");
-    expect(state.notify).toHaveBeenCalledTimes(1);
-    expect(state.notify).toHaveBeenCalledWith(expect.objectContaining({ filterId: 2 }));
+    expect(await db.notificationOutbox.findMany()).toMatchObject([{ filterId: 2 }]);
     expect(await db.messageFilterMembership.findMany()).toMatchObject([{ filterId: 2 }]);
   });
   it("stores one message with independent memberships and does not reset completion when adding a rule", async () => {

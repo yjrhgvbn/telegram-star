@@ -30,29 +30,55 @@ export function createDialogEntityMapProvider(
 
   let dialogEntityMap: Map<string, any> | null = null;
   let dialogEntityMapUpdatedAt = 0;
+  let cachedClient: any = null;
+  let generation = 0;
+  let pending: Promise<Map<string, any>> | null = null;
+
+  function clear(): void {
+    generation += 1;
+    dialogEntityMap = null;
+    dialogEntityMapUpdatedAt = 0;
+    pending = null;
+  }
 
   return {
     async getDialogEntityMap() {
+      const client = getTelegramClient();
+      // Entity access hashes belong to the account that fetched them, even when peer IDs match.
+      if (cachedClient !== client) {
+        cachedClient = client;
+        clear();
+      }
       const currentTime = now();
       if (dialogEntityMap && currentTime - dialogEntityMapUpdatedAt < ttlMs) {
         return dialogEntityMap;
       }
 
-      const client = getTelegramClient();
       if (!client || !isTelegramClientConnected()) {
         return dialogEntityMap ?? new Map();
       }
-
-      const dialogs = await client.getDialogs({ limit: dialogLimit });
-      dialogEntityMap = buildEntityMap(dialogs as any[]);
-      dialogEntityMapUpdatedAt = currentTime;
-      return dialogEntityMap;
+      if (pending) return pending;
+      const requestGeneration = generation;
+      const request = (async () => {
+        const dialogs = await client.getDialogs({ limit: dialogLimit });
+        // A request from a detached account must neither refill the cache nor leak its entities
+        // to callers already waiting when logout, account switching or explicit clearing occurs.
+        if (getTelegramClient() !== client || generation !== requestGeneration || !isTelegramClientConnected()) {
+          return new Map<string, any>();
+        }
+        dialogEntityMap = buildEntityMap(dialogs as any[]);
+        dialogEntityMapUpdatedAt = now();
+        return dialogEntityMap;
+      })();
+      pending = request;
+      try {
+        return await request;
+      } finally {
+        if (pending === request) pending = null;
+      }
     },
 
-    clear() {
-      dialogEntityMap = null;
-      dialogEntityMapUpdatedAt = 0;
-    },
+    clear,
   };
 }
 

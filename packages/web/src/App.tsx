@@ -1,3 +1,4 @@
+import { AppAccessGate } from "./components/AppAccessGate";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { PwaUpdatePrompt } from "./components/PwaUpdatePrompt";
 import { FiltersPage } from "./pages/FiltersPage";
@@ -9,7 +10,7 @@ import { ClientShellBridgeProvider } from "./shared/runtime/ClientShellBridgePro
 import { useClientDeviceRegistration } from "./shared/runtime/useClientDeviceRegistration";
 import { isDemo } from "./demo/mode";
 
-function App() {
+function AppContent() {
   useClientDeviceRegistration();
 
   return (
@@ -31,4 +32,6 @@ function App() {
   );
 }
 
-export default App;
+export default function App() {
+  return <AppAccessGate><AppContent /></AppAccessGate>;
+}

@@ -1,4 +1,4 @@
-import { forwardMatchedMessage } from "../notifier.js";
+import { wakeNotificationOutbox } from "../notificationOutbox.js";
 import { matchFilterConditions, parseConditions } from "../filter-matching.js";
 import { emitMessageEvent } from "../messageEvents.js";
 import { appLogger } from "../../shared/logging.js";
@@ -8,7 +8,7 @@ import {
   serializeMessageContentLinks,
 } from "./messageContentLinks.js";
 import { persistMessageForFilters } from "./messagePersistence.js";
-import { buildTelegramLink, getMessageTimestampMs, getSenderSummary } from "./utils.js";
+import { buildTelegramLink, getChatId, getChatTitle, getMessageTimestampMs, getSenderSummary } from "./utils.js";
 import { getSenderUserId } from "./senderIdentity.js";
 
 export interface ActiveMessageFilter {
@@ -22,7 +22,8 @@ export type MessageIngestionSource =
   | "live-edit"
   | "startup-catchup"
   | "reconnect-catchup"
-  | "periodic-catchup";
+  | "periodic-catchup"
+  | "gap-catchup";
 
 export interface IngestTelegramMessageInput {
   message: any;
@@ -32,6 +33,7 @@ export interface IngestTelegramMessageInput {
   notify: boolean;
   emitEvent: boolean;
   runId?: string;
+  isCurrentSource?: () => boolean;
 }
 
 export type MessageIngestionResult = "created" | "duplicate" | "unmatched";
@@ -76,25 +78,24 @@ export function getMessageTimingFields(message: any, nowMs = Date.now()): Messag
   };
 }
 
-export function findMatchingFilters(
+export async function findMatchingFilters(
   chatId: string,
   content: string,
   filters: ActiveMessageFilter[],
   senderUserId?: string | null,
-): { filter: ActiveMessageFilter; matchedKeyword: string | null }[] {
+): Promise<{ filter: ActiveMessageFilter; matchedKeyword: string | null }[]> {
   const matches: { filter: ActiveMessageFilter; matchedKeyword: string | null }[] = [];
   for (const filter of filters) {
     const conditions = parseConditions(filter.conditions);
     if (conditions.length === 0) continue;
 
-    const match = matchFilterConditions({ chatId, content, senderUserId }, conditions);
+    const match = await matchFilterConditions({ chatId, content, senderUserId }, conditions);
     if (match.error) {
       // 实时链路遇到单条自定义脚本错误时跳过该规则，继续尝试后续规则。
       appLogger.warn(
         {
           event: "filter.script.execution_failed",
           filterId: filter.id,
-          err: match.error,
         },
         "Custom filter script execution failed",
       );
@@ -108,32 +109,33 @@ export function findMatchingFilters(
   return matches;
 }
 
-export function findFirstMatchingFilter(
+export async function findFirstMatchingFilter(
   chatId: string,
   content: string,
   filters: ActiveMessageFilter[],
   senderUserId?: string | null,
-): { filter: ActiveMessageFilter; matchedKeyword: string | null } | null {
-  return findMatchingFilters(chatId, content, filters, senderUserId)[0] ?? null;
+): Promise<{ filter: ActiveMessageFilter; matchedKeyword: string | null } | null> {
+  return (await findMatchingFilters(chatId, content, filters, senderUserId))[0] ?? null;
 }
 
 /** 由实时监听和历史回补共用的唯一消息入库入口。 */
 export async function ingestTelegramMessage(
   input: IngestTelegramMessageInput,
 ): Promise<MessageIngestionResult> {
+  if (input.isCurrentSource && !input.isCurrentSource()) return "unmatched";
   const ingestionStartedAtMs = Date.now();
   const { message, chat, activeFilters } = input;
   if (!message || !chat || !hasMessageContent(message) || activeFilters.length === 0) {
     return "unmatched";
   }
 
-  const chatId = chat.id?.toString?.() || "";
+  const chatId = getChatId(chat);
   if (!chatId) return "unmatched";
 
   const textContent = getMessageTextContent(message);
   const senderUserId = getSenderUserId(message);
   const filterMatchStartedAtMs = Date.now();
-  const matches = findMatchingFilters(chatId, textContent, activeFilters, senderUserId);
+  const matches = await findMatchingFilters(chatId, textContent, activeFilters, senderUserId);
   const filterMatchMs = Date.now() - filterMatchStartedAtMs;
   if (matches.length === 0) return "unmatched";
 
@@ -152,7 +154,7 @@ export async function ingestTelegramMessage(
     "Telegram message matched active filters",
   );
 
-  const chatTitle = chat.title || chat.firstName || chat.username || chatId;
+  const chatTitle = getChatTitle(chat);
   const mediaInfo = extractMediaInfo(message);
   const contentLinks = extractMessageContentLinks(message, textContent);
   const telegramLink = buildTelegramLink(chatId, chat, message.id);
@@ -181,6 +183,7 @@ export async function ingestTelegramMessage(
   const receivedAtMs = Date.now();
   const timing = getMessageTimingFields(message, receivedAtMs);
 
+  if (input.isCurrentSource && !input.isCurrentSource()) return "unmatched";
   const persistStartedAtMs = Date.now();
   const persisted = await persistMessageForFilters({
     telegramMessageId: message.id,
@@ -204,7 +207,7 @@ export async function ingestTelegramMessage(
       mediaThumbBase64: mediaInfo.mediaThumbBase64,
       mediaExtra: mediaInfo.mediaExtra,
     }),
-  }, matches.map((match) => ({ filterId: match.filter.id, matchedKeyword: match.matchedKeyword })))
+  }, matches.map((match) => ({ filterId: match.filter.id, matchedKeyword: match.matchedKeyword })), "automatic", { notify: input.notify, isCurrentSource: input.isCurrentSource })
     .catch((error: unknown) => {
       appLogger.error(
         {
@@ -232,43 +235,10 @@ export async function ingestTelegramMessage(
     matchedKeyword: latestMatch.matchedKeyword,
   };
 
-  let notifyStatus: "not-requested" | "no-targets" | "queued" | "queue-failed" =
-    "not-requested";
-  let notifyTargetCount = 0;
-  let notificationQueueMs = 0;
-  if (input.notify) {
-    const notificationQueueStartedAtMs = Date.now();
-    try {
-      notifyTargetCount = await forwardMatchedMessage({
-        filterId: matched.filter.id,
-        filterName: matched.filter.name,
-        matchedKeyword: matched.matchedKeyword,
-        chatTitle,
-        senderName,
-        senderId,
-        content: textContent || (mediaInfo ? `[${mediaInfo.mediaType}]` : ""),
-        messageDate: timing.messageDate,
-        telegramLink,
-        messageKey: `${chatId}:${message.id}`,
-        rowId,
-      });
-      notifyStatus = notifyTargetCount > 0 ? "queued" : "no-targets";
-    } catch (error) {
-      notifyStatus = "queue-failed";
-      appLogger.error(
-        {
-          err: error,
-          event: "notification.forward.queue_failed",
-          messageKey: `${chatId}:${message.id}`,
-          rowId,
-          filterId: matched.filter.id,
-        },
-        "Failed to queue matched message notifications",
-      );
-    } finally {
-      notificationQueueMs = Date.now() - notificationQueueStartedAtMs;
-    }
-  }
+  const notifyTargetCount = persisted.notifyTargetCount ?? 0;
+  const notifyStatus = !input.notify ? "not-requested" : notifyTargetCount > 0 ? "queued" : "no-targets";
+  const notificationQueueMs = 0; // Durable enqueue is included in persistMs above.
+  if (notifyTargetCount > 0) wakeNotificationOutbox();
 
   if (input.emitEvent) {
     emitMessageEvent({ type: "new" });

@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process";
-import { mkdirSync } from "fs";
+import { closeSync, mkdirSync, openSync } from "fs";
 import { dirname } from "path";
 import { appConfig } from "../config.js";
 import { appLogger } from "../shared/logging.js";
@@ -17,6 +17,13 @@ function runPrismaCommand(args: string[]): void {
 
 async function deployDatabase(): Promise<void> {
   mkdirSync(dirname(appConfig.dbPath), { recursive: true });
+  // Prisma's SQLite engine can fail before migration when the file is absent.
+  // Create only the empty file, never tables or an existing database's contents.
+  try {
+    closeSync(openSync(appConfig.dbPath, "wx", 0o600));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+  }
 
   appLogger.info(
     { event: "database.migrations.applying" },

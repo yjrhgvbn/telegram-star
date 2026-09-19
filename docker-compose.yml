@@ -15,7 +15,7 @@ services:
         max-size: "20m"
         max-file: "10"
     ports:
-      - "3000:3000"
+      - "${TELEGRAM_STAR_BIND_ADDRESS:-0.0.0.0}:3000:3000"
     volumes:
       - telegram-star-data:/app/data
     environment:
@@ -23,6 +23,7 @@ services:
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH:-}
       - PORT=3000
       - HOST=0.0.0.0
+      - APP_ACCESS_PASSWORD=${APP_ACCESS_PASSWORD:-}
       - DATABASE_URL=file:/app/data/telegram-star.db
       - DB_PATH=/app/data/telegram-star.db
       - SESSION_PATH=/app/data/session.txt

@@ -15,10 +15,8 @@ import { installGramJsDiagnostics } from "./gramJsDiagnostics.js";
 
 let _client: TelegramClient | null = null;
 let _isConnected = false;
-
-// 等待验证码 / 两步验证密码的 resolver，预留给交互式登录流程
-let _phoneCodeResolver: ((code: string) => void) | null = null;
-let _passwordResolver: ((password: string) => void) | null = null;
+let _isAuthorized = false;
+let _loginStep: "code" | "password" | null = null;
 
 // --- Client 访问器 ---
 
@@ -27,16 +25,30 @@ export function getClient(): TelegramClient | null {
 }
 
 export function setClient(c: TelegramClient | null): void {
+  if (_client === c) return;
   if (c) installGramJsDiagnostics(c);
   _client = c;
+  _isConnected = false;
+  _isAuthorized = false;
+  _loginStep = null;
 }
 
 export function isClientConnected(): boolean {
-  return _isConnected;
+  // A connected MTProto socket during login is not an authenticated account.
+  return _isConnected && _isAuthorized;
 }
 
 export function setConnected(value: boolean): void {
   _isConnected = value;
+}
+
+export function setAuthorized(value: boolean): void {
+  _isAuthorized = value;
+  if (value) _loginStep = null;
+}
+
+export function setLoginStep(value: "code" | "password" | null): void {
+  _loginStep = value;
 }
 
 // --- 客户端连接配置 ---
@@ -68,7 +80,7 @@ export function loadSession(): string {
 export function saveSession(session: string): void {
   const dir = dirname(appConfig.telegram.sessionPath);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(appConfig.telegram.sessionPath, session, "utf-8");
+  writeFileSync(appConfig.telegram.sessionPath, session, { encoding: "utf-8", mode: 0o600 });
 }
 
 // --- 公开状态 API ---
@@ -85,9 +97,9 @@ export function getConnectionStatus(): {
   const configured = appConfig.telegram.apiId > 0 && appConfig.telegram.apiHash.trim().length > 0;
   return {
     connected: _isConnected,
-    authorized: _client?.connected ? true : false,
-    waitingForCode: _phoneCodeResolver !== null,
-    waitingForPassword: _passwordResolver !== null,
+    authorized: _isAuthorized,
+    waitingForCode: _loginStep === "code",
+    waitingForPassword: _loginStep === "password",
     telegramConfigured: configured,
     telegramConfigSource: configured ? "database" : "missing",
   };

@@ -6,6 +6,7 @@ import {
 } from "./messagePagination.js";
 
 const cursor = {
+  id: 10,
   messageDate: "2026-06-26T00:00:00.000Z",
   telegramMessageId: 42,
 };
@@ -34,6 +35,7 @@ describe("messagePagination", () => {
               messageDate: cursor.messageDate,
               telegramMessageId: { lt: cursor.telegramMessageId },
             },
+            { messageDate: cursor.messageDate, telegramMessageId: cursor.telegramMessageId, id: { lt: cursor.id } },
           ],
         },
       ],
@@ -51,6 +53,7 @@ describe("messagePagination", () => {
               messageDate: cursor.messageDate,
               telegramMessageId: { gt: cursor.telegramMessageId },
             },
+            { messageDate: cursor.messageDate, telegramMessageId: cursor.telegramMessageId, id: { gt: cursor.id } },
           ],
         },
       ],

@@ -397,3 +397,4 @@ export type FilterBackfillMode = z.infer<typeof filterBackfillModeSchema>;
 export type FilterBackfillJobStatus = z.infer<typeof filterBackfillJobStatusSchema>;
 export type FilterBackfillJobCreateInput = z.infer<typeof filterBackfillJobCreateInputSchema>;
 export type FilterBackfillJob = z.infer<typeof filterBackfillJobSchema>;
+export type FilterDeleteResponse = z.infer<typeof filterDeleteResponseSchema>;

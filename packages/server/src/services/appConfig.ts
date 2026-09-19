@@ -167,80 +167,44 @@ export async function saveTelegramConfig(input: {
   apiId: unknown;
   apiHash: unknown;
 }): Promise<TelegramConfigStatus> {
-  const currentConfig = await getStoredTelegramConfig();
-  const telegramConfig = validateTelegramConfig(input, currentConfig);
-  const now = new Date().toISOString();
-
-  await db.appConfig.upsert({
-    where: { key: TELEGRAM_CONFIG_KEY },
-    create: {
-      key: TELEGRAM_CONFIG_KEY,
-      valueJson: JSON.stringify(telegramConfig),
-      createdAt: now,
-      updatedAt: now,
-    },
-    update: {
-      valueJson: JSON.stringify(telegramConfig),
-      updatedAt: now,
-    },
-  });
-
-  updateTelegramConfig(telegramConfig);
-  return getTelegramConfigStatus();
+  const validated = validateTelegramConfig(input, await getStoredTelegramConfig());
+  return (await saveAppConfig({ telegram: validated })).status.telegram;
 }
 
 export async function saveMediaConfig(input: { thumbIndex: unknown }): Promise<MediaConfigStatus> {
-  const mediaConfig = validateMediaConfig(input);
-  const now = new Date().toISOString();
-
-  await db.appConfig.upsert({
-    where: { key: MEDIA_CONFIG_KEY },
-    create: {
-      key: MEDIA_CONFIG_KEY,
-      valueJson: JSON.stringify(mediaConfig),
-      createdAt: now,
-      updatedAt: now,
-    },
-    update: {
-      valueJson: JSON.stringify(mediaConfig),
-      updatedAt: now,
-    },
-  });
-
-  updateMediaConfig(mediaConfig);
-  return getMediaConfigStatus();
+  const validated = validateMediaConfig(input);
+  return (await saveAppConfig({ media: validated })).status.media;
 }
 
 export async function saveAppConfig(input: AppConfigUpdate): Promise<{
   status: AppConfigStatus;
-  changed: {
-    telegram: boolean;
-    media: boolean;
-  };
+  changed: { telegram: boolean; media: boolean };
 }> {
-  let telegramChanged = false;
-  let mediaChanged = false;
-
-  if (input.telegram !== undefined) {
-    await saveTelegramConfig({
-      apiId: input.telegram.apiId,
-      apiHash: input.telegram.apiHash,
+  // Validate the entire request before writing. Both rows commit together; runtime state
+  // changes only after commit, so a failed request cannot leave half-applied credentials.
+  const telegram = input.telegram === undefined ? null : validateTelegramConfig({
+    apiId: input.telegram.apiId,
+    apiHash: input.telegram.apiHash,
+  }, await getStoredTelegramConfig());
+  const media = input.media === undefined ? null : validateMediaConfig({ thumbIndex: input.media.thumbIndex });
+  const now = new Date().toISOString();
+  if (telegram || media) {
+    await db.$transaction(async (tx) => {
+      for (const [key, value] of [[TELEGRAM_CONFIG_KEY, telegram], [MEDIA_CONFIG_KEY, media]] as const) {
+        if (!value) continue;
+        const valueJson = JSON.stringify(value);
+        await tx.appConfig.upsert({
+          where: { key },
+          create: { key, valueJson, createdAt: now, updatedAt: now },
+          update: { valueJson, updatedAt: now },
+        });
+      }
     });
-    telegramChanged = true;
   }
-
-  if (input.media !== undefined) {
-    await saveMediaConfig({
-      thumbIndex: input.media.thumbIndex,
-    });
-    mediaChanged = true;
-  }
-
+  if (telegram) updateTelegramConfig(telegram);
+  if (media) updateMediaConfig(media);
   return {
     status: await getAppConfigStatus(),
-    changed: {
-      telegram: telegramChanged,
-      media: mediaChanged,
-    },
+    changed: { telegram: telegram !== null, media: media !== null },
   };
 }

@@ -47,3 +47,8 @@ export type TelegramConfigStatus = z.infer<typeof telegramConfigStatusSchema>;
 export type MediaConfigStatus = z.infer<typeof mediaConfigStatusSchema>;
 export type AppConfigStatus = z.infer<typeof appConfigStatusSchema>;
 export type AppConfigUpdate = z.infer<typeof appConfigUpdateSchema>;
+
+export const appAccessStatusSchema = z.object({ required: z.boolean(), authorized: z.boolean() });
+export const appAccessAssetsSchema = z.object({ assetToken: z.string(), assetExpiresAt: z.number() });
+export const appAccessSessionSchema = appAccessAssetsSchema.extend({ token: z.string(), expiresAt: z.number() });
+export type AppAccessSession = z.infer<typeof appAccessSessionSchema>;

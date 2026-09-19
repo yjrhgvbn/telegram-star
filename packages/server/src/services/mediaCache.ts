@@ -28,6 +28,8 @@ const cache = new MediaLruCache({
   maxEntries: MAX_ENTRIES,
 });
 
+let cacheClient = getClient();
+let cacheGeneration = 0;
 const MAX_CONCURRENCY = 2;
 const pendingRequests = new PendingRequestRegistry<{ buffer: Buffer; mimeType: string } | null>(
   MAX_PENDING_DOWNLOADS,
@@ -45,8 +47,16 @@ export async function getThumbBuffer(
   chatId: string,
   messageId: number,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  const client = getClient();
+  if (cacheClient !== client) {
+    cacheClient = client;
+    clearMediaCache();
+  }
+  if (!client || !isClientConnected()) return null;
+  const generation = cacheGeneration;
+  const isCurrent = () => getClient() === client && generation === cacheGeneration && isClientConnected();
   const thumbIndex = appConfig.media.thumbIndex;
-  const key = buildThumbCacheKey(chatId, messageId, thumbIndex);
+  const key = `${generation}:${buildThumbCacheKey(chatId, messageId, thumbIndex)}`;
 
   // 1. 缓存命中
   const cached = cache.get(key);
@@ -55,11 +65,12 @@ export async function getThumbBuffer(
   // 2. 请求去重并发起下载。超时只结束当前 HTTP 等待；底层任务仍保留在 registry
   // 中并占用并发槽，直到真正结束，避免超时后重复启动不可取消的 GramJS 下载。
   const download = pendingRequests.getOrCreate(key, () =>
-    downloadThumb(chatId, messageId, thumbIndex, key),
+    downloadThumb(chatId, messageId, thumbIndex, key, client, isCurrent),
   );
 
   try {
-    return await withTimeout(download, DOWNLOAD_THUMB_TIMEOUT_MS);
+    const result = await withTimeout(download, DOWNLOAD_THUMB_TIMEOUT_MS);
+    return isCurrent() ? result : null;
   } catch (err: any) {
     const reason = err?.message || String(err);
     if (reason !== "download_thumb_timeout") {
@@ -77,23 +88,26 @@ async function downloadThumb(
   messageId: number,
   thumbIndex: number,
   key: string,
+  client: NonNullable<ReturnType<typeof getClient>>,
+  isCurrent: () => boolean,
 ): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  const client = getClient();
-  if (!client || !isClientConnected()) return null;
-
   return downloadLimiter.run(async () => {
+    if (!isCurrent()) return null;
     try {
       const entityMap = await getDialogEntityMap();
+      if (!isCurrent()) return null;
       const entity = entityMap.get(chatId);
       if (!entity) return null;
 
       const msgs = await client.getMessages(entity, { ids: [messageId] });
+      if (!isCurrent()) return null;
       const msg = msgs?.[0];
       if (!msg || !msg.media) return null;
 
       const buffer = await downloadWithFallbackThumb(client, msg, thumbIndex);
       if (!buffer || typeof buffer === "string") return null;
 
+      if (!isCurrent()) return null;
       const mimeType = guessThumbnailMimeType(msg.media);
       cache.set(key, { buffer, mimeType });
       return { buffer, mimeType };
@@ -155,6 +169,7 @@ async function downloadWithFallbackThumb(
 }
 
 export function clearMediaCache(): void {
+  cacheGeneration += 1;
   cache.clear();
   // Do not clear in-flight downloads: GramJS cannot cancel them. Keeping their keys registered
   // prevents a config change or retry from starting duplicate background transfers.

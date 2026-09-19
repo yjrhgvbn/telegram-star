@@ -107,9 +107,10 @@ describe("source avatar cache", () => {
     expect(await provider.getSourceAvatar("10")).toBeNull();
   });
 
-  it("does not look up arbitrary peers or personal senders outside known source dialogs", async () => {
+  it("accepts known private dialogs but does not look up arbitrary peers", async () => {
     const telegram = createClient();
     telegram.getDialogs.mockResolvedValue([
+      { entity: { className: "Channel", id: "30", title: "Same ID channel" } },
       { entity: { className: "User", id: "30" } },
       { entity: { className: "Chat", id: "40" } },
     ]);
@@ -118,8 +119,11 @@ describe("source avatar cache", () => {
       isClientConnected: () => true,
     });
     expect(await provider.getSourceAvatar("unknown")).toBeNull();
-    expect(await provider.getSourceAvatar("30")).toBeNull();
     expect(telegram.downloadProfilePhoto).not.toHaveBeenCalled();
+    expect(await provider.getSourceAvatar("user:30")).toMatchObject({ mimeType: "image/jpeg" });
+    expect(telegram.downloadProfilePhoto).toHaveBeenLastCalledWith({ className: "User", id: "30" }, { isBig: false });
+    expect(await provider.getSourceAvatar("30")).toMatchObject({ mimeType: "image/jpeg" });
+    expect(telegram.downloadProfilePhoto).toHaveBeenLastCalledWith({ className: "Channel", id: "30", title: "Same ID channel" }, { isBig: false });
     expect(await provider.getSourceAvatar("40")).toMatchObject({ mimeType: "image/jpeg" });
   });
 

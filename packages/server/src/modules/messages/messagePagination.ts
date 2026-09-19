@@ -2,6 +2,7 @@ import type { MessageListQuery } from "@telegram-star/shared/contracts/messages"
 import type { Prisma } from "../../generated/prisma/client.js";
 
 export interface MessageCursorPosition {
+  id: number;
   messageDate: string;
   telegramMessageId: number;
 }
@@ -54,14 +55,19 @@ function buildCursorBoundary(
   const dateOperator = direction === "before" ? "lt" : "gt";
   const messageIdOperator = direction === "before" ? "lt" : "gt";
 
-  // messageDate alone is not unique; telegramMessageId is the stable tie-breaker
-  // used by every message query so cursor windows stay deterministic.
+  // Telegram IDs are only unique within a chat. The database row ID breaks ties
+  // across chats that published the same message number in the same second.
   return {
     OR: [
       { messageDate: { [dateOperator]: cursor.messageDate } },
       {
         messageDate: cursor.messageDate,
         telegramMessageId: { [messageIdOperator]: cursor.telegramMessageId },
+      },
+      {
+        messageDate: cursor.messageDate,
+        telegramMessageId: cursor.telegramMessageId,
+        id: { [messageIdOperator]: cursor.id },
       },
     ],
   };

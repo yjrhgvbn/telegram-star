@@ -1,8 +1,8 @@
 # 版本发布：镜像与安装包
 
-**推送 `main` 更新自己的服务器；推送版本 tag 发布 Docker Hub 镜像和客户端安装包，两条流程互相独立。** 分支推送和 PR 不触发独立 CI，需要检查时手动运行 **CI**；版本发布工作流会自行构建和测试。不走应用商店，不需要购买商店账号。
+**推送 `main` 更新自己的服务器；推送版本 tag 发布 Docker Hub 镜像和客户端安装包，两条流程互相独立。** PR 自动运行 **CI**，也支持手动运行；普通分支推送不独立触发。自用部署先复用 CI 验证相同提交，版本发布工作流自行构建、测试和检查后端类型。不走应用商店，不需要购买商店账号。
 
-公开产物：服务端 + Web 的 amd64 / arm64 镜像；macOS 两种架构的 DMG；Windows x64 EXE；Linux x64 AppImage / DEB；可选 Android arm64 APK。普通用户只需安装 Docker，复制 Release 中的命令即可启动，客户端连接自己的后端。
+公开产物：服务端 + Web 的 amd64 / arm64 镜像；macOS 两种架构的 DMG；Windows x64 EXE；Linux x64 AppImage / DEB；可选 Android arm64 APK。普通用户安装 Docker 后执行 Release 中的命令即可启动，客户端连接自己的后端。后台密码可选，启用时需自行设置并保管至少 16 字符的密码。
 
 ## 首次配置 GitHub
 
@@ -69,7 +69,7 @@ openssl base64 -A -in ~/telegram-star-signing/release.jks \
 
 ## 部署到自己的服务器
 
-[Deploy To Server 工作流](../.github/workflows/deploy.yml)在推送 `main` 时自动执行，也可手动运行。服务器需要 Git、Docker 和 Compose，预先克隆仓库并准备 `.env`；SSH 用户需有仓库读取、目录写入和 Docker 操作权限。保持部署目录干净，保留原目录、项目名和数据卷。
+[Deploy To Server 工作流](../.github/workflows/deploy.yml)在推送 `main` 时自动执行，也可手动运行。服务器需要 Git、Docker 和 Compose，预先克隆仓库并准备 `.env`，按需设置 `APP_ACCESS_PASSWORD`（非空值至少 16 字符，留空直接访问）；SSH 用户需有仓库读取、目录写入和 Docker 操作权限。保持部署目录干净，保留原目录、项目名和数据卷。默认端口继续绑定 `0.0.0.0:3000`，已有部署无需新增密码或绑定地址配置；只供本机访问时可主动设置 `TELEGRAM_STAR_BIND_ADDRESS=127.0.0.1`。
 
 在仓库 Actions 配置五个 Repository secrets：
 
@@ -81,12 +81,12 @@ openssl base64 -A -in ~/telegram-star-signing/release.jks \
 | `SSH_PRIVATE_KEY` | 对应已授权公钥的私钥 |
 | `DEPLOY_PATH` | 服务器上的代码仓库绝对路径 |
 
-部署先执行 `git fetch --all --prune`、`git checkout main`、`git pull --ff-only origin main`，再在服务器构建本地镜像 `telegram-star:local`：
+部署先通过复用的 CI，再将该次运行已验证的提交 SHA 传到服务器，执行 `git fetch origin "$DEPLOY_SHA"` 与 `git checkout --detach "$DEPLOY_SHA"`，并核对 HEAD。即使 `main` 后续推进，也不会改部署未经本次验证的提交。检出前后检查工作区，存在本地修改或非忽略的未跟踪文件时停止并保留它们；管理员先保存处理后重试，不自动 reset / clean，忽略的 `.env` 和运行数据保留。随后构建本地镜像 `telegram-star:local`：
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build --wait --wait-timeout 180
 ```
 
-手动运行入口为 **Actions → Deploy To Server → Run workflow**，不填镜像版本。此流程不读取 Docker Hub 配置或改写 `.env`，不推镜像、不发布安装包，也不额外运行 CI 测试。部署前自行备份；健康检查失败时需检查日志并修复或回退，工作流不自动回滚。
+手动运行入口为 **Actions → Deploy To Server → Run workflow**，不填镜像版本。此流程不读取 Docker Hub 配置或改写 `.env`，不推镜像、不发布安装包，并以前置 CI 成功为条件。部署前自行备份；健康检查失败时需检查日志并修复或回退，工作流不自动回滚。
 
 用户的镜像安装、升级与备份统一见[部署指南](user-deployment.md)，客户端下载见[使用教程](user-guide.md#6-连接其他客户端)。首次版本发布完成前，示例镜像和安装包还不能下载。

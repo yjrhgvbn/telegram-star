@@ -8,16 +8,16 @@ import {
 import { isDuplicateMessageError } from "./messagePersistence.js";
 
 describe("Telegram message ingestion", () => {
-  it("collects all matching rules so removing one rule cannot hide another match", () => {
+  it("collects all matching rules so removing one rule cannot hide another match", async () => {
     const filters = [
       { id: 1, name: "release", conditions: JSON.stringify([{ type: "keyword", values: ["release"] }]) },
       { id: 2, name: "version", conditions: JSON.stringify([{ type: "regex", values: ["V\\d+"] }]) },
       { id: 3, name: "other", conditions: JSON.stringify([{ type: "keyword", values: ["missing"] }]) },
     ];
-    expect(findMatchingFilters("chat-1", "Release V2 is ready", filters).map(({ filter }) => filter.id)).toEqual([1, 2]);
+    expect((await findMatchingFilters("chat-1", "Release V2 is ready", filters)).map(({ filter }) => filter.id)).toEqual([1, 2]);
   });
-  it("selects the first enabled filter that matches all of its conditions", () => {
-    const result = findFirstMatchingFilter("chat-1", "Release V2 is ready", [
+  it("selects the first enabled filter that matches all of its conditions", async () => {
+    const result = (await findFirstMatchingFilter("chat-1", "Release V2 is ready", [
       {
         id: 1,
         name: "wrong chat",
@@ -36,7 +36,7 @@ describe("Telegram message ingestion", () => {
         name: "later match",
         conditions: JSON.stringify([{ type: "regex", values: ["V\\d+"] }]),
       },
-    ]);
+    ]));
 
     expect(result).toEqual({
       filter: {

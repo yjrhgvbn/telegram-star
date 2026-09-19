@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   messageEventPayloadSchema,
   type MessageEventPayload,
 } from "@telegram-star/shared/contracts/messages";
 import { getMessageEventsUrl as resolveMessageEventsUrl } from "@/shared/api/url";
+import { ACCESS_ASSETS_EVENT } from "@/shared/runtime/accessSession";
 import { isDemo } from "@/demo/mode";
 
 export { getMessageEventsUrl } from "@/shared/api/url";
@@ -41,6 +42,12 @@ export function useMessageEvents({
   eventsUrl = resolveMessageEventsUrl(),
   createEventSource = defaultCreateMessageEventSource,
 }: UseMessageEventsOptions) {
+  const [, refreshAssets] = useState(0);
+  useEffect(() => {
+    const refresh = () => refreshAssets(value => value + 1);
+    window.addEventListener(ACCESS_ASSETS_EVENT, refresh);
+    return () => window.removeEventListener(ACCESS_ASSETS_EVENT, refresh);
+  }, []);
   const handlersRef = useRef({ onNewMessage, onReadMessages });
   handlersRef.current = { onNewMessage, onReadMessages };
 

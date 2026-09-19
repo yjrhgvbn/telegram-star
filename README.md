@@ -2,7 +2,7 @@
 
 **筛选 Telegram 消息，集中阅读，按需转发。**
 
-Telegram Star 是一个自托管工具，使用你的 Telegram 账号，监听已加入的群组和频道。
+Telegram Star 是一个自托管工具，使用你的 Telegram 账号，监听已加入的群组、频道，以及已有私聊和机器人会话。
 
 [在线 Demo](https://yjrhgvbn.github.io/telegram-star/) · [下载安装](https://github.com/yjrhgvbn/telegram-star/releases) · [使用教程](docs/user-guide.md) · [部署指南](docs/user-deployment.md)
 
@@ -23,18 +23,19 @@ Telegram Star 是一个自托管工具，使用你的 Telegram 账号，监听�
 
 ### 服务端：Docker
 
-安装 Docker，并确保网络能访问 Telegram，执行一条命令：
+安装 Docker，并确保网络能访问 Telegram。后台密码可选；如需启用，在当前终端设置自己保管的 `APP_ACCESS_PASSWORD`（至少 16 字符，不是 Telegram 密码），并执行 `export APP_ACCESS_PASSWORD`。未设置或留空可直接启动：
 
 ```bash
 docker run -d --name telegram-star --restart unless-stopped --init \
-  -p 3000:3000 -v telegram-star-data:/app/data \
+  -p 0.0.0.0:3000:3000 -v telegram-star-data:/app/data \
+  -e APP_ACCESS_PASSWORD \
   --log-driver local \
   docker.io/yjrhgvbn/telegram-star:0.0.1
 ```
 
-打开 [http://localhost:3000](http://localhost:3000)；远程部署时使用服务器地址。Docker 自动拉取镜像，Telegram 凭证在页面填写，无需下载配置文件。版本以[发布页](https://github.com/yjrhgvbn/telegram-star/releases)为准，首个版本发布后即可使用。
+本机打开 [http://localhost:3000](http://localhost:3000)，远程网页使用 `http://服务器IP:3000`；已启用密码时先输入后台访问密码，再填写 Telegram 凭证。默认保留 `0.0.0.0:3000` 入口，无需新增配置；仅供本机或本机反向代理访问时，可将发布地址改为 `127.0.0.1`。HTTPS 与访问设置见[部署指南](docs/user-deployment.md#访问与缓存)。Docker 自动拉取镜像，无需下载配置文件。版本以[发布页](https://github.com/yjrhgvbn/telegram-star/releases)为准，首个版本发布后即可使用。
 
-当前为单用户应用，未内置访问认证，请放在可信网络或有认证的反向代理后。数据会保存在数据卷中，升级和备份见[部署指南](docs/user-deployment.md)。
+当前为单用户应用，各客户端共享同一账号和配置；不提供多用户权限隔离。后台密码未启用时，能访问服务的人可以读取消息和修改配置。数据会保存在数据卷中，升级和备份见[部署指南](docs/user-deployment.md)。
 
 ### 桌面与 Android
 
@@ -52,7 +53,7 @@ docker run -d --name telegram-star --restart unless-stopped --init \
 ## 开始使用
 
 1. **登录 Telegram**：从 [my.telegram.org/apps](https://my.telegram.org/apps) 获取 API ID / API Hash，在页面填写后，用手机号和验证码登录；启用两步验证的账号还需输入密码。
-2. **创建规则**：在「规则」选一个群组或频道，添加关键词，例如 `发布, 更新`，确认匹配样本后保存。
+2. **创建规则**：在「规则」选一个群组、频道或私聊来源，添加关键词，例如 `发布, 更新`，确认匹配样本后保存。
 3. **查看消息**：新命中的内容进入「消息」；想收录旧内容，在规则中执行「补录历史消息」。
 4. **处理或转发**：读完标记「完成」；需要通知时，在「转发」添加 Apprise 地址并关联规则。
 

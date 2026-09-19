@@ -1,0 +1,9 @@
+.app-access { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: var(--background); }
+.app-access__panel { width: min(100%, 400px); display: flex; flex-direction: column; gap: 16px; }
+.app-access__panel h1 { margin: 0; font-size: 24px; font-weight: 650; }
+.app-access__panel > p { margin: 0; color: var(--muted-foreground); font-size: 14px; line-height: 1.7; }
+.app-access__form { display: flex; flex-direction: column; gap: 18px; margin-top: 8px; }
+.app-access__field { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.app-access__field input { min-height: 44px; }
+.app-access__error { margin: 0; color: var(--destructive); line-height: 1.6; font-size: 14px; overflow-wrap: anywhere; }
+@media (max-width: 680px) { .app-access__field input { font-size: 16px; } }

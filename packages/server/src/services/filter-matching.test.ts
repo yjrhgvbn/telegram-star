@@ -27,23 +27,23 @@ describe("filter matching", () => {
     ]);
   });
 
-  it("requires every condition to match and keeps the first matched keyword", () => {
-    const result = matchFilterConditions(
+  it("requires every condition to match and keeps the first matched keyword", async () => {
+    const result = (await matchFilterConditions(
       { chatId: "chat-1", content: "Daily RELEASE and NOTICE notes" },
       [
         { type: "keyword", values: ["release", "notice"] },
         { type: "chat", values: ["chat-1", "chat-2"] },
       ],
-    );
+    ));
 
     expect(result).toEqual({ matched: true, matchedKeyword: "release" });
   });
 
-  it("matches exact sender IDs as alternatives without producing content highlights", () => {
-    const result = evaluateFilterConditions(
+  it("matches exact sender IDs as alternatives without producing content highlights", async () => {
+    const result = (await evaluateFilterConditions(
       { chatId: "chat-1", senderUserId: "9007199254740993", content: "User 9007199254740993 posted" },
       [{ type: "sender", values: ["9007199254740992", "9007199254740993"] }],
-    );
+    ));
     expect(result).toEqual({
       matched: true,
       matchedKeyword: null,
@@ -56,66 +56,66 @@ describe("filter matching", () => {
         matchedTexts: [],
       }],
     });
-    expect(matchFilterConditions(
+    expect((await matchFilterConditions(
       { chatId: "chat-1", senderUserId: "9007199254740992", content: "9007199254740993" },
       [{ type: "sender", values: ["9007199254740993"] }],
-    )).toEqual({ matched: false, matchedKeyword: null });
+    ))).toEqual({ matched: false, matchedKeyword: null });
   });
 
   it.each([undefined, null, "-123", "@username", "0", "0123"])(
     "does not infer a user from content when senderUserId is %s",
-    (senderUserId) => {
+    async (senderUserId) => {
       const input = { chatId: "123", senderUserId, content: "sender 123" };
-      expect(matchFilterConditions(input, [{ type: "sender", values: ["123"] }]))
+      expect((await matchFilterConditions(input, [{ type: "sender", values: ["123"] }])))
         .toEqual({ matched: false, matchedKeyword: null });
-      expect(matchFilterConditions(input, [{ type: "sender", effect: "exclude", values: ["123"] }]))
+      expect((await matchFilterConditions(input, [{ type: "sender", effect: "exclude", values: ["123"] }])))
         .toEqual({ matched: true, matchedKeyword: null });
     },
   );
 
-  it("combines sender, chat, and keyword restrictions with AND", () => {
+  it("combines sender, chat, and keyword restrictions with AND", async () => {
     const conditions = [
       { type: "sender" as const, values: ["123", "456"] },
       { type: "chat" as const, values: ["chat-1"] },
       { type: "keyword" as const, values: ["BTC"] },
     ];
     const input = { chatId: "chat-1", senderUserId: "456", content: "BTC update" };
-    expect(matchFilterConditions(input, conditions)).toEqual({ matched: true, matchedKeyword: "BTC" });
-    expect(matchFilterConditions({ ...input, senderUserId: "789" }, conditions).matched).toBe(false);
-    expect(matchFilterConditions({ ...input, chatId: "chat-2" }, conditions).matched).toBe(false);
-    expect(matchFilterConditions({ ...input, content: "other update" }, conditions).matched).toBe(false);
+    expect((await matchFilterConditions(input, conditions))).toEqual({ matched: true, matchedKeyword: "BTC" });
+    expect((await matchFilterConditions({ ...input, senderUserId: "789" }, conditions)).matched).toBe(false);
+    expect((await matchFilterConditions({ ...input, chatId: "chat-2" }, conditions)).matched).toBe(false);
+    expect((await matchFilterConditions({ ...input, content: "other update" }, conditions)).matched).toBe(false);
   });
 
-  it("combines sender alternatives with content and excludes any blocked sender", () => {
+  it("combines sender alternatives with content and excludes any blocked sender", async () => {
     const conditions = [
       { type: "chat" as const, groupId: "source", values: ["chat-1"] },
       { type: "sender" as const, groupId: "include", values: ["123"] },
       { type: "keyword" as const, groupId: "include", values: ["BTC"] },
       { type: "sender" as const, groupId: "blocked", groupEffect: "exclude" as const, values: ["456", "789"] },
     ];
-    const senderOnly = evaluateFilterConditions(
+    const senderOnly = (await evaluateFilterConditions(
       { chatId: "chat-1", senderUserId: "123", content: "ordinary update" }, conditions,
-    );
+    ));
     expect(senderOnly.matched).toBe(true);
     expect(senderOnly.matchedKeyword).toBeNull();
     expect(senderOnly.evidence[1]).toMatchObject({
       groupId: "include", groupPassed: true, conditionMatched: true,
       matchedValues: ["123"], matchedTexts: [],
     });
-    expect(matchFilterConditions(
+    expect((await matchFilterConditions(
       { chatId: "chat-1", senderUserId: "111", content: "BTC update" }, conditions,
-    )).toEqual({ matched: true, matchedKeyword: "BTC" });
-    const excluded = evaluateFilterConditions(
+    ))).toEqual({ matched: true, matchedKeyword: "BTC" });
+    const excluded = (await evaluateFilterConditions(
       { chatId: "chat-1", senderUserId: "789", content: "BTC update" }, conditions,
-    );
+    ));
     expect(excluded.matched).toBe(false);
     expect(excluded.evidence[3]).toMatchObject({
       groupId: "blocked", effect: "exclude", passed: false, groupPassed: false,
       conditionMatched: true, matchedValues: ["789"], matchedTexts: [],
     });
-    expect(matchFilterConditions(
+    expect((await matchFilterConditions(
       { chatId: "chat-2", senderUserId: "123", content: "BTC update" }, conditions,
-    ).matched).toBe(false);
+    )).matched).toBe(false);
   });
 
   it("round-trips sender IDs and exclusion groups", () => {
@@ -155,27 +155,27 @@ describe("filter matching", () => {
     },
   );
 
-  it("matches regex conditions case-insensitively", () => {
-    const result = matchFilterConditions(
+  it("matches regex conditions case-insensitively", async () => {
+    const result = (await matchFilterConditions(
       { chatId: "chat-1", content: "Release V12.4 is live" },
       [
         { type: "regex", values: ["v\\d+\\.\\d+"] },
         { type: "chat", values: ["chat-1"] },
       ],
-    );
+    ));
 
     expect(result).toEqual({ matched: true, matchedKeyword: "v\\d+\\.\\d+" });
   });
 
-  it("collects evidence for every matching value and the actual regex text", () => {
-    const result = evaluateFilterConditions(
+  it("collects evidence for every matching value and the actual regex text", async () => {
+    const result = (await evaluateFilterConditions(
       { chatId: "chat-1", content: "RELEASE V12.4, release NOTICE v13.5" },
       [
         { type: "keyword", values: ["release", "notice"] },
         { type: "regex", values: ["v\\d+\\.\\d+"] },
         { type: "chat", values: ["chat-1"] },
       ],
-    );
+    ));
 
     expect(result).toEqual({
       matched: true,
@@ -209,14 +209,14 @@ describe("filter matching", () => {
     });
   });
 
-  it("fails when any condition does not match", () => {
-    const result = matchFilterConditions(
+  it("fails when any condition does not match", async () => {
+    const result = (await matchFilterConditions(
       { chatId: "chat-9", content: "Daily RELEASE notes" },
       [
         { type: "keyword", values: ["release"] },
         { type: "chat", values: ["chat-1"] },
       ],
-    );
+    ));
 
     expect(result).toEqual({ matched: false, matchedKeyword: null });
   });
@@ -293,7 +293,7 @@ describe("filter matching", () => {
     ]);
   });
 
-  it("matches alternatives with OR, groups with AND, and exclusions with NOT", () => {
+  it("matches alternatives with OR, groups with AND, and exclusions with NOT", async () => {
     const conditions = [
       { type: "keyword" as const, groupId: "content", values: ["红包"] },
       { type: "regex" as const, groupId: "content", values: ["返佣.*300"] },
@@ -306,51 +306,51 @@ describe("filter matching", () => {
     ];
 
     expect(
-      matchFilterConditions(
+      (await matchFilterConditions(
         { chatId: "chat-1", content: "返佣最高可到 300，马上参加" },
         conditions,
-      ),
+      )),
     ).toEqual({ matched: true, matchedKeyword: "返佣.*300" });
 
     expect(
-      matchFilterConditions(
+      (await matchFilterConditions(
         { chatId: "chat-1", content: "红包 300，活动已结束" },
         conditions,
-      ),
+      )),
     ).toEqual({ matched: false, matchedKeyword: null });
 
     expect(
-      matchFilterConditions(
+      (await matchFilterConditions(
         { chatId: "chat-1", content: "只有数字 300，没有活动信息" },
         conditions,
-      ),
+      )),
     ).toEqual({ matched: false, matchedKeyword: null });
   });
 
-  it("rejects a message when any exclusion condition matches", () => {
+  it("rejects a message when any exclusion condition matches", async () => {
     expect(
-      matchFilterConditions(
+      (await matchFilterConditions(
         { chatId: "chat-1", content: "300 元红包，速领" },
         [
           { type: "keyword", values: ["红包"] },
           { type: "keyword", effect: "exclude", values: ["已领完", "广告"] },
         ],
-      ),
+      )),
     ).toEqual({ matched: true, matchedKeyword: "红包" });
 
     expect(
-      matchFilterConditions(
+      (await matchFilterConditions(
         { chatId: "chat-1", content: "300 元红包，已领完" },
         [
           { type: "keyword", values: ["红包"] },
           { type: "keyword", effect: "exclude", values: ["已领完", "广告"] },
         ],
-      ),
+      )),
     ).toEqual({ matched: false, matchedKeyword: null });
   });
 
-  it("runs a user script with message data and accepts an optional matched text", () => {
-    const result = matchFilterConditions(
+  it("runs a user script with message data and accepts an optional matched text", async () => {
+    const result = (await matchFilterConditions(
       { chatId: "chat-1", content: "恭喜发财，红包金额 300 元" },
       [
         {
@@ -360,12 +360,12 @@ describe("filter matching", () => {
           ],
         },
       ],
-    );
+    ));
 
     expect(result).toEqual({ matched: true, matchedKeyword: "300 元红包" });
   });
 
-  it("supports excluding a message when a user script returns true", () => {
+  it("supports excluding a message when a user script returns true", async () => {
     const conditions = [
       { type: "keyword" as const, values: ["红包"] },
       {
@@ -376,14 +376,14 @@ describe("filter matching", () => {
     ];
 
     expect(
-      matchFilterConditions({ chatId: "chat-1", content: "正式红包 300 元" }, conditions),
+      (await matchFilterConditions({ chatId: "chat-1", content: "正式红包 300 元" }, conditions)),
     ).toEqual({ matched: true, matchedKeyword: "红包" });
     expect(
-      matchFilterConditions({ chatId: "chat-1", content: "测试红包 300 元" }, conditions),
+      (await matchFilterConditions({ chatId: "chat-1", content: "测试红包 300 元" }, conditions)),
     ).toEqual({ matched: false, matchedKeyword: null });
   });
 
-  it("reports script validation and runtime errors without matching", () => {
+  it("reports script validation and runtime errors without matching", async () => {
     const validation = validateConditions([
       { type: "script", values: ["return (;"] },
     ]);
@@ -391,14 +391,36 @@ describe("filter matching", () => {
     expect(validation.error).toContain("condition.script source is invalid");
 
     expect(
-      matchFilterConditions(
+      (await matchFilterConditions(
         { chatId: "chat-1", content: "红包 300 元" },
         [{ type: "script", values: ["throw new Error('boom');"] }],
-      ),
+      )),
     ).toMatchObject({
       matched: false,
       matchedKeyword: null,
       error: expect.stringContaining("boom"),
     });
   });
+});
+
+describe("isolated rule execution", () => {
+  it("does not expose host process, filesystem, or environment to scripts", async () => {
+    const result = await matchFilterConditions({chatId:"1", content:"test"}, [{type:"script", values:["return typeof process === 'undefined' && typeof require === 'undefined' && typeof fetch === 'undefined';"]}]);
+    expect(result.matched).toBe(true);
+    const escape = await matchFilterConditions({chatId:"1", content:"test"}, [{type:"script", values:["return message.constructor.constructor('return process')().version;"]}]);
+    expect(escape.matched).toBe(false);
+    expect(escape.error).toBeTruthy();
+  });
+  it("bounds getters and catastrophic regexes without blocking the main event loop", async () => {
+    let ticks = 0;
+    const timer = setInterval(() => { ticks += 1; }, 10);
+    try {
+      const getter = await matchFilterConditions({chatId:"1",content:"test"}, [{type:"script",values:["return {get matched(){while(true){}}};"]}]);
+      expect(getter.error).toBeTruthy();
+      const regex = await matchFilterConditions({chatId:"1",content:"a".repeat(30)+"!"}, [{type:"regex",values:["(a+)+$"]}]);
+      expect(regex.error).toContain("超时");
+      expect(ticks).toBeGreaterThan(10);
+      expect((await matchFilterConditions({chatId:"1",content:"ok"},[{type:"script",values:["return true;"]}])).matched).toBe(true);
+    } finally { clearInterval(timer); }
+  }, 10_000);
 });

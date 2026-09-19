@@ -15,10 +15,11 @@ const envTelegramApiHash = process.env.TELEGRAM_API_HASH;
 export const appConfig = {
   port: parseInt(process.env.PORT || "3000", 10),
   host: process.env.HOST || "0.0.0.0",
+  accessPassword: process.env.APP_ACCESS_PASSWORD || "",
   dbPath,
   databaseUrl: databaseUrl || `file:${dbPath}`,
   telegram: {
-    apiId: Number.isFinite(envTelegramApiId) ? envTelegramApiId : 0,
+    apiId: typeof envTelegramApiId === "number" && Number.isFinite(envTelegramApiId) ? envTelegramApiId : 0,
     apiHash: envTelegramApiHash || "",
     sessionPath: process.env.SESSION_PATH || "./data/session.txt",
     envApiId: Number.isFinite(envTelegramApiId) ? envTelegramApiId : undefined,

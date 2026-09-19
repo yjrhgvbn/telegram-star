@@ -15,8 +15,8 @@ import {
   type MessageCursorPosition,
 } from "./messagePagination.js";
 
-const MESSAGE_ORDER_ASC: Prisma.MessageOrderByWithRelationInput[] = [{ messageDate: "asc" }, { telegramMessageId: "asc" }];
-const MESSAGE_ORDER_DESC: Prisma.MessageOrderByWithRelationInput[] = [{ messageDate: "desc" }, { telegramMessageId: "desc" }];
+const MESSAGE_ORDER_ASC: Prisma.MessageOrderByWithRelationInput[] = [{ messageDate: "asc" }, { telegramMessageId: "asc" }, { id: "asc" }];
+const MESSAGE_ORDER_DESC: Prisma.MessageOrderByWithRelationInput[] = [{ messageDate: "desc" }, { telegramMessageId: "desc" }, { id: "desc" }];
 const MESSAGE_MEMBERSHIPS_SELECT = { select: { filterId: true } } as const;
 
 export interface MessageWindow {

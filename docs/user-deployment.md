@@ -4,16 +4,17 @@
 
 ## Docker 部署
 
-安装 Docker 后直接运行，无需下载配置文件、安装 Compose 或克隆源码。镜像包含 Web、服务端与通知转发组件，支持 `linux/amd64` 和 `linux/arm64`；服务器需能访问 Telegram。
+安装 Docker 后直接运行，无需下载配置文件、安装 Compose 或克隆源码。镜像包含 Web、服务端与通知转发组件，支持 `linux/amd64` 和 `linux/arm64`；服务器需能访问 Telegram。后台密码可选：如需启用，在当前终端设置自己生成并保管的 `APP_ACCESS_PASSWORD`（至少 16 字符，不是 Telegram 密码），并执行 `export APP_ACCESS_PASSWORD`；下面的 `-e` 会传入该变量，未设置或留空时直接访问。
 
 ```bash
 docker run -d --name telegram-star --restart unless-stopped --init \
-  -p 3000:3000 -v telegram-star-data:/app/data \
+  -p 0.0.0.0:3000:3000 -v telegram-star-data:/app/data \
+  -e APP_ACCESS_PASSWORD \
   --log-driver local \
   docker.io/yjrhgvbn/telegram-star:0.0.1
 ```
 
-打开 `http://localhost:3000`，远程服务器使用 `http://<server-ip>:3000`。在浏览器填写 Telegram API ID / Hash 并登录，然后配置监听规则与转发通道。
+本机打开 `http://localhost:3000`，远程网页使用 `http://服务器IP:3000`；若已启用密码，先输入后台访问密码，然后填写 Telegram API ID / Hash 并登录。默认向 `0.0.0.0:3000` 发布端口，沿用已有入口；仅供本机或本机反向代理访问时，可将命令改为 `-p 127.0.0.1:3000:3000`。HTTPS 与访问设置见[访问与缓存](#访问与缓存)。
 
 容器启动时自动应用数据库迁移，失败不会继续启动应用。用以下命令检查容器和启动日志，再确认页面能打开：
 
@@ -32,24 +33,26 @@ docker logs --tail=200 telegram-star
 
 | 容器环境变量 | 用途 |
 | --- | --- |
+| `APP_ACCESS_PASSWORD` | 可选；留空或不设置直接访问，非空值至少 16 字符，由管理员保管 |
 | `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | 可选；数据库没有 Telegram 凭证时兜底 |
 | `LOG_LEVEL` / `GRAMJS_LOG_LEVEL` | 应用 / Telegram 库日志，默认 `info` / `warn` |
 | `CORS_ORIGIN` | 默认 `*`；限制跨源访问时使用一个来源字符串 |
 
-镜像默认监听 `0.0.0.0:3000`，数据库和会话路径都在 `/app/data`，无需手动设置。修改 `-p 3000:3000` 左侧端口即可调整宿主机访问端口；更改启动参数或环境变量时按下节重建容器，并保留数据卷。
+镜像默认监听 `0.0.0.0:3000`，数据库和会话路径都在 `/app/data`，无需手动设置。修改 `-p 0.0.0.0:3000:3000` 中间的端口即可调整宿主机访问端口；更改启动参数或环境变量时按下节重建容器，并保留数据卷。
 
 数据库还包含 API 凭证、规则和 Apprise 地址。数据卷、会话文件及备份均按敏感配置保管。
 
 ## 升级与验证
 
-先按下节备份，再选择 [GitHub Releases](https://github.com/yjrhgvbn/telegram-star/releases) 中已发布的版本。以下以 `0.0.2` 为例，先拉取成功，再替换容器，继续使用原数据卷：
+先按[数据备份与恢复](#数据备份与恢复)备份，再选择 [GitHub Releases](https://github.com/yjrhgvbn/telegram-star/releases) 中已发布的版本。以下以 `0.0.2` 为例；如原实例已启用后台密码，先在当前终端设置原有 `APP_ACCESS_PASSWORD` 并执行 `export APP_ACCESS_PASSWORD`，以保留保护。未启用时可留空。再拉取镜像、替换容器，继续使用原数据卷：
 
 ```bash
 docker pull docker.io/yjrhgvbn/telegram-star:0.0.2 && \
 docker stop telegram-star && \
 docker rm telegram-star && \
 docker run -d --name telegram-star --restart unless-stopped --init \
-  -p 3000:3000 -v telegram-star-data:/app/data \
+  -p 0.0.0.0:3000:3000 -v telegram-star-data:/app/data \
+  -e APP_ACCESS_PASSWORD \
   --log-driver local \
   docker.io/yjrhgvbn/telegram-star:0.0.2
 docker logs --tail=200 telegram-star
@@ -60,6 +63,16 @@ docker logs --tail=200 telegram-star
 更新后确认页面和 `/api/health` 可访问，Telegram 状态、消息、规则与转发配置仍可读取。Web/PWA 刷新后加载新版本；客户端壳有更新时，从 Release 下载安装包升级。当前不提供自动更新服务。
 
 发送者用户 ID 过滤新增可空的 `messages.sender_user_id` 字段，由现有 `db:deploy` 自动迁移，不改写旧 `sender_id`。旧值可能是频道 ID，不能直接作为用户身份；旧消息在正常再次收录或手动补录时才补齐已确认的用户 ID，不增加自动扫描频率。
+
+私聊和机器人来源现在使用 `user:<数字ID>`，避免与频道数字 ID 冲突；发送者用户 ID 条件仍填写纯数字。旧数据中的裸数字来源无法可靠判定为私聊，不自动转换；旧私聊规则需重新选择来源并按需手动补录。
+
+## 通知与更新恢复
+
+新消息和首个命中规则的每个通知目标在同一事务写入持久队列，避免入库后、派发前重启丢失任务。发送并发上限为 2，每项最多尝试 5 次，重试间隔依次为 5 秒、30 秒、2 分钟、10 分钟；重启后恢复到期任务和过期租约。手动补录和重复收录不重新发送；投递时已禁用的目标会取消该任务，删除目标会清理其队列。
+
+发送成功或取消后清空队列中的标题、正文；已完成、取消和最终失败记录保留 30 天后清理。达到次数上限后记录 `notification.outbox.exhausted`，不再自动重试。投递采用至少一次语义：发送成功后、数据库确认前的极端崩溃可能造成重复，接收平台不支持幂等时无法保证恰好一次。
+
+自动回补保留原有 10 分钟周期，并在启动、重连及限频的 Telegram gap 告警后运行。更新 difference 游标按 Telegram 账号保存，可恢复游标之后的新消息和较早消息的编辑；每次每个 scope 最多取 50 页，超限保留已完成进度供后续继续。首次只建立 difference 基线，不追溯基线之前的更新；近期历史回补仍按原范围执行。Telegram 返回 `DifferenceTooLong` / `ChannelDifferenceTooLong` 时会记录 `telegram.difference.too_long`，服务端已丢弃的更新历史无法保证补全，可按需手动补录。已有本地消息仍保留原正文和完成状态。
 
 ## 数据备份与恢复
 
@@ -96,13 +109,13 @@ docker inspect --format '{{.HostConfig.LogConfig.Type}} {{json .HostConfig.LogCo
 | 事件 | 排查用途 |
 | --- | --- |
 | `telegram.update.received` | 新消息或编辑更新到达应用 Raw 回调的时间、`updateType`、`messageType`、`pts/ptsCount`；回调先于业务处理执行，但不等同于网络包到达时间；`MessageService` 会被消息业务回调跳过 |
-| `telegram.update.gap` | Telegram 发出的 `UpdateChannelTooLong` / `UpdatesTooLong` 告警；仅记录，不额外触发扫描 |
+| `telegram.update.gap` | Telegram 发出的 `UpdateChannelTooLong` / `UpdatesTooLong` 告警；限频触发已有回补队列及 difference 恢复 |
 | `telegram.message.processed` | 实时处理结果 `created` / `duplicate` / `unmatched` / `no-active-filters` / `missing-chat`，以及 `filterLoadMs`、`chatResolveMs`、`ingestionMs`、`processingMs` |
 | `telegram.message.matched` | 匹配成功、开始查询发送者前的消息键与规则 ID；之后没有完成日志时可继续定位处理是否停滞 |
 | `telegram.message.saved` | 入库完成；新增 `filterMatchMs`、`senderResolveMs`、`persistMs`、`notificationQueueMs` 和 `ingestionDurationMs` 分段耗时 |
 | `telegram.message.handle_failed` / `telegram.message.ingestion_failed` | 失败阶段 `stage`、耗时和消息键 |
 
-`saved` 中原有 `receivedAt` 仍指发送者查询完成后的时间，`lagMs` 仍优先按编辑时间计算；判断实时到达延迟应查看 `update.received`。`notificationQueueMs` 包含目标查询、模板渲染及任务启动，不等待发送完成；实际发送耗时查看同一消息键的 `notification.apprise.sent/failed`。实时处理结果日志不包含周期扫描中的每条未匹配消息；自动回补仍按原有 10 分钟周期执行。
+`saved` 中原有 `receivedAt` 仍指发送者查询完成后的时间，`lagMs` 仍优先按编辑时间计算；判断实时到达延迟应查看 `update.received`。持久通知入队包含在 `persistMs` 中，兼容字段 `notificationQueueMs` 固定为 0，不代表未创建任务；实际发送耗时查看同一消息键的 `notification.apprise.sent/failed`，重试查看 `notification.outbox.retry_scheduled/exhausted`。实时处理结果日志不包含周期扫描中的每条未匹配消息；自动回补仍按原有 10 分钟周期执行。
 
 实时回调之前的 GramJS 接收层也有诊断日志，无需提高 `GRAMJS_LOG_LEVEL`。正常观测事件使用应用 `info`，异常使用 `warn`：
 
@@ -128,15 +141,20 @@ docker inspect --format '{{.HostConfig.LogConfig.Type}} {{json .HostConfig.LogCo
 
 ```bash
 cp telegram-star.env.example .env
+# 可选：编辑 .env 设置 APP_ACCESS_PASSWORD（非空值至少 16 字符）
 docker compose pull
 docker compose up -d --no-build --wait --wait-timeout 180
 ```
 
-升级时只修改 `.env` 中 `TELEGRAM_STAR_IMAGE` 的版本再运行 pull / up，不覆盖已有配置，也不使用 `docker compose down -v`。已有源码构建部署继续使用原构建覆盖文件。
+Compose 后台密码同样可选，未设置或留空时直接访问，发布端口默认绑定 `0.0.0.0`，旧部署无需新增环境变量。若只允许宿主机访问，可主动设置 `TELEGRAM_STAR_BIND_ADDRESS=127.0.0.1`；保留已有自定义绑定地址即可。
+
+升级时只修改 `.env` 中 `TELEGRAM_STAR_IMAGE` 的版本再运行 pull / up，不覆盖已有配置，也不使用 `docker compose down -v`。已有源码构建部署继续使用原构建覆盖文件。[SSH 自动部署](version-releases.md#部署到自己的服务器)先验证并检出同一提交；部署目录存在本地修改或非忽略的未跟踪文件时会失败，保留文件供管理员处理，不自动 reset / clean。
 
 ## 访问与缓存
 
-当前应用没有应用层账号或密码保护，Telegram 登录也不是访问控制。后端只应暴露在可信网络，或置于有认证的反向代理之后；CORS 不提供身份验证。上面的 `-p 3000:3000` 映射所有网卡；只供本机或本机反向代理访问时，改为 `-p 127.0.0.1:3000:3000`。
+应用提供可选的单用户后台密码保护，Telegram 登录与后台访问独立，不提供多用户权限隔离。源码默认 `HOST=0.0.0.0`，Docker 命令和 Compose 也默认向宿主机 `0.0.0.0:3000` 发布端口，保持已有远程入口。任意监听地址均允许不设置或留空 `APP_ACCESS_PASSWORD`，此时能连接服务的人可以读取消息和修改配置；设置非空密码才启用保护，且至少 16 字符。只供本机或本机反向代理访问时，可主动使用 `HOST=127.0.0.1`（源码）或 `TELEGRAM_STAR_BIND_ADDRESS=127.0.0.1`（Compose），Docker run 则改用 `-p 127.0.0.1:3000:3000`。远程传输凭据时使用 HTTPS，并按需配置防火墙；CORS 不提供身份验证。
+
+启用密码后，后台会话有效期 12 小时，前端只在当前会话的 `sessionStorage`（不可用时使用内存）保存令牌，不保存密码；“设置 → 服务器连接 → 锁定后台访问”清除当前客户端会话，不撤销其他客户端令牌。头像、缩略图及消息事件流使用 5 分钟资源票据，票据不能操作管理接口。健康检查和静态页面可匿名加载，业务 API 受保护。修改密码后重启服务会使旧令牌失效。
 
 Web/PWA 同源访问不需要额外 CORS。Tauri 本地壳会跨源调用健康检查和设备接口；限制 `CORS_ORIGIN` 时需验证 WebView 来源。当前接受 `*` 或一个来源字符串，不支持逗号分隔白名单；使用 Docker 时通过 `-e CORS_ORIGIN=...` 配置，Compose 用户修改其环境配置。
 

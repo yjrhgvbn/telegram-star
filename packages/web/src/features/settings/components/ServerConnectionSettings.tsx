@@ -5,6 +5,7 @@ import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { AlertCircle, CheckCircle2, ChevronDown, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ACCESS_REQUIRED_EVENT, clearAccessSession, getAccessSession } from "@/shared/runtime/accessSession";
 import type { useServerConnectionSettings } from "../hooks/useServerConnectionSettings";
 import "./ServerConnectionSettings.css";
 
@@ -27,6 +28,10 @@ export function ServerConnectionSettings({
 
   return (
     <section className="server-connection-settings" aria-label="服务器连接设置">
+      {getAccessSession() ? <Button variant="outline" onClick={() => {
+        clearAccessSession();
+        window.dispatchEvent(new Event(ACCESS_REQUIRED_EVENT));
+      }}>锁定后台访问</Button> : null}
       <div className="server-connection-label-row">
         <h2 id="connection-mode-label">连接方式</h2>
         <span>仅当前客户端</span>

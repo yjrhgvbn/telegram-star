@@ -79,7 +79,9 @@ function updateSummary(value: InternalObject | undefined): InternalObject {
       if (updates.length >= MAX_UPDATE_REFS) return;
       const message = typeof item.message === "object" && item.message !== null ? item.message : item;
       const peer = message.peerId ?? message;
-      const chatId = numericId(peer.channelId ?? peer.chatId ?? peer.userId ?? item.channelId);
+      const rawChatId = numericId(peer.channelId ?? peer.chatId ?? peer.userId ?? item.channelId);
+      const chatId = rawChatId && peer.userId !== undefined && peer.channelId === undefined && peer.chatId === undefined
+        ? `user:${rawChatId}` : rawChatId;
       const telegramMessageId = finiteNumber(message.id);
       updates.push({
         updateType: safeName(item.className),

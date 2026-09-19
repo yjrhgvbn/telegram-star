@@ -1,3 +1,5 @@
+import { db } from "../../db/index.js";
+import { enqueueMatchedMessage } from "../notificationOutbox.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import {
   synchronizeMessageMemberships,
@@ -28,6 +30,7 @@ export interface MessagePersistenceResult {
   addedFilterIds: number[];
   addedMatches: MessageFilterMatch[];
   blockedFilterIds: number[];
+  notifyTargetCount?: number;
 }
 
 /** 检查移除标记与归属写入必须在同一事务内，避免回补把刚移除的归属写回来。 */
@@ -35,102 +38,139 @@ export async function persistMessageForFilters(
   data: Prisma.MessageUncheckedCreateInput,
   matches: MessageFilterMatch[],
   mode: "automatic" | "manual" = "automatic",
+  options: { notify?: boolean; isCurrentSource?: () => boolean } = {},
 ): Promise<MessagePersistenceResult> {
-  return withMessageMembershipTransaction(async (tx) => {
-    const uniqueMatches = [...new Map(matches.map((match) => [match.filterId, match])).values()];
-    const existing = await tx.message.findUnique({
-      where: {
-        chatId_telegramMessageId: { chatId: data.chatId, telegramMessageId: data.telegramMessageId },
-      },
-      select: { id: true, content: true, senderUserId: true, filterMemberships: { select: { filterId: true } } },
-    });
-    // 旧 senderId 未区分用户和频道，不能猜测。只在正常再次获取消息时补齐已确认的用户身份，
-    // 保留已存正文、已读状态和规则归属，也不为这项元数据补齐发起额外 Telegram 请求。
-    const senderUserId = existing?.senderUserId ?? data.senderUserId ?? null;
-    if (existing && existing.senderUserId === null && senderUserId !== null) {
-      await tx.message.update({ where: { id: existing.id }, data: { senderUserId } });
-    }
-    const existingFilterIds = new Set(existing?.filterMemberships.map((membership) => membership.filterId));
-    const candidateIds = new Set(uniqueMatches.map((match) => match.filterId));
-    // 规则可能在 Telegram 网络等待期间被修改。旧匹配结果仅提供候选 ID，
-    // 必须使用同一写事务内的最新条件和最终要展示的正文重新判断。
-    const filters = await tx.filter.findMany({
-      where: { id: { in: [...candidateIds] } },
-      select: { id: true, conditions: true, enabled: true, systemKey: true },
-    });
-    const removals = await tx.messageRemoval.findMany({
-      where: {
-        chatId: data.chatId,
-        telegramMessageId: data.telegramMessageId,
-        filterId: { in: [...candidateIds] },
-      },
-      select: { filterId: true, blockBackfill: true },
-    });
-    const blockedFilterIds = removals
-      .filter((removal) => mode === "automatic" || removal.blockBackfill)
-      .map((removal) => removal.filterId);
-    const blockedIds = new Set(blockedFilterIds);
-    // 已存在的正文沿用原有不覆盖语义；新增规则归属也要匹配这份已保存内容。
-    const content = existing?.content ?? data.content ?? "";
-    const allowedMatches: MessageFilterMatch[] = [];
-    for (const filter of filters) {
-      if (filter.systemKey !== null || blockedIds.has(filter.id)) continue;
-      const conditions = parseConditions(filter.conditions);
-      // 损坏或执行失败的规则不新增归属，也不影响已经保存的消息。
-      if (conditions.length === 0) continue;
-      const match = matchFilterConditions({ chatId: data.chatId, content, senderUserId }, conditions);
-      if (match.error) {
-        appLogger.warn({ event: "filter.script.execution_failed", filterId: filter.id, err: match.error }, "Custom filter script execution failed during persistence");
-        continue;
+  const empty: MessagePersistenceResult = { rowId: null, created: false, addedFilterIds: [], addedMatches: [], blockedFilterIds: [] };
+  const cancelled = Symbol("stale-message-source");
+  const changed = Symbol("message-or-rule-changed");
+  const assertCurrent = () => { if (options.isCurrentSource && !options.isCurrentSource()) throw cancelled; };
+  const uniqueMatches = [...new Map(matches.map((match) => [match.filterId, match])).values()];
+  const candidateIds = new Set(uniqueMatches.map((match) => match.filterId));
+  const messageQuery = {
+    where: { chatId_telegramMessageId: { chatId: data.chatId, telegramMessageId: data.telegramMessageId } },
+    select: { id: true, content: true, senderUserId: true, filterMemberships: { select: { filterId: true } } },
+  } as const;
+  const filterQuery = {
+    where: { id: { in: [...candidateIds] } },
+    select: { id: true, name: true, conditions: true, enabled: true, systemKey: true },
+    orderBy: { id: "asc" as const },
+  };
+  // Evaluate potentially expensive scripts without holding SQLite's single writer.
+  // The transaction rechecks the exact inputs and retries if rules/content changed.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      assertCurrent();
+      const [snapshotMessage, snapshotFilters] = await Promise.all([
+        db.message.findUnique(messageQuery), db.filter.findMany(filterQuery),
+      ]);
+      const content = snapshotMessage?.content ?? data.content ?? "";
+      const senderUserId = snapshotMessage?.senderUserId ?? data.senderUserId ?? null;
+      const evaluated = new Map<number, MessageFilterMatch>();
+      for (const filter of snapshotFilters) {
+        if (filter.systemKey !== null || (mode !== "manual" && !filter.enabled)) continue;
+        const conditions = parseConditions(filter.conditions);
+        if (!conditions.length) continue;
+        const match = await matchFilterConditions({ chatId: data.chatId, content, senderUserId }, conditions);
+        if (match.error) {
+          // Script errors can contain message text chosen by the script itself.
+          appLogger.warn({ event: "filter.script.execution_failed", filterId: filter.id }, "Custom filter script execution failed during persistence");
+          continue;
+        }
+        if (match.matched) evaluated.set(filter.id, { filterId: filter.id, matchedKeyword: match.matchedKeyword });
       }
-      if (!match.matched) continue;
-      const latestMatch = { filterId: filter.id, matchedKeyword: match.matchedKeyword };
-      if (mode === "manual" || filter.enabled) allowedMatches.push(latestMatch);
-    }
-    // 数据库查询顺序不是规则优先级；兼容旧监听链路按调用方顺序选择首个通知规则。
-    const candidateOrder = new Map(uniqueMatches.map((match, index) => [match.filterId, index]));
-    allowedMatches.sort((left, right) => candidateOrder.get(left.filterId)! - candidateOrder.get(right.filterId)!);
-    if (allowedMatches.length === 0) {
-      return { rowId: null, created: false, addedFilterIds: [], addedMatches: [], blockedFilterIds };
-    }
-    const addedMatches = allowedMatches.filter((match) => !existingFilterIds.has(match.filterId));
-    let rowId = existing?.id;
-    if (rowId === undefined) {
-      const primary = allowedMatches[0];
-      const created = await tx.message.create({
-        data: { ...data, matchedFilterId: primary.filterId, matchedKeyword: primary.matchedKeyword },
-        select: { id: true },
+      assertCurrent();
+      return await withMessageMembershipTransaction(async (tx) => {
+        assertCurrent();
+        const existing = await tx.message.findUnique(messageQuery);
+        const filters = await tx.filter.findMany(filterQuery);
+        if (existing?.id !== snapshotMessage?.id || existing?.content !== snapshotMessage?.content ||
+            existing?.senderUserId !== snapshotMessage?.senderUserId || JSON.stringify(filters) !== JSON.stringify(snapshotFilters)) throw changed;
+        const existingFilterIds = new Set(existing?.filterMemberships.map((membership) => membership.filterId));
+        if (existing && existing.senderUserId === null && senderUserId !== null) {
+          await tx.message.update({ where: { id: existing.id }, data: { senderUserId } });
+        }
+        const removals = await tx.messageRemoval.findMany({
+          where: {
+            chatId: data.chatId,
+            telegramMessageId: data.telegramMessageId,
+            filterId: { in: [...candidateIds] },
+          },
+          select: { filterId: true, blockBackfill: true },
+        });
+        const blockedFilterIds = removals
+          .filter((removal) => mode === "automatic" || removal.blockBackfill)
+          .map((removal) => removal.filterId);
+        const blockedIds = new Set(blockedFilterIds);
+        const allowedMatches = filters.flatMap((filter) => {
+          const match = evaluated.get(filter.id);
+          return match && !blockedIds.has(filter.id) ? [match] : [];
+        });
+        // 数据库查询顺序不是规则优先级；兼容旧监听链路按调用方顺序选择首个通知规则。
+        const candidateOrder = new Map(uniqueMatches.map((match, index) => [match.filterId, index]));
+        allowedMatches.sort((left, right) => candidateOrder.get(left.filterId)! - candidateOrder.get(right.filterId)!);
+        if (allowedMatches.length === 0) {
+          assertCurrent();
+          return { rowId: null, created: false, addedFilterIds: [], addedMatches: [], blockedFilterIds };
+        }
+        const addedMatches = allowedMatches.filter((match) => !existingFilterIds.has(match.filterId));
+        let rowId = existing?.id;
+        if (rowId === undefined) {
+          const primary = allowedMatches[0];
+          const created = await tx.message.create({
+            data: { ...data, matchedFilterId: primary.filterId, matchedKeyword: primary.matchedKeyword },
+            select: { id: true },
+          });
+          rowId = created.id;
+        }
+        if (addedMatches.length > 0) {
+          await tx.messageFilterMembership.createMany({
+            data: addedMatches.map((match) => ({
+              messageId: rowId,
+              filterId: match.filterId,
+              matchedKeyword: match.matchedKeyword,
+              createdAt: new Date().toISOString(),
+            })),
+          });
+        }
+        if (mode === "manual") {
+          // 成功恢复当前规则后才清除标记，其他规则的移除状态保持原样。
+          await tx.messageRemoval.deleteMany({
+            where: {
+              chatId: data.chatId,
+              telegramMessageId: data.telegramMessageId,
+              filterId: { in: allowedMatches.map((match) => match.filterId) },
+              blockBackfill: false,
+            },
+          });
+        }
+        if (existing && addedMatches.length > 0) await synchronizeMessageMemberships(tx, [rowId]);
+        let notifyTargetCount = 0;
+        assertCurrent();
+        if (!existing && mode === "automatic" && options.notify) {
+          const primary = allowedMatches[0]!;
+          const filter = filters.find((item) => item.id === primary.filterId)!;
+          notifyTargetCount = await enqueueMatchedMessage(tx, {
+            rowId, messageKey: `${data.chatId}:${data.telegramMessageId}`, filterId: filter.id,
+            filterName: filter.name, matchedKeyword: primary.matchedKeyword,
+            chatTitle: data.chatTitle ?? data.chatId, senderName: data.senderName ?? "Unknown", senderId: data.senderId ?? "",
+            content: data.content || (data.mediaType ? `[${data.mediaType}]` : ""),
+            messageDate: data.messageDate, telegramLink: data.telegramLink ?? "",
+          });
+        }
+        assertCurrent();
+        return {
+          rowId,
+          created: !existing,
+          addedFilterIds: addedMatches.map((match) => match.filterId),
+          addedMatches,
+          blockedFilterIds,
+          ...(options.notify ? { notifyTargetCount } : {}),
+        };
       });
-      rowId = created.id;
+    } catch (error) {
+      if (error === cancelled) return empty;
+      if (error !== changed) throw error;
     }
-    if (addedMatches.length > 0) {
-      await tx.messageFilterMembership.createMany({
-        data: addedMatches.map((match) => ({
-          messageId: rowId,
-          filterId: match.filterId,
-          matchedKeyword: match.matchedKeyword,
-          createdAt: new Date().toISOString(),
-        })),
-      });
-    }
-    if (mode === "manual") {
-      // 成功恢复当前规则后才清除标记，其他规则的移除状态保持原样。
-      await tx.messageRemoval.deleteMany({
-        where: {
-          chatId: data.chatId,
-          telegramMessageId: data.telegramMessageId,
-          filterId: { in: allowedMatches.map((match) => match.filterId) },
-          blockBackfill: false,
-        },
-      });
-    }
-    if (existing && addedMatches.length > 0) await synchronizeMessageMemberships(tx, [rowId]);
-    return {
-      rowId,
-      created: !existing,
-      addedFilterIds: addedMatches.map((match) => match.filterId),
-      addedMatches,
-      blockedFilterIds,
-    };
-  });
+  }
+  throw new Error("Message rules changed repeatedly; ingestion will retry during catch-up");
 }

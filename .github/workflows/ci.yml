@@ -1,8 +1,9 @@
 name: CI
 
 on:
-  # Release tags run the checks in release.yml; this workflow is for manual checks.
+  pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -62,6 +63,9 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+
+      - name: Check backend types
+        run: pnpm typecheck:server
 
       - name: Check release tooling and version consistency
         run: |

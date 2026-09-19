@@ -65,6 +65,7 @@ describe("messages repository", () => {
       orderBy: [
         { messageDate: "asc" },
         { telegramMessageId: "asc" },
+        { id: "asc" },
       ],
     });
   });
@@ -198,6 +199,7 @@ describe("messages repository", () => {
     mocks.messageFindFirst.mockResolvedValue(null);
 
     await expect(listMessagesAroundCursor(where, 3, {
+      id: 3,
       messageDate: "2026-09-09T00:00:00.000Z", telegramMessageId: 30,
     }, 20)).resolves.toMatchObject({ rows: [{ id: 1 }, { id: 5 }] });
     expect(mocks.messageFindFirst).toHaveBeenCalledWith(expect.objectContaining({

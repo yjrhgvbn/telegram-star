@@ -11,7 +11,8 @@ import {
   type MessageIngestionResult,
   type MessageIngestionSource,
 } from "./messageIngestion.js";
-import { getMessageTimestampMs } from "./utils.js";
+import { getChatId, getMessageTimestampMs } from "./utils.js";
+import { recoverUpdateDifferences, parseUpdateRecoveryCursor, type UpdateRecoveryResult } from "./updateDifferenceRecovery.js";
 import { appLogger } from "../../shared/logging.js";
 
 export type MessageCatchUpReason = Exclude<MessageIngestionSource, "live" | "live-edit">;
@@ -49,6 +50,7 @@ export interface MessageCatchUpResult {
 interface CatchUpDialog {
   entity?: any;
   message?: any;
+  dialog?: { pts?: number };
 }
 
 export interface MessageCatchUpRunDependencies {
@@ -66,6 +68,7 @@ export interface MessageCatchUpRunDependencies {
   }) => Promise<any[]>;
   ingestMessage: (input: IngestTelegramMessageInput) => Promise<MessageIngestionResult>;
   emitRefresh: () => void;
+  recoverUpdates?: (dialogs: CatchUpDialog[], chatScope: Set<string> | null, notify: boolean) => Promise<UpdateRecoveryResult>;
 }
 
 interface RunMessageCatchUpInput {
@@ -258,11 +261,21 @@ export async function runMessageCatchUpOnce(
   if (activeFilters.length > 0) {
     const chatScope = resolveCatchUpChatScope(activeFilters);
     const dialogs = await dependencies.loadDialogs(input.client);
+    assertCatchUpActive(dependencies.isActive);
+    // Establish/update the protocol cursor before the history snapshot. Edits are
+    // recovered by pts, not by their original publication date.
+    if (dependencies.recoverUpdates) {
+      const recovered = await dependencies.recoverUpdates(dialogs, chatScope, window.hadCheckpoint);
+      scannedMessages += recovered.scannedMessages;
+      savedCount += recovered.savedCount;
+      duplicateCount += recovered.duplicateCount;
+      unmatchedCount += recovered.unmatchedCount;
+    }
     const inspectableDialogs = dialogs.filter((dialog) => {
       const entity = dialog.entity;
       if (!isCatchUpEntity(entity) || !shouldScanDialog(dialog, window.sinceMs)) return false;
 
-      const chatId = entity.id?.toString?.() || "";
+      const chatId = getChatId(entity);
       return Boolean(chatId) && (chatScope === null || chatScope.has(chatId));
     });
 
@@ -291,6 +304,7 @@ export async function runMessageCatchUpOnce(
             notify: window.hadCheckpoint,
             emitEvent: false,
             runId: input.runId,
+            isCurrentSource: dependencies.isActive,
           });
 
           if (result === "created") savedCount += 1;
@@ -335,6 +349,28 @@ function defaultRunDependencies(context: ActiveCatchUpContext): MessageCatchUpRu
       }),
     loadDialogs: (client) => client.getDialogs({}) as Promise<CatchUpDialog[]>,
     loadMessages: (messageInput) => loadMessagesForCatchUp(messageInput),
+    recoverUpdates: async (dialogs, chatScope, notify) => {
+      const key = `telegram-update-cursor:${context.accountId}`;
+      return recoverUpdateDifferences({ client: context.client, accountId: context.accountId, dialogs, chatScope }, {
+        isActive: () => activeContext === context && getClient() === context.client && Boolean(context.client.connected),
+        loadCursor: async () => {
+          const row = await db.appConfig.findUnique({ where: { key } });
+          try { return row ? parseUpdateRecoveryCursor(JSON.parse(row.valueJson)) : null; }
+          catch { return null; }
+        },
+        saveCursor: async (cursor) => {
+          const now = new Date().toISOString();
+          const valueJson = JSON.stringify(cursor);
+          await db.appConfig.upsert({ where: { key }, create: { key, valueJson, createdAt: now, updatedAt: now }, update: { valueJson, updatedAt: now } });
+        },
+        ingest: async (message, chat) => ingestTelegramMessage({
+          message, chat,
+          activeFilters: await db.filter.findMany({ where: { enabled: true, systemKey: null }, orderBy: { id: "asc" }, select: { id: true, name: true, conditions: true } }),
+          source: "gap-catchup", notify, emitEvent: false,
+          isCurrentSource: () => activeContext === context && getClient() === context.client,
+        }),
+      });
+    },
     ingestMessage: ingestTelegramMessage,
     emitRefresh: () => emitMessageEvent({ type: "new" }),
   };

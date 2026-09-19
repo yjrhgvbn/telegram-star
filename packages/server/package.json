@@ -24,6 +24,7 @@
     "input": "^1.0.1",
     "p-map": "^7.0.4",
     "prisma": "^7.6.0",
+    "quickjs-emscripten": "0.32.0",
     "telegram": "^2.26.0",
     "zod": "^4.4.3"
   },

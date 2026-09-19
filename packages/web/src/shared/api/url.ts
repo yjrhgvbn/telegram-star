@@ -1,3 +1,4 @@
+import { withAssetAccess } from "@/shared/runtime/accessSession";
 import { getRuntimeServerUrl, normalizeServerUrl } from "@/shared/runtime/serverConfig";
 
 function toApiPath(path: string): string {
@@ -16,11 +17,11 @@ export function getApiUrl(path = "", serverUrl = getRuntimeServerUrl()): string 
 }
 
 export function getMessageEventsUrl(serverUrl = getRuntimeServerUrl()): string {
-  return getApiUrl("/messages/events", serverUrl);
+  return withAssetAccess(getApiUrl("/messages/events", serverUrl), serverUrl);
 }
 
 export function getMessageAvatarUrl(messageId: number, serverUrl = getRuntimeServerUrl()): string {
-  return getApiUrl(`/messages/${messageId}/avatar`, serverUrl);
+  return withAssetAccess(getApiUrl(`/messages/${messageId}/avatar`, serverUrl), serverUrl);
 }
 
 export function getMediaThumbUrl(
@@ -28,5 +29,5 @@ export function getMediaThumbUrl(
   telegramMessageId: number | string,
   serverUrl = getRuntimeServerUrl(),
 ): string {
-  return getApiUrl(`/media/${chatId}/${telegramMessageId}/thumb`, serverUrl);
+  return withAssetAccess(getApiUrl(`/media/${chatId}/${telegramMessageId}/thumb`, serverUrl), serverUrl);
 }

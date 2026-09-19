@@ -2,6 +2,7 @@ import { getBrowserStorage } from "@telegram-star/shared/browser-storage";
 import { isDemo } from "@/demo/mode";
 
 export const SERVER_CONFIG_STORAGE_KEY = "telegram-star:server-url:v1";
+export const SERVER_CONFIG_CHANGED_EVENT = "telegram-star:server-changed";
 
 export type ServerConfigStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -46,7 +47,11 @@ export function saveServerUrl(
 
   try {
     // 客户端只保存服务器根地址，不保存 /api；空字符串表示显式使用同源 Web 模式。
+    const previous = getRuntimeServerUrl(storage);
     storage.setItem(SERVER_CONFIG_STORAGE_KEY, normalizeServerUrl(serverUrl));
+    if (previous !== getRuntimeServerUrl(storage) && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(SERVER_CONFIG_CHANGED_EVENT));
+    }
   } catch {
     // 配置保存失败不应阻断页面运行，后续 M3 UI 再提示用户具体错误。
   }
@@ -58,7 +63,11 @@ export function clearSavedServerUrl(
   if (!storage) return;
 
   try {
+    const previous = getRuntimeServerUrl(storage);
     storage.removeItem(SERVER_CONFIG_STORAGE_KEY);
+    if (previous !== getRuntimeServerUrl(storage) && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(SERVER_CONFIG_CHANGED_EVENT));
+    }
   } catch {
     // 清理失败时保持当前运行态，避免因为配置存储异常影响主流程。
   }

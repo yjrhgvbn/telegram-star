@@ -12,6 +12,8 @@ import {
 import { getClient, isClientConnected } from "./client.js";
 import {
   isValidChat,
+  getChatTitle,
+  getChatId,
   buildTelegramLink,
   getSenderSummary,
   getScopedChatIds,
@@ -72,9 +74,13 @@ function getPreviewClientCache(client: object): PreviewClientCache {
   return created;
 }
 
+function assertCurrentClient(client: NonNullable<ReturnType<typeof getClient>>): void {
+  if (getClient() !== client || !isClientConnected()) throw new Error("Telegram account changed during history scan");
+}
+
 // --- 会话列表 ---
 
-/** 返回当前账号已加入的所有群组/频道，按标题字母序排列 */
+/** 返回当前账号的群组、频道、私聊与机器人会话，按名称排列 */
 export async function listJoinedChats(): Promise<JoinedChat[]> {
   const client = getClient();
   if (!client || !isClientConnected()) {
@@ -89,11 +95,11 @@ export async function listJoinedChats(): Promise<JoinedChat[]> {
     const entity = (dialog as any).entity;
     if (!isValidChat(entity)) continue;
 
-    const id = entity?.id?.toString?.() || "";
+    const id = getChatId(entity);
     if (!id || seen.has(id)) continue;
 
     seen.add(id);
-    chats.push({ id, title: entity?.title || entity?.username || id });
+    chats.push({ id, title: getChatTitle(entity) });
   }
 
   return chats.sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
@@ -119,15 +125,15 @@ export async function listSingleChatMessages(options: {
   const dialogs = await client.getDialogs({ limit: chatSearchLimit });
 
   const targetDialog = dialogs.find(
-    (d: any) => d?.entity?.id?.toString?.() === targetChatId,
+    (d: any) => getChatId(d?.entity) === targetChatId,
   );
   if (!targetDialog) throw new Error("Chat not found or no access");
 
   const entity = (targetDialog as any).entity;
   if (!isValidChat(entity)) throw new Error("Unsupported chat type");
 
-  const chatId = entity?.id?.toString?.() || targetChatId;
-  const chatTitle = entity?.title || entity?.username || chatId;
+  const chatId = getChatId(entity) || targetChatId;
+  const chatTitle = getChatTitle(entity);
   const history = await client.getMessages(entity, { limit: messageLimit });
 
   const validMessages = history.filter((item: any) => hasMessageContent(item));
@@ -181,13 +187,13 @@ export async function listSingleChatMessages(options: {
  * 使用 offsetId 锚点避免重复拉取同一批消息。
  */
 async function loadSegmentedHistory(options: {
+  client: NonNullable<ReturnType<typeof getClient>>;
   entity: any;
   scanLimit: number;
   batchSize?: number;
   sinceMs?: number;
 }): Promise<any[]> {
-  const client = getClient();
-  if (!client) return [];
+  const client = options.client;
 
   const { batchSize } = normalizeSegmentedHistoryLimits(options);
   const messages: any[] = [];
@@ -198,7 +204,9 @@ async function loadSegmentedHistory(options: {
   while (scanned < options.scanLimit && guard < 100) {
     guard += 1;
     const take = Math.min(batchSize, options.scanLimit - scanned);
+    assertCurrentClient(client);
     const history = await client.getMessages(options.entity, { limit: take, offsetId });
+    assertCurrentClient(client);
 
     if (!history || history.length === 0) break;
 
@@ -223,7 +231,7 @@ async function loadSegmentedHistory(options: {
 }
 
 async function loadPreviewChatSnapshot(options: {
-  client: object;
+  client: NonNullable<ReturnType<typeof getClient>>;
   entity: any;
   chatId: string;
   chatTitle: string;
@@ -231,6 +239,7 @@ async function loadPreviewChatSnapshot(options: {
 }): Promise<HistoricalFilterPreviewMessage[]> {
   const loadSnapshot = async () => {
     const history = await loadSegmentedHistory({
+      client: options.client,
       entity: options.entity,
       scanLimit: options.perChatLimit,
       batchSize: 100,
@@ -334,7 +343,7 @@ export async function previewHistoricalFilterMessages(options: {
     const entity = (dialog as any).entity;
     if (!isValidChat(entity)) return false;
 
-    const chatId = entity?.id?.toString?.() || "";
+    const chatId = getChatId(entity);
     return Boolean(chatId) && shouldInspectChat(chatId, scopedChatIds);
   });
   const paginatedDialogs = getDialogPageSlice(inspectableDialogs, page, pageSize);
@@ -345,12 +354,12 @@ export async function previewHistoricalFilterMessages(options: {
       const entity = (dialog as any).entity;
       if (!isValidChat(entity)) return;
 
-      const chatId = entity?.id?.toString?.() || "";
+      const chatId = getChatId(entity);
       if (!chatId) return;
 
       scannedChats += 1;
 
-      const chatTitle = entity?.title || entity?.username || chatId;
+      const chatTitle = getChatTitle(entity);
       const snapshot = await loadPreviewChatSnapshot({
         client,
         entity,
@@ -360,7 +369,7 @@ export async function previewHistoricalFilterMessages(options: {
       });
 
       for (const baseMessage of snapshot) {
-        const match = evaluateFilterConditions(
+        const match = await evaluateFilterConditions(
           { chatId, content: baseMessage.content, senderUserId: baseMessage.senderUserId },
           options.conditions,
         );
@@ -487,12 +496,13 @@ export async function backfillFilterHistory(options: {
   }
 
   const dialogs = await client.getDialogs({}) as any[];
+  assertCurrentClient(client);
   const scopedChatIds = getScopedChatIds(options.conditions);
   const inspectableDialogs = dialogs.filter((dialog: any) => {
     const entity = dialog?.entity;
     if (!isValidChat(entity)) return false;
 
-    const chatId = entity?.id?.toString?.() || "";
+    const chatId = getChatId(entity);
     return Boolean(chatId) && shouldInspectChat(chatId, scopedChatIds);
   });
   const perChatLimit = options.perChatLimit === null
@@ -523,8 +533,8 @@ export async function backfillFilterHistory(options: {
 
   for (const dialog of inspectableDialogs) {
     const entity = dialog.entity;
-    const chatId = entity?.id?.toString?.() || "";
-    const chatTitle = entity?.title || entity?.username || chatId;
+    const chatId = getChatId(entity);
+    const chatTitle = getChatTitle(entity);
     let offsetId = 0;
     let scannedInChat = 0;
 
@@ -534,7 +544,9 @@ export async function backfillFilterHistory(options: {
       const take = perChatLimit === null
         ? batchSize
         : Math.min(batchSize, perChatLimit - scannedInChat);
+      assertCurrentClient(client);
       const history = await client.getMessages(entity, { limit: take, offsetId });
+      assertCurrentClient(client);
       if (!history || history.length === 0) break;
 
       scannedInChat += history.length;
@@ -548,7 +560,7 @@ export async function backfillFilterHistory(options: {
 
         const textContent = getMessageTextContent(item);
         const senderUserId = getSenderUserId(item);
-        const match = matchFilterConditions(
+        const match = await matchFilterConditions(
           { chatId, content: textContent, senderUserId },
           options.conditions,
         );
@@ -558,6 +570,7 @@ export async function backfillFilterHistory(options: {
         matchedCount += 1;
         const { senderName, senderId } = getSenderSummary(item.sender);
         const mediaInfo = extractMediaInfo(item);
+        assertCurrentClient(client);
         const persisted = await persistMessageForFilters({
           telegramMessageId: item.id,
           chatId,

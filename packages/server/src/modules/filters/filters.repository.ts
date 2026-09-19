@@ -104,56 +104,57 @@ export async function updateFilterRow(id: number, input: FilterUpdateInput): Pro
     });
   }
 
-  // 规则与历史归属必须原子更新，避免新规则生效后仍短暂展示旧规则命中的消息。
   const conditions = input.conditions;
-  return withMessageMembershipTransaction(async (transaction) => {
-    await transaction.filter.update({
-      where: { id },
-      data: buildFilterUpdateData(input),
-    });
-    const memberships = await transaction.messageFilterMembership.findMany({
-      where: { filterId: id },
-      select: {
-        matchedKeyword: true,
-        message: { select: { id: true, chatId: true, content: true, senderUserId: true } },
-      },
-    });
-    const messages = memberships.map(({ message, matchedKeyword }) => ({ ...message, matchedKeyword }));
+  const changed = Symbol("filter-memberships-changed");
+  const membershipQuery = {
+    where: { filterId: id },
+    select: { matchedKeyword: true, message: { select: { id: true, chatId: true, content: true, senderUserId: true } } },
+    orderBy: { messageId: "asc" as const },
+  } as const;
+  // Rule execution must not hold SQLite's writer lock. Check the snapshot again
+  // before committing so concurrent ingestion cannot escape reconciliation.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const snapshot = await db.messageFilterMembership.findMany(membershipQuery);
+    const messages = snapshot.map(({ message, matchedKeyword }) => ({ ...message, matchedKeyword }));
     const changedMessageIds = messages.map((message) => message.id);
-    const reconciliation = planFilterMessageReconciliation(messages, conditions);
+    const reconciliation = await planFilterMessageReconciliation(messages, conditions);
+    try {
+      return await withMessageMembershipTransaction(async (transaction) => {
+        const current = await transaction.messageFilterMembership.findMany(membershipQuery);
+        if (JSON.stringify(current) !== JSON.stringify(snapshot)) throw changed;
+        await transaction.filter.update({ where: { id }, data: buildFilterUpdateData(input) });
 
-    for (const messageIds of toMessageIdBatches(reconciliation.messageIdsToDelete)) {
-      await transaction.messageFilterMembership.deleteMany({
-        where: {
-          messageId: { in: messageIds },
-          filterId: id,
-        },
+        for (const messageIds of toMessageIdBatches(reconciliation.messageIdsToDelete)) {
+          await transaction.messageFilterMembership.deleteMany({
+            where: {
+              messageId: { in: messageIds },
+              filterId: id,
+            },
+          });
+        }
+
+        for (const keywordUpdate of reconciliation.keywordUpdates) {
+          for (const messageIds of toMessageIdBatches(keywordUpdate.messageIds)) {
+            await transaction.messageFilterMembership.updateMany({
+              where: { messageId: { in: messageIds }, filterId: id },
+              data: { matchedKeyword: keywordUpdate.matchedKeyword },
+            });
+          }
+        }
+
+        // 条件清理只解除当前规则归属，保留其他规则及其消息级完成状态。
+        for (const messageIds of toMessageIdBatches(changedMessageIds)) {
+          await synchronizeMessageMemberships(transaction, messageIds);
+        }
+
+        // 规则变更可能删除历史命中，必须在清理完成后再读取活动摘要。
+        return transaction.filter.findUniqueOrThrow({ where: { id }, include: filterApiInclude });
       });
+    } catch (error) {
+      if (error !== changed) throw error;
     }
-
-    for (const keywordUpdate of reconciliation.keywordUpdates) {
-      for (const messageIds of toMessageIdBatches(keywordUpdate.messageIds)) {
-        await transaction.messageFilterMembership.updateMany({
-          where: {
-            messageId: { in: messageIds },
-            filterId: id,
-          },
-          data: { matchedKeyword: keywordUpdate.matchedKeyword },
-        });
-      }
-    }
-
-    // 条件清理只解除当前规则归属，保留其他规则及其消息级完成状态。
-    for (const messageIds of toMessageIdBatches(changedMessageIds)) {
-      await synchronizeMessageMemberships(transaction, messageIds);
-    }
-
-    // 规则变更可能删除历史命中，必须在清理完成后再读取活动摘要。
-    return transaction.filter.findUniqueOrThrow({
-      where: { id },
-      include: filterApiInclude,
-    });
-  });
+  }
+  throw new Error("消息正在变化，请重试保存规则");
 }
 
 export async function toggleFilterRow(id: number, enabled: boolean): Promise<FilterRow> {

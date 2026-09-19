@@ -23,7 +23,7 @@ export function hasUserReactionSignal(message: any): boolean {
 
 /**
  * 从 UpdateMessageReactions 中提取数据库使用的 chatId 与消息 ID。
- * 当前项目只同步群组/频道消息，私聊等其他 peer 类型保持忽略。
+ * 群组、频道与私聊均同步当前账号自己的 Reaction。
  */
 export function extractReactionMessageRef(update: any): ReactionMessageRef | null {
   if (update?.className !== "UpdateMessageReactions") return null;
@@ -32,12 +32,8 @@ export function extractReactionMessageRef(update: any): ReactionMessageRef | nul
   const telegramMessageId = Number(update.msgId || 0);
   if (!peer || !telegramMessageId) return null;
 
-  let chatId = "";
-  if (peer.className === "PeerChannel") {
-    chatId = peer.channelId?.toString?.() ?? "";
-  } else if (peer.className === "PeerChat") {
-    chatId = peer.chatId?.toString?.() ?? "";
-  }
+  const chatId = getPeerChatId(peer);
 
   return chatId ? { chatId, telegramMessageId } : null;
 }
+import { getPeerChatId } from "./utils.js";

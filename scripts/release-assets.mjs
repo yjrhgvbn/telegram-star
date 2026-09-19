@@ -38,16 +38,17 @@ Android：${env.ANDROID_RESULT === "success" ? "下载本 Release 的 arm64 APK�
 
 macOS 包未公证，首次打开可能需要在系统设置中允许；Windows 可能提示未知发行者。客户端升级时下载新版安装包，Android 保持同一签名密钥。
 
-镜像：\`${image}\`（linux/amd64、linux/arm64）。安装 Docker 后执行，无需下载配置文件：
+镜像：\`${image}\`（linux/amd64、linux/arm64）。安装 Docker 后执行，无需下载配置文件。后台密码可选；如需启用，在终端设置自己保管的 \`APP_ACCESS_PASSWORD\`（至少 16 字符，不是 Telegram 密码），并执行 \`export APP_ACCESS_PASSWORD\`。未设置或留空可直接启动：
 
 \`\`\`bash
 docker run -d --name telegram-star --restart unless-stopped --init \\
-  -p 3000:3000 -v telegram-star-data:/app/data \\
+  -p 0.0.0.0:3000:3000 -v telegram-star-data:/app/data \\
+  -e APP_ACCESS_PASSWORD \\
   --log-driver local \\
   ${image}
 \`\`\`
 
-访问 http://localhost:3000 配置 Telegram。Android 客户端连接 HTTPS 后端。真实实例放在可信网络或认证反向代理后。
+本机访问 http://localhost:3000，远程网页使用 http://服务器IP:3000；已启用密码时先输入后台访问密码，再配置 Telegram。默认保留 0.0.0.0:3000 入口，无需新增配置；仅供本机或本机反向代理访问时，可主动改为 -p 127.0.0.1:3000:3000。远程传输凭据及 Android 客户端使用 HTTPS。Compose 的后台密码和 TELEGRAM_STAR_BIND_ADDRESS 均可选，默认发布地址为 0.0.0.0；未启用密码时，能连接服务的人可以读取消息和修改配置，不提供多用户权限隔离。
 
 数据保存在 \`telegram-star-data\` 数据卷，升级前备份并复用同一卷，具体步骤见[部署指南](https://github.com/yjrhgvbn/telegram-star/blob/${tag}/docs/user-deployment.md)。已有 Compose 部署继续使用原目录、项目名和数据卷；Compose 和环境模板仅作为可选附件。SHA256SUMS.txt 校验附件，image-digest.txt 提供精确镜像摘要。
 `;

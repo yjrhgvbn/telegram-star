@@ -42,7 +42,7 @@ describe("readReactionSignal", () => {
         msgId: 44,
         peer: { className: "PeerUser", userId: { toString: () => "3003" } },
       }),
-    ).toBeNull();
+    ).toEqual({ chatId: "user:3003", telegramMessageId: 44 });
     expect(
       extractReactionMessageRef({
         className: "UpdateMessageReactions",

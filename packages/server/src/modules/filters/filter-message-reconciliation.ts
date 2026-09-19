@@ -23,15 +23,15 @@ export interface FilterMessageReconciliationPlan {
  * 重新按过滤器的新条件评估历史归属：不再命中的消息删除，仍命中的消息同步关键词。
  * 该函数保持纯计算，数据库写入由 repository 在同一事务中执行。
  */
-export function planFilterMessageReconciliation(
+export async function planFilterMessageReconciliation(
   messages: FilterMessageCandidate[],
   conditions: FilterCondition[],
-): FilterMessageReconciliationPlan {
+): Promise<FilterMessageReconciliationPlan> {
   const messageIdsToDelete: number[] = [];
   const messageIdsByKeyword = new Map<string | null, number[]>();
 
   for (const message of messages) {
-    const match = matchFilterConditions(
+    const match = await matchFilterConditions(
       { chatId: message.chatId, content: message.content, senderUserId: message.senderUserId },
       conditions,
     );

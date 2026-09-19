@@ -157,3 +157,20 @@ describe("Telegram message catch-up", () => {
     }));
   });
 });
+
+it("scans a selected private dialog without scanning a colliding channel ID", async () => {
+  const user = { className: "User", id: "321", firstName: "Alice" };
+  const channel = { className: "Channel", id: "321", title: "Channel" };
+  const loadMessages = vi.fn().mockResolvedValue([]);
+  const dependencies: MessageCatchUpRunDependencies = {
+    now: () => 1_500_000, isActive: () => true, loadCheckpoint: async () => 1_000_000,
+    saveCheckpoint: vi.fn(), loadActiveFilters: async () => [{
+      id: 1, name: "Private", conditions: JSON.stringify([{ type: "chat", values: ["user:321"] }]),
+    }],
+    loadDialogs: async () => [user, channel].map(entity => ({ entity, message: { date: new Date(1_400_000) } })),
+    loadMessages, ingestMessage: vi.fn(), emitRefresh: vi.fn(),
+  };
+  const result = await runMessageCatchUpOnce({ client: {} as never, accountId: "1", reason: "periodic-catchup" }, dependencies);
+  expect(result.scannedChats).toBe(1);
+  expect(loadMessages).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ entity: user }));
+});

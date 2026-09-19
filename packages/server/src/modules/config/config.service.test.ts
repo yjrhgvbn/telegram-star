@@ -24,7 +24,7 @@ describe("config.service", () => {
     ).toBe(true);
   });
 
-  it("applies runtime side effects for config changes", () => {
+  it("applies runtime side effects for config changes", async () => {
     const effects = {
       getTelegramClient: () => ({ connected: false }),
       resetTelegramClientCalls: 0,
@@ -37,13 +37,13 @@ describe("config.service", () => {
       },
     };
 
-    applyConfigUpdateSideEffects({ telegram: true, media: true }, effects);
+    await applyConfigUpdateSideEffects({ telegram: true, media: true }, effects);
 
     expect(effects.resetTelegramClientCalls).toBe(1);
     expect(effects.clearMediaCacheCalls).toBe(1);
   });
 
-  it("keeps a connected Telegram client alive after config save", () => {
+  it("keeps a connected Telegram client alive after config save", async () => {
     const effects = {
       getTelegramClient: () => ({ connected: true }),
       resetTelegramClientCalls: 0,
@@ -56,7 +56,7 @@ describe("config.service", () => {
       },
     };
 
-    applyConfigUpdateSideEffects({ telegram: true, media: false }, effects);
+    await applyConfigUpdateSideEffects({ telegram: true, media: false }, effects);
 
     expect(effects.resetTelegramClientCalls).toBe(0);
     expect(effects.clearMediaCacheCalls).toBe(0);

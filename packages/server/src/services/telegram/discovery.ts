@@ -11,6 +11,8 @@ import {
   buildTelegramLink,
   getMessageTimestampMs,
   isValidChat,
+  getChatTitle,
+  getPeerChatId,
 } from "./utils.js";
 
 const DISCOVERY_CACHE_TTL_MS = 60_000;
@@ -18,7 +20,7 @@ const DISCOVERY_CACHE_MAX_ENTRIES = 24;
 const DISCOVERY_MAX_MATCHES_PER_CHAT = 2;
 const DISCOVERY_SNIPPET_LENGTH = 220;
 
-type DiscoveryScope = "groups" | "broadcasts";
+type DiscoveryScope = "groups" | "broadcasts" | "users";
 
 const discoveryCaches = new WeakMap<object, AsyncTtlCache<ChatDiscoveryResponse>>();
 
@@ -34,12 +36,6 @@ function getDiscoveryCache(client: object): AsyncTtlCache<ChatDiscoveryResponse>
   return created;
 }
 
-function getMessageChatId(message: any): string | null {
-  const peer = message?.peerId;
-  if (peer?.channelId) return peer.channelId.toString();
-  if (peer?.chatId) return peer.chatId.toString();
-  return null;
-}
 
 function normalizeSnippet(content: string, query: string): string {
   const normalized = content.replace(/\s+/g, " ").trim();
@@ -58,7 +54,8 @@ function normalizeSnippet(content: string, query: string): string {
   }`;
 }
 
-function resolveChatType(entity: any): "group" | "channel" {
+function resolveChatType(entity: any): "group" | "channel" | "private" | "bot" {
+  if (entity?.className === "User") return entity.bot ? "bot" : "private";
   return entity?.className === "Channel" && entity?.broadcast ? "channel" : "group";
 }
 
@@ -76,7 +73,7 @@ export function buildChatDiscoveryResults(options: {
   const seenMessages = new Set<string>();
 
   for (const message of sortedMessages) {
-    const chatId = getMessageChatId(message);
+    const chatId = getPeerChatId(message?.peerId);
     if (!chatId) continue;
 
     const entity = options.joinedEntities.get(chatId);
@@ -104,7 +101,7 @@ export function buildChatDiscoveryResults(options: {
       result = {
         chat: {
           id: chatId,
-          title: entity?.title || entity?.username || chatId,
+          title: getChatTitle(entity),
           type: resolveChatType(entity),
         },
         matches: [],
@@ -144,7 +141,7 @@ async function searchGlobalScope(options: {
       limit: options.limit,
       ...(options.scope === "groups"
         ? { groupsOnly: true }
-        : { broadcastsOnly: true }),
+        : options.scope === "broadcasts" ? { broadcastsOnly: true } : { usersOnly: true }),
     }),
   );
 
@@ -154,7 +151,7 @@ async function searchGlobalScope(options: {
 }
 
 /**
- * 使用 Telegram 服务端索引按消息内容发现当前账号已加入的群组/频道。
+ * 使用 Telegram 服务端索引按消息内容发现当前账号已有群组、频道、私聊与机器人会话。
  * 查询只保留一分钟内存缓存，不写数据库，也不会转成过滤器关键词。
  */
 export async function discoverJoinedChats(options: {
@@ -174,17 +171,18 @@ export async function discoverJoinedChats(options: {
 
   return getDiscoveryCache(client).get(cacheKey, async () => {
     const joinedEntities = await getDialogEntityMap();
-    // 两个范围并行查询，避免先查群组再查频道造成额外等待。
+    // 各类会话并行查询；使用 Telegram usersOnly 同时覆盖普通用户和机器人。
     const perScopeLimit = Math.min(100, Math.max(30, limit * 3));
-    const [groupMessages, channelMessages] = await Promise.all([
+    const [groupMessages, channelMessages, userMessages] = await Promise.all([
       searchGlobalScope({ client, query, limit: perScopeLimit, scope: "groups" }),
       searchGlobalScope({ client, query, limit: perScopeLimit, scope: "broadcasts" }),
+      searchGlobalScope({ client, query, limit: perScopeLimit, scope: "users" }),
     ]);
 
     return {
       query,
       data: buildChatDiscoveryResults({
-        messages: [...groupMessages, ...channelMessages],
+        messages: [...groupMessages, ...channelMessages, ...userMessages],
         joinedEntities,
         query,
         limit,

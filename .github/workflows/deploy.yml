@@ -14,7 +14,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
   deploy:
+    needs: verify
     name: Deploy via SSH
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -24,19 +28,31 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         env:
           DEPLOY_DIRECTORY: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
-          envs: DEPLOY_DIRECTORY
+          envs: DEPLOY_DIRECTORY,DEPLOY_SHA
           script: |
             set -e
             cd "$DEPLOY_DIRECTORY"
-            git fetch --all --prune
-            git checkout main
-            git pull --ff-only origin main
+            require_clean_worktree() {
+              deploy_worktree_status="$(git status --porcelain --untracked-files=all)"
+              if [ -n "$deploy_worktree_status" ]; then
+                echo "Deployment stopped: the server checkout has local changes or untracked files. Preserve and resolve them before retrying." >&2
+                exit 1
+              fi
+            }
+            # Fail without discarding server edits; ignored runtime .env/data remain allowed.
+            require_clean_worktree
+            git fetch origin "$DEPLOY_SHA"
+            # Deploy the exact commit that passed verification, even if main advanced meanwhile.
+            git checkout --detach "$DEPLOY_SHA"
+            test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+            require_clean_worktree
             # This server builds main locally; Docker Hub version releases are independent.
             docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build --wait --wait-timeout 180
             docker compose -f docker-compose.yml -f docker-compose.build.yml ps

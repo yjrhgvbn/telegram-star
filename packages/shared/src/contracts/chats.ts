@@ -14,7 +14,7 @@ export const chatDiscoveryQuerySchema = z
   })
   .strict();
 
-export const chatDiscoveryChatTypeSchema = z.enum(["group", "channel"]);
+export const chatDiscoveryChatTypeSchema = z.enum(["group", "channel", "private", "bot"]);
 
 export const chatDiscoveryMatchSchema = z.object({
   messageId: z.number().int().positive(),

@@ -26,6 +26,6 @@ describe("media service", () => {
   });
 
   it("uses private browser caching for thumbnail payloads", () => {
-    expect(MEDIA_THUMB_CACHE_CONTROL).toBe("private, max-age=86400");
+    expect(MEDIA_THUMB_CACHE_CONTROL).toBe("private, no-store");
   });
 });

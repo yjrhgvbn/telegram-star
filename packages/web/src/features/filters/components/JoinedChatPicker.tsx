@@ -468,7 +468,7 @@ export function JoinedChatPicker({
                                   {result.chat.title}
                                 </span>
                                 <Badge variant="outline" className="h-4 px-1.5 text-[9px]">
-                                  {result.chat.type === "channel" ? "频道" : "群组"}
+                                  {({ channel: "频道", group: "群组", supergroup: "群组", private: "私聊", bot: "机器人" })[result.chat.type]}
                                 </Badge>
                               </span>
                               <span className="mt-1.5 flex flex-col gap-1">

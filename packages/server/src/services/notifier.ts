@@ -6,12 +6,11 @@ import {
   renderForwardTemplate,
   type ForwardTemplatePayload,
 } from "@telegram-star/shared/contracts/forward-targets";
-import { db } from "../db/index.js";
 import { appLogger } from "../shared/logging.js";
 
 const execFileAsync = promisify(execFile);
 
-interface ForwardPayload {
+export interface ForwardPayload {
   filterId?: number;
   targetId?: number;
   filterName: string;
@@ -40,6 +39,9 @@ interface NotificationLogContext {
   messageKey?: string;
   rowId?: number;
   filterId?: number;
+  targetId?: number;
+  outboxId?: number;
+  attempt?: number;
   source?: "message-forward" | "target-test";
 }
 
@@ -147,59 +149,4 @@ export function buildForwardNotification(
     title: renderWithFallback(titleTemplate, DEFAULT_FORWARD_TITLE_TEMPLATE, templatePayload),
     body: renderWithFallback(bodyTemplate, DEFAULT_FORWARD_BODY_TEMPLATE, templatePayload),
   };
-}
-
-export async function forwardMatchedMessage(payload: ForwardPayload): Promise<number> {
-  if (!payload.filterId) {
-    return 0;
-  }
-
-  // Find enabled ForwardTargets that are linked to this filter
-  const targets = await db.forwardTarget.findMany({
-    where: {
-      enabled: true,
-      filters: {
-        some: {
-          id: payload.filterId,
-        },
-      },
-    },
-    select: {
-      id: true,
-      appriseUrl: true,
-      titleTemplate: true,
-      bodyTemplate: true,
-    },
-  });
-
-  if (targets.length === 0) {
-    return 0;
-  }
-
-  // 每个转发通道独立渲染模板，避免一个通道的格式影响其它目标。
-  Promise.all(
-    targets.map((target) => {
-      const notification = buildForwardNotification(payload, target);
-      return sendAppriseNotification([target.appriseUrl], notification.title, notification.body, {
-        source: "message-forward",
-        messageKey: payload.messageKey,
-        rowId: payload.rowId,
-        filterId: payload.filterId,
-        targetId: target.id,
-      });
-    }),
-  ).catch((error: unknown) => {
-    appLogger.error(
-      {
-        event: "notification.forward.failed",
-        messageKey: payload.messageKey,
-        rowId: payload.rowId,
-        filterId: payload.filterId,
-        targetCount: targets.length,
-        error: getSafeProcessError(error instanceof Error && error.cause ? error.cause : error),
-      },
-      "Matched message notification failed",
-    );
-  });
-  return targets.length;
 }

@@ -83,7 +83,8 @@ export async function listReadSyncLogs(limit = 100) {
 
     return {
       id: row.id,
-      level: row.level,
+      // Older databases store a string; normalize unknown historical values at the API boundary.
+      level: row.level === "warn" || row.level === "error" ? row.level : "info" as ReadSyncLogLevel,
       source: row.source,
       action: row.action,
       message: row.message,

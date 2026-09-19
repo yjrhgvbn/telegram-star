@@ -16,20 +16,23 @@ export function openMessageEventStream(
   reply: FastifyReply,
 ): Promise<void> {
   const connectedAtMs = Date.now();
-  const origin = request.headers.origin || appConfig.cors.origin;
+  const requestedOrigin = request.headers.origin;
+  const origin = requestedOrigin && (appConfig.cors.origin === "*" || requestedOrigin === appConfig.cors.origin) ? requestedOrigin : undefined;
   reply.raw.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
+    ...(origin ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : {}),
+    "Referrer-Policy": "no-referrer",
   });
   reply.raw.flushHeaders();
 
   const send = (payload: MessageEventPayload) => {
     if (!reply.raw.writableEnded) {
-      reply.raw.write(`data: ${JSON.stringify(messageEventPayloadSchema.parse(payload))}\n\n`);
+      try {
+        if (!reply.raw.write(`data: ${JSON.stringify(messageEventPayloadSchema.parse(payload))}\n\n`)) reply.raw.end();
+      } catch { reply.raw.destroy(); }
     }
   };
 
@@ -61,5 +64,5 @@ export function openMessageEventStream(
   });
 
   // Fastify 需要一个不结束的 Promise 来维持 SSE 连接。
-  return new Promise<void>(() => {});
+  return new Promise<void>((resolve) => reply.raw.once("close", resolve));
 }

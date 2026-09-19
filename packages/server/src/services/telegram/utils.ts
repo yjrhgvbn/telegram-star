@@ -6,10 +6,31 @@ import type { FilterCondition } from "../filter-matching.js";
 
 // --- 实体类型判断 ---
 
-/** 判断 GramJS entity 是否为合法的群组或频道（排除私聊与机器人） */
+/** 判断是否为可收录的会话：群组、频道、私聊或机器人。 */
 export function isValidChat(entity: any): boolean {
   if (!entity) return false;
-  return entity.className === "Channel" || entity.className === "Chat";
+  return ["Channel", "Chat", "User"].includes(entity.className);
+}
+
+/** Keep existing group/channel keys while separating Telegram's user ID namespace. */
+export function getChatId(entity: any): string {
+  const id = entity?.id?.toString?.() ?? "";
+  if (!id) return "";
+  return entity.className === "User" || entity.className === "UserEmpty" ? `user:${id}` : id;
+}
+
+/** Same source key for Raw updates as for dialog entities; sender IDs stay numeric. */
+export function getPeerChatId(peer: any): string {
+  if (peer?.channelId != null) return peer.channelId.toString();
+  if (peer?.chatId != null) return peer.chatId.toString();
+  if (peer?.userId != null) return `user:${peer.userId.toString()}`;
+  return "";
+}
+
+/** 统一会话名称；私聊没有 title，必须使用用户姓名。 */
+export function getChatTitle(entity: any): string {
+  return entity?.title || [entity?.firstName, entity?.lastName].filter(Boolean).join(" ") ||
+    entity?.username || entity?.id?.toString?.() || "Unknown";
 }
 
 // --- 链接构造 ---
@@ -20,6 +41,13 @@ export function isValidChat(entity: any): boolean {
  * 私有会话使用 t.me/c/{channelId}/{id}。
  */
 export function buildTelegramLink(chatId: string, chat: any, messageId: number): string {
+  // Telegram 不提供普通私聊的公开消息链接。用户名/手机号只打开对话，
+  // 没有可解析标识时返回空串，由界面隐藏入口，不能伪造频道消息地址。
+  if (chat?.className === "User") {
+    if (chat.username) return `https://t.me/${chat.username}`;
+    if (chat.phone && /^\+?\d+$/.test(chat.phone)) return `https://t.me/+${chat.phone.replace(/^\+/, "")}`;
+    return "";
+  }
   if (chat?.username) {
     return `https://t.me/${chat.username}/${messageId}`;
   }
@@ -43,8 +71,7 @@ export function getSenderSummary(sender: any): { senderName: string; senderId: s
 
 /** 从条件列表中提取 chat 类型条件的 chatId 集合；空集合表示不限制范围 */
 export function getScopedChatIds(conditions: FilterCondition[]): Set<string> {
-  const chatCondition = conditions.find((c) => c.type === "chat");
-  return new Set(chatCondition?.values ?? []);
+  return new Set(conditions.filter((condition) => condition.type === "chat").flatMap((condition) => condition.values));
 }
 
 /** 根据过滤器作用域判断某个 chatId 是否需要检查 */
@@ -73,14 +100,14 @@ export function getMessageTimestampMs(message: any): number {
 
 /**
  * 将 getDialogs() 返回的列表转换为 chatId → entity 的查找表，
- * 仅包含合法的群组/频道实体。
+ * 包含群组、频道、私聊和机器人实体。
  */
 export function buildDialogEntityMap(dialogs: any[]): Map<string, any> {
   const map = new Map<string, any>();
   for (const dialog of dialogs) {
     const entity = (dialog as any)?.entity;
     if (!isValidChat(entity)) continue;
-    const chatId = entity?.id?.toString?.() || "";
+    const chatId = getChatId(entity);
     if (chatId) map.set(chatId, entity);
   }
   return map;

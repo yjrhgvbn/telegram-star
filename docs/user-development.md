@@ -44,7 +44,9 @@ Demo 通过 `--mode demo` 启用，使用 Hash 路由、内存 API 及明确的�
 | `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | 可选；数据库没有凭证时兜底 |
 | `DATABASE_URL` / `DB_PATH` | 默认 `file:./data/telegram-star.db` / `./data/telegram-star.db` |
 | `SESSION_PATH` | Telegram 会话文件，默认 `./data/session.txt` |
-| `PORT` / `HOST` | server 监听地址，默认 `3000` / `0.0.0.0` |
+| `PORT` / `HOST` | server 监听地址，默认 `3000` / `0.0.0.0`；仅本机使用时可设 `HOST=127.0.0.1` |
+| `APP_ACCESS_PASSWORD` | 可选后台密码；任意监听地址均可留空，设置非空值时至少 16 字符 |
+| `TELEGRAM_STAR_BIND_ADDRESS` | 可选；Compose 发布端口的宿主地址，默认 `0.0.0.0`，仅本机使用时可设 `127.0.0.1` |
 | `API_PROXY_TARGET` | Web 开发代理的后端根地址，默认 `http://localhost:3000` |
 | `CORS_ORIGIN` | 示例配置为 `*`；远程访问约束见 [部署文档](user-deployment.md#访问与缓存) |
 | `LOG_LEVEL` / `GRAMJS_LOG_LEVEL` | 应用 / Telegram 库日志，示例配置为 `info` / `warn` |
@@ -56,6 +58,7 @@ server 读取仓库根目录 `.env`。直接运行 Prisma CLI 时由 [prisma.con
 
 ```bash
 pnpm test
+pnpm typecheck:server
 pnpm test:release
 pnpm release:check
 pnpm build
@@ -67,7 +70,7 @@ DATABASE_URL="file:$release_check_dir/telegram-star.db" \
 ```
 
 - `pnpm build` 构建 shared、Web、桌面壳前端、手机壳前端和 server，**不生成原生客户端安装包**。
-- `pnpm test:web` 只运行 Web 测试；`pnpm test:server` 运行 server 与 shared 测试。
+- `pnpm test:web` 只运行 Web 测试；`pnpm test:server` 运行 server 与 shared 测试；`pnpm typecheck:server` 独立检查后端类型。
 - `pnpm test:release` 验证版本同步、Android 签名配置与附件生成脚本；`pnpm release:check` 检查各端版本一致。
 - `pnpm db:deploy` 先构建 shared / server，再执行 migration 部署程序；上面的临时数据库用于验证，直接运行该命令则使用本地配置的数据库。
 - `pnpm start` 构建 shared / server、应用 migration 并启动 Node；本机生产模式需先用 `pnpm build` 生成 Web 产物。
@@ -75,7 +78,7 @@ DATABASE_URL="file:$release_check_dir/telegram-star.db" \
 
 发布前确认消息、规则、转发、设置可访问，刷新或 PWA 更新后能加载新版本；有 migration 时确认现有消息与配置仍可读取。Docker 发布验证见 [部署文档](user-deployment.md)。
 
-分支推送和 PR 不触发独立 [CI](../.github/workflows/ci.yml)；需要时在 Actions 手动运行完整构建、测试、临时 SQLite 迁移及 Demo 构建，不使用真实 Telegram 凭据，也不替代浏览器验证。版本 tag 由[发布工作流](../.github/workflows/release.yml)自行验证并生成公开产物，不额外启动 CI。**推送 `main` 仍会独立触发 [SSH 源码部署](version-releases.md#部署到自己的服务器)，在自己的服务器本地构建镜像，但不推送 Docker Hub 或发布安装包。** 分支保护见[发布准备说明](open-source-release.md)。
+PR 自动运行 [CI](../.github/workflows/ci.yml)，也支持 Actions 手动运行及 `workflow_call` 复用，包含完整构建、测试、后端类型、临时 SQLite 迁移及 Demo 构建；不使用真实 Telegram 凭据，也不替代浏览器验证。普通分支推送不单独触发 CI。版本 tag 由[发布工作流](../.github/workflows/release.yml)自行验证并生成公开产物。**推送 `main` 触发 [SSH 源码部署](version-releases.md#部署到自己的服务器)，先通过复用的 CI，再在自己的服务器构建同一提交的镜像；不推送 Docker Hub 或发布安装包。** 分支保护见[发布准备说明](open-source-release.md)。
 
 服务端、Web 和客户端使用统一版本号；`pnpm release:version 0.0.1` 同步版本，提交和 tag 发布步骤见[版本发布文档](version-releases.md)。
 
@@ -83,13 +86,19 @@ DATABASE_URL="file:$release_check_dir/telegram-star.db" \
 
 普通用户直接复制 [README 的 Docker 命令](../README.md#服务端docker)使用发布镜像，无需源码或配置文件。以下 Compose 流程用于开发及维护者的服务器部署。
 
-在已克隆的仓库准备好 `.env` 后，显式加载 [docker-compose.build.yml](../docker-compose.build.yml)，验证本地镜像：
+在已克隆的仓库准备好 `.env` 后，按需设置 `APP_ACCESS_PASSWORD`（非空值至少 16 字符；留空不开启保护），显式加载 [docker-compose.build.yml](../docker-compose.build.yml)，验证本地镜像：
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build --wait --wait-timeout 180
 ```
 
 该命令构建 `telegram-star:local`。默认 [docker-compose.yml](../docker-compose.yml) 只拉取发布镜像；切回时只指定 `-f docker-compose.yml`，按[部署指南](user-deployment.md)选择版本，保留原项目名和数据卷。若有旧的 `compose.override.yml` 或 `docker-compose.override.yml`，检查其中的镜像 / 构建覆盖，或始终显式指定 `-f`。
+
+## 规则执行与后台任务
+
+JavaScript 条件在独立子进程中的 QuickJS 运行，不向脚本暴露 Node、文件、网络或环境变量；脚本有执行与内存限制，正则也放入有超时上限的子进程。规则计算在 SQLite 写事务外进行，提交前重查条件和消息快照，避免慢脚本占用写锁。
+
+消息与首个命中规则的通知 outbox 在同一事务持久化。通知 worker 并发上限 2，每项最多尝试 5 次，失败退避 5 秒、30 秒、2 分钟、10 分钟；过期租约可在重启后恢复。手动历史补录不发通知，重复收录不重复入队。接收端没有幂等确认时，发送成功但本地确认前崩溃仍可能重复；更多运行边界见[部署文档](user-deployment.md#通知与更新恢复)。
 
 ## 数据库变更
 

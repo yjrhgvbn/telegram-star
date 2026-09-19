@@ -30,6 +30,7 @@
     "test": "vitest run",
     "test:web": "vitest run packages/web",
     "test:server": "vitest run packages/server packages/shared",
+    "typecheck:server": "pnpm --filter @telegram-star/server exec tsc --noEmit -p tsconfig.json",
     "test:watch": "vitest",
     "start": "pnpm --filter @telegram-star/shared build && pnpm --filter @telegram-star/server build && pnpm --filter @telegram-star/server db:deploy && pnpm --filter @telegram-star/server start",
     "db:generate": "pnpm --filter @telegram-star/server db:generate",

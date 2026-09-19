@@ -100,7 +100,7 @@ model Message {
   mediaThumbBase64  String?  @map("media_thumb_base64")   // Stripped thumbnail base64
   mediaExtra        String?  @map("media_extra")          // JSON 扩展字段 (宽高/联系人等)
 
-  @@index([messageDate, telegramMessageId])
+  @@index([messageDate, telegramMessageId, id])
   @@index([matchedFilterId, isRead, messageDate])
   @@index([isRead, messageDate])
   @@unique([chatId, telegramMessageId], map: "messages_chat_id_telegram_message_id_key")
@@ -163,8 +163,34 @@ model ForwardTarget {
   updatedAt   String   @map("updated_at")
 
   filters     Filter[] @relation("FilterToForwardTarget")
+  notifications NotificationOutbox[]
 
   @@map("forward_targets")
+}
+
+// 与消息同事务创建；成功记录保留唯一键，避免重放或进程重启重复入队。
+model NotificationOutbox {
+  id            Int      @id @default(autoincrement())
+  messageId     Int      @map("message_id")
+  messageKey    String   @map("message_key")
+  filterId      Int      @map("filter_id")
+  targetId      Int      @map("target_id")
+  title         String
+  body          String
+  status        String   @default("pending")
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  leaseUntil    DateTime? @map("lease_until")
+  leaseToken    String?   @map("lease_token")
+  lastErrorJson String?   @map("last_error_json")
+  createdAt     DateTime @default(now()) @map("created_at")
+  completedAt   DateTime? @map("completed_at")
+  target        ForwardTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, targetId])
+  @@index([status, nextAttemptAt])
+  @@index([status, leaseUntil])
+  @@map("notification_outbox")
 }
 
 model AppConfig {

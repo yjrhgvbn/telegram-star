@@ -72,3 +72,27 @@ describe("chat discovery", () => {
     expect(results[0]?.matches[0]?.snippet.endsWith("…")).toBe(true);
   });
 });
+
+it("discovers colliding private/channel IDs separately and identifies bots", () => {
+  const results = buildChatDiscoveryResults({
+    query: "release", limit: 20,
+    joinedEntities: new Map([
+      ["321", { className: "Channel", id: "321", title: "News", broadcast: true }],
+      ["user:321", { className: "User", id: "321", firstName: "Alice", lastName: "Z", username: "alice" }],
+      ["user:654", { className: "User", id: "654", firstName: "Helper", bot: true, username: "helperbot" }],
+    ]),
+    messages: [
+      createMessage({ id: 1, chatId: "321", content: "release channel", date: 100 }),
+      createMessage({ id: 1, userId: "321", content: "release private", date: 200 }),
+      createMessage({ id: 2, userId: "654", content: "release bot", date: 300 }),
+    ],
+  });
+  expect(results.map(result => result.chat)).toEqual([
+    { id: "user:654", title: "Helper", type: "bot" },
+    { id: "user:321", title: "Alice Z", type: "private" },
+    { id: "321", title: "News", type: "channel" },
+  ]);
+  expect(results.map(result => result.matches[0]?.telegramLink)).toEqual([
+    "https://t.me/helperbot", "https://t.me/alice", "https://t.me/c/321/1",
+  ]);
+});

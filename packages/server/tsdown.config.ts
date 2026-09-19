@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/db/deploy.ts"],
+  entry: ["src/index.ts", "src/db/deploy.ts", "src/services/rule-worker.ts"],
   outDir: "dist",
   format: "esm",
   platform: "node",

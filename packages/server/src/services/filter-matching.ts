@@ -1,4 +1,5 @@
 import { Script } from "node:vm";
+import { runIsolatedRule } from "./ruleExecution.js";
 import type {
   FilterCondition,
   FilterConditionType,
@@ -17,7 +18,6 @@ export type {
 
 const SUPPORTED_CONDITION_EFFECTS = ["require", "exclude"] as const;
 const SCRIPT_SOURCE_MAX_LENGTH = 20_000;
-const SCRIPT_EXECUTION_TIMEOUT_MS = 25;
 const SCRIPT_CACHE_MAX_ENTRIES = 100;
 const MATCH_EVIDENCE_TEXT_LIMIT = 50;
 const scriptCache = new Map<string, Script>();
@@ -80,70 +80,6 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-interface ScriptConditionResult {
-  matched: boolean;
-  legacyMatchedText: string | null;
-  matchedValues: string[];
-  matchedTexts: string[];
-}
-
-function executeScriptCondition(
-  source: string,
-  input: FilterMatchInput,
-): ScriptConditionResult {
-  const script = compileScript(source);
-  const result = script.runInNewContext(
-    {
-      message: Object.freeze({ chatId: input.chatId, content: input.content }),
-    },
-    {
-      timeout: SCRIPT_EXECUTION_TIMEOUT_MS,
-      microtaskMode: "afterEvaluate",
-    },
-  ) as unknown;
-
-  if (typeof result === "boolean") {
-    return {
-      matched: result,
-      legacyMatchedText: null,
-      matchedValues: [],
-      matchedTexts: [],
-    };
-  }
-
-  if (result && typeof result === "object" && "then" in result) {
-    throw new Error("自定义脚本必须同步返回，不能返回 Promise");
-  }
-
-  if (!result || typeof result !== "object" || !("matched" in result)) {
-    throw new Error("自定义脚本必须返回 boolean 或 { matched, matchedText?, matchedTexts? }");
-  }
-
-  const candidate = result as {
-    matched?: unknown;
-    matchedText?: unknown;
-    matchedTexts?: unknown;
-  };
-  if (typeof candidate.matched !== "boolean") {
-    throw new Error("自定义脚本返回对象的 matched 必须是 boolean");
-  }
-
-  const matchedText = typeof candidate.matchedText === "string"
-    ? candidate.matchedText.trim().slice(0, 500) || null
-    : null;
-  const matchedTexts = uniqueEvidenceTexts([
-    ...(matchedText ? [matchedText] : []),
-    ...(Array.isArray(candidate.matchedTexts) ? candidate.matchedTexts : []),
-  ]);
-
-  return {
-    matched: candidate.matched,
-    legacyMatchedText: matchedText ?? matchedTexts[0] ?? null,
-    matchedValues: [],
-    matchedTexts,
-  };
-}
-
 interface SingleConditionMatch {
   matched: boolean;
   legacyMatchedText: string | null;
@@ -155,7 +91,7 @@ interface ConditionHandler {
   allowsExclude: boolean;
   normalizeValues: (values: string[]) => string[];
   validate: (condition: FilterCondition) => string | null;
-  evaluate: (input: FilterMatchInput, condition: FilterCondition) => SingleConditionMatch;
+  evaluate: (input: FilterMatchInput, condition: FilterCondition) => SingleConditionMatch | Promise<SingleConditionMatch>;
 }
 
 function createEmptyConditionMatch(matched = false): SingleConditionMatch {
@@ -165,18 +101,6 @@ function createEmptyConditionMatch(matched = false): SingleConditionMatch {
     matchedValues: [],
     matchedTexts: [],
   };
-}
-
-function collectRegexMatches(pattern: string, content: string): string[] {
-  const matches: string[] = [];
-  const expression = new RegExp(pattern, "gi");
-
-  for (const match of content.matchAll(expression)) {
-    if (match[0]) matches.push(match[0]);
-    if (matches.length >= MATCH_EVIDENCE_TEXT_LIMIT) break;
-  }
-
-  return uniqueEvidenceTexts(matches);
 }
 
 /**
@@ -238,27 +162,7 @@ const conditionHandlers = {
     validate: (condition) => condition.values.some((value) => !isValidRegexPattern(value))
       ? "condition.regex values must be valid regular expressions"
       : null,
-    evaluate: (input, condition) => {
-      const matchedValues: string[] = [];
-      const matchedTexts: string[] = [];
-
-      for (const pattern of condition.values) {
-        if (!isValidRegexPattern(pattern)) continue;
-        const firstMatch = new RegExp(pattern, "i").exec(input.content);
-        if (!firstMatch) continue;
-
-        matchedValues.push(pattern);
-        matchedTexts.push(...collectRegexMatches(pattern, input.content));
-      }
-
-      return {
-        matched: matchedValues.length > 0,
-        // 保留旧语义：消息表与通知模板仍记录第一条命中的表达式。
-        legacyMatchedText: matchedValues[0] ?? null,
-        matchedValues: uniqueEvidenceTexts(matchedValues),
-        matchedTexts: uniqueEvidenceTexts(matchedTexts),
-      };
-    },
+    evaluate: (input, condition) => runIsolatedRule("regex", condition.values.filter(isValidRegexPattern), input),
   },
   script: {
     allowsExclude: true,
@@ -284,7 +188,7 @@ const conditionHandlers = {
       if (condition.values.length !== 1) {
         throw new Error("自定义脚本条件必须且只能包含一段代码");
       }
-      return executeScriptCondition(condition.values[0], input);
+      return runIsolatedRule("script", condition.values, input);
     },
   },
 } satisfies Record<FilterConditionType, ConditionHandler>;
@@ -384,7 +288,7 @@ export function parseConditions(raw: string): FilterCondition[] {
             : null;
         if (
           effect === null ||
-          (effect === "exclude" && !conditionHandlers[item.type].allowsExclude)
+          (effect === "exclude" && !conditionHandlers[item.type as FilterConditionType].allowsExclude)
         ) {
           return null;
         }
@@ -416,7 +320,7 @@ export function parseConditions(raw: string): FilterCondition[] {
             ...(effect ? { effect } : {}),
             ...(groupEffect ? { groupEffect } : {}),
             values,
-          }) === "exclude" && !conditionHandlers[item.type].allowsExclude)
+          }) === "exclude" && !conditionHandlers[item.type as FilterConditionType].allowsExclude)
         ) {
           return null;
         }
@@ -426,7 +330,7 @@ export function parseConditions(raw: string): FilterCondition[] {
           ...(effect === "exclude" ? { effect } : {}),
           ...(groupId ? { groupId } : {}),
           ...(groupEffect === "exclude" ? { groupEffect } : {}),
-          values: conditionHandlers[item.type].normalizeValues(values),
+          values: conditionHandlers[item.type as FilterConditionType].normalizeValues(values),
         };
       })
       .filter((item): item is FilterCondition => item !== null && item.values.length > 0);
@@ -552,10 +456,10 @@ export function hasConflictingChatConditions(conditions: FilterCondition[]): boo
   );
 }
 
-export function evaluateFilterConditions(
+export async function evaluateFilterConditions(
   input: FilterMatchInput,
   conditions: FilterCondition[],
-): FilterEvaluationResult {
+): Promise<FilterEvaluationResult> {
   if (conditions.length === 0) {
     return { matched: false, matchedKeyword: null, evidence: [] };
   }
@@ -570,7 +474,7 @@ export function evaluateFilterConditions(
 
     try {
       for (const { condition, conditionIndex } of group.members) {
-        const conditionMatch = conditionHandlers[condition.type].evaluate(input, condition);
+        const conditionMatch = await conditionHandlers[condition.type].evaluate(input, condition);
         groupMatched ||= conditionMatch.matched;
 
         if (conditionMatch.matched && conditionMatch.legacyMatchedText) {
@@ -627,10 +531,10 @@ export function evaluateFilterConditions(
  * 兼容现有实时监听、回填和通知链路，只暴露原有的匹配结果字段。
  * 需要解释或高亮时使用 evaluateFilterConditions 获取完整证据。
  */
-export function matchFilterConditions(
+export async function matchFilterConditions(
   input: FilterMatchInput,
   conditions: FilterCondition[],
-): FilterMatchResult {
-  const { evidence: _evidence, ...result } = evaluateFilterConditions(input, conditions);
+): Promise<FilterMatchResult> {
+  const { evidence: _evidence, ...result } = await evaluateFilterConditions(input, conditions);
   return result;
 }
